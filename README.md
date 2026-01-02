@@ -1,6 +1,6 @@
 # EZVals
 
-Lightweight evals for AI agents and LLM apps. Write Python functions, use `EvalContext` to track results, and EZVals handles storage, scoring, and a small web UI.
+Unit Testing for AI agents and LLM apps. Write Python functions, use `EvalContext` to track results, and EZVals handles storage, scoring, and a small web UI.
 
 ## Installation
 
