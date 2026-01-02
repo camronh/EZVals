@@ -2,8 +2,8 @@
   "$schema": "https://mintlify.com/schema.json",
   "name": "EZVals",
   "logo": {
-    "dark": "/assets/logo.png",
-    "light": "/assets/logo.png"
+    "dark": "/assets/logo-dark.png",
+    "light": "/assets/logo-light.png"
   },
   "favicon": "/assets/favicon.png",
   "colors": {
