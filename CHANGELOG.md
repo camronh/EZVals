@@ -2,7 +2,7 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## 0.1.0 - 2026-01-02
 
 - Added: Markdown export with stats visualization and filtered data support.
 - Added: Export dropdown menu in header with JSON, CSV, and Markdown formats.
@@ -21,6 +21,7 @@ All notable changes to this project will be documented in this file.
 - Fixed: Rerun after renaming a run now works correctly. Previously, `app.state.run_name` wasn't synced after rename, causing results to write to a duplicate file.
 - Fixed: Progress bar now uses CSS variable `--progress-bar-bg` for proper light/dark mode theming.
 - Fixed: Edit run name button now works when dropdown is shown (hides dropdown, shows input).
+- Fixed: Run dropdown now hides when rows are selected for rerun.
 - Tests: Added E2E tests for comparison mode functionality.
 - Tests: Added hot reload test for module cache clearing.
 - Tests: Added tests for run metadata injection into EvalContext.
