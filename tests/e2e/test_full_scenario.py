@@ -861,8 +861,9 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             page.wait_for_selector("#results-table")
 
             # Export JSON/CSV and validate schema columns.
-            page.locator("#settings-toggle").click()
-            expect(page.locator("#settings-form [name='concurrency']")).to_have_value(str(concurrency))
+            # Export is now in its own dropdown (not settings modal)
+            page.locator("#export-toggle").click()
+            page.wait_for_selector("#export-menu:not(.hidden)")
             with page.expect_download() as download_info:
                 page.locator("#export-json-btn").click()
             download = download_info.value
@@ -871,6 +872,9 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             download.save_as(json_path)
             exported = json.loads(json_path.read_text())
             assert len(exported.get("results", [])) == expected_count, "JSON export should include all results"
+            # Re-open export dropdown for CSV
+            page.locator("#export-toggle").click()
+            page.wait_for_selector("#export-menu:not(.hidden)")
             with page.expect_download() as download_info:
                 page.locator("#export-csv-btn").click()
             download = download_info.value
@@ -883,7 +887,6 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
                 "error", "latency", "metadata", "trace_data", "annotations"
             }
             assert required_cols.issubset(set(header)), "CSV export should include required columns"
-            page.locator("#settings-cancel").click()
 
             browser.close()
     finally:

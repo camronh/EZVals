@@ -1946,8 +1946,15 @@ function updateRunButtonState() {
     playBtn.classList.add('rounded');
     dropdownToggle?.classList.add('hidden');
     dropdownToggle?.classList.remove('flex');
+  } else if (hasSelections) {
+    // Previous runs exist with selection - just Rerun, no dropdown
+    playBtnText.textContent = 'Rerun';
+    playBtn.classList.remove('rounded-l');
+    playBtn.classList.add('rounded');
+    dropdownToggle?.classList.add('hidden');
+    dropdownToggle?.classList.remove('flex');
   } else {
-    // Previous runs exist (with or without selection) - split button
+    // Previous runs exist, no selection - split button with dropdown
     playBtnText.textContent = _runMode === 'new' ? 'New Run' : 'Rerun';
     playBtn.classList.remove('rounded');
     playBtn.classList.add('rounded-l');

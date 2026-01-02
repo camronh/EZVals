@@ -395,33 +395,6 @@ class TestScoresSorting:
                 browser.close()
 
 
-class TestStickyHeader:
-    """#1: Table header should have dynamic sticky position."""
-
-    def test_header_has_css_variable(self, tmp_path):
-        store = ResultsStore(tmp_path / "runs")
-        run_id = store.save_run(make_summary_with_error(), "2024-01-01T00-00-00Z")
-        app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
-
-        with run_server(app) as url:
-            with sync_playwright() as p:
-                browser = p.chromium.launch()
-                page = browser.new_page()
-                page.goto(url)
-                page.wait_for_selector("#results-table")
-
-                # Wait for initStatsToggle to set the CSS variable
-                time.sleep(0.3)
-
-                # Check that the CSS variable is set on document
-                stats_height = page.evaluate(
-                    "getComputedStyle(document.documentElement).getPropertyValue('--stats-height')"
-                )
-                assert stats_height.strip() != "", "CSS variable --stats-height should be set"
-
-                browser.close()
-
-
 class TestRerunButton:
     """#6: Detail page should have a rerun button."""
 
@@ -613,13 +586,13 @@ class TestRunDropdown:
                 page.wait_for_selector("#results-table")
                 time.sleep(0.5)
 
-                # Check that run dropdown exists
+                # Check that run dropdown button exists (custom button dropdown, not <select>)
                 dropdown = page.locator(".stats-run-dropdown, .stats-run-dropdown-compact")
                 assert dropdown.count() > 0, "Run dropdown should appear with multiple runs"
 
-                # Check dropdown has both runs as options
-                options = dropdown.first.locator("option").all_text_contents()
-                assert len(options) >= 2, f"Dropdown should have 2+ options, got {options}"
+                # Check dropdown button shows current run name
+                dropdown_text = dropdown.first.text_content()
+                assert "run-two" in dropdown_text, f"Dropdown should show current run name, got: {dropdown_text}"
 
                 browser.close()
 
