@@ -15,15 +15,10 @@
       "to": "#3b82f6"
     }
   },
-  "topbarLinks": [
-    {
-      "name": "GitHub",
-      "url": "https://github.com/camronh/EZVals"
-    }
-  ],
   "topbarCtaButton": {
     "name": "Get Started",
-    "url": "/quickstart"
+    "url": "/quickstart",
+    "type": "link"
   },
   "anchors": [
     {
