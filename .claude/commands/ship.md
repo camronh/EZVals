@@ -73,13 +73,24 @@ Follow these steps in order:
 If shipping to main:
 1. Don't ask the user what version number to use (suggest next alpha based on CHANGELOG)
 2. Update CHANGELOG.md: change `## Unreleased` to `## <version> - <today's date>`
-3. Commit: `git commit -m "release <version>"`
-4. Push dev: `git push origin dev`
-5. Checkout main: `git checkout main`
-6. Pull latest: `git pull origin main`
-7. Merge dev: `git merge dev`
-8. Push main: `git push origin main`
-9. Return to dev: `git checkout dev`
+3. Update `pyproject.toml` version to match
+4. Commit: `git commit -m "release <version>"`
+5. Push dev: `git push origin dev`
+6. Checkout main: `git checkout main`
+7. Pull latest: `git pull origin main`
+8. Merge dev: `git merge dev`
+9. Push main: `git push origin main`
+10. Create and push tag: `git tag v<version> && git push origin v<version>`
+11. Return to dev: `git checkout dev`
+
+## PyPI Publishing (Automatic)
+
+Publishing to PyPI is handled automatically by GitHub Actions:
+
+- **Dev builds** (`.github/workflows/publish-dev.yml`): Every push to `main` publishes a dev version (`0.0.0.dev{timestamp}`) to PyPI
+- **Release builds** (`.github/workflows/publish.yml`): Pushing a tag like `v0.1.0` triggers a release publish to PyPI
+
+You don't need to manually run `uv publish` - just push the tag and the workflow handles it.
 
 ## Error Handling
 - If tests fail → stop and report
