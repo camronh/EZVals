@@ -2,6 +2,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+- Changed: Stats bar error count now always displays (shows 0 when no errors) for consistent layout.
+- Changed: Reorganized stats bar metrics into rows for better visual hierarchy.
+- Changed: Updated documentation UI screenshots with new logo.
+
 ## 0.1.0 - 2026-01-02
 
 - Added: Markdown export with stats visualization and filtered data support.
