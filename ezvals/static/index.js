@@ -220,16 +220,17 @@ function chipStats(chip, precision = 2) {
 }
 
 function updateLatencyDisplay(expandedPanel, avgLatency, animate = false) {
-  let latencyMetric = expandedPanel.querySelector('.stats-metric-sm');
+  let latencyMetric = expandedPanel.querySelector('.stats-metric-sm.stats-latency');
   if (avgLatency > 0) {
     const html = `${avgLatency.toFixed(2)}<span class="stats-metric-unit">s</span>`;
     if (!latencyMetric) {
+      const metricsRow = expandedPanel.querySelector('.stats-metric-row');
       const leftContent = expandedPanel.querySelector('.stats-left-content');
-      if (leftContent) {
+      if (metricsRow || leftContent) {
         latencyMetric = document.createElement('div');
-        latencyMetric.className = 'stats-metric stats-metric-sm';
+        latencyMetric.className = 'stats-metric stats-metric-sm stats-latency';
         latencyMetric.innerHTML = `<span class="stats-metric-value">${html}</span><span class="stats-metric-label">avg latency</span>`;
-        leftContent.appendChild(latencyMetric);
+        (metricsRow || leftContent).appendChild(latencyMetric);
       }
     } else {
       const el = latencyMetric.querySelector('.stats-metric-value');
@@ -513,7 +514,7 @@ function renderStatsExpanded(data) {
   let metricsHtml = '';
   if (!inComparisonMode) {
     latencyHtml = avgLatency > 0
-      ? `<div class="stats-metric stats-metric-sm"><span class="stats-metric-value">${avgLatency.toFixed(2)}<span class="stats-metric-unit">s</span></span><span class="stats-metric-label">avg latency</span></div>`
+      ? `<div class="stats-metric stats-metric-sm stats-latency"><span class="stats-metric-value">${avgLatency.toFixed(2)}<span class="stats-metric-unit">s</span></span><span class="stats-metric-label">avg latency</span></div>`
       : '';
 
     let progressHtml = '';
@@ -521,16 +522,16 @@ function renderStatsExpanded(data) {
       progressHtml = `<div class="stats-progress"><div class="stats-progress-bar"><div class="stats-progress-fill" style="width: ${pctDone}%"></div></div><span class="stats-progress-text text-emerald-400">${pctDone}% (${progressCompleted}/${progressTotal})</span></div>`;
     }
 
-    const errorsHtml = totalErrors > 0
-      ? `<div id="stats-errors" class="stats-metric stats-metric-sm"><span class="stats-metric-value text-accent-error">${totalErrors}</span><span class="stats-metric-label">errors</span></div>`
-      : '<div id="stats-errors" class="stats-metric stats-metric-sm hidden"></div>';
+    const errorsHtml = `<div id="stats-errors" class="stats-metric stats-metric-sm stats-errors"><span class="stats-metric-value text-accent-error">${totalErrors}</span><span class="stats-metric-label">errors</span></div>`;
+    const secondaryMetrics = [errorsHtml];
+    if (latencyHtml) secondaryMetrics.push(latencyHtml);
+    const secondaryRow = `<div class="stats-metric-row">${secondaryMetrics.join('')}</div>`;
     metricsHtml = `
       <div class="stats-metric-row-main">
         <div class="stats-metric"><span class="stats-metric-value">${total}</span><span class="stats-metric-label">tests</span></div>
-        ${errorsHtml}
         ${progressHtml}
       </div>
-      ${latencyHtml}
+      ${secondaryRow}
     `;
   }
 
@@ -2122,15 +2123,16 @@ function updateStatsInPlace(data) {
   const errorsDiv = expandedPanel.querySelector('#stats-errors');
   if (errorsDiv) {
     const errorValue = errorsDiv.querySelector('.stats-metric-value');
-    if (stats.totalErrors > 0) {
-      errorsDiv.classList.remove('hidden');
-      if (errorValue) {
-        errorValue.textContent = stats.totalErrors;
-      } else {
-        errorsDiv.innerHTML = `<span class="stats-metric-value text-accent-error">${stats.totalErrors}</span><span class="stats-metric-label">errors</span>`;
+    if (errorValue) {
+      if (errorValue.textContent !== String(stats.totalErrors)) {
+        errorValue.classList.add('updating');
+        setTimeout(() => {
+          errorValue.textContent = String(stats.totalErrors);
+          errorValue.classList.remove('updating');
+        }, 100);
       }
     } else {
-      errorsDiv.classList.add('hidden');
+      errorsDiv.innerHTML = `<span class="stats-metric-value text-accent-error">${stats.totalErrors}</span><span class="stats-metric-label">errors</span>`;
     }
   }
 
