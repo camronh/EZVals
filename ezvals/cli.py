@@ -664,11 +664,11 @@ def _get_skill_source_path() -> Path:
     import importlib.resources
     # Python 3.9+ uses files(), older versions need a different approach
     try:
-        return Path(importlib.resources.files('ezvals').joinpath('skills', 'ezvals'))
+        return Path(importlib.resources.files('ezvals').joinpath('skills', 'evals'))
     except AttributeError:
         # Fallback for older Python
         import pkg_resources
-        return Path(pkg_resources.resource_filename('ezvals', 'skills/ezvals'))
+        return Path(pkg_resources.resource_filename('ezvals', 'skills/evals'))
 
 
 def _find_canonical_agent_dir(base_path: Path, agents: list) -> tuple[str | None, Path | None]:
@@ -676,7 +676,7 @@ def _find_canonical_agent_dir(base_path: Path, agents: list) -> tuple[str | None
     for agent in agents:
         agent_dir = base_path / f'.{agent}'
         if agent_dir.exists():
-            return agent, agent_dir / 'skills' / 'ezvals'
+            return agent, agent_dir / 'skills' / 'evals'
     return None, None
 
 
@@ -725,7 +725,7 @@ def _add_to_git_exclude(base_path: Path, pattern: str):
 
 @cli.group('skills')
 def skills_group():
-    """Manage EZVals agent skills."""
+    """Manage evals agent skill."""
     pass
 
 
@@ -733,7 +733,7 @@ def skills_group():
 @click.option('--global', '-g', 'global_', is_flag=True, help='Install globally (to home directory)')
 @click.option('--agents', '-a', multiple=True, help='Specific agents to link (claude, codex, cursor, etc.)')
 def skills_add(global_: bool, agents: tuple):
-    """Install EZVals skill for AI coding agents. Overwrites existing."""
+    """Install evals skill for AI coding agents. Overwrites existing."""
     import ezvals
 
     version = ezvals.__version__
@@ -751,7 +751,7 @@ def skills_add(global_: bool, agents: tuple):
 
     if canonical_agent is None:
         # No existing agent dirs - use .agents/ as fallback
-        canonical_path = base_path / '.agents' / 'skills' / 'ezvals'
+        canonical_path = base_path / '.agents' / 'skills' / 'evals'
         created_agents_dir = True
     else:
         created_agents_dir = False
@@ -762,7 +762,7 @@ def skills_add(global_: bool, agents: tuple):
     # Create symlinks from other agents to canonical
     linked_agents = []
     for agent in target_agents:
-        agent_skill_path = base_path / f'.{agent}' / 'skills' / 'ezvals'
+        agent_skill_path = base_path / f'.{agent}' / 'skills' / 'evals'
         if agent_skill_path != canonical_path:
             _create_symlink(canonical_path, agent_skill_path)
             linked_agents.append(agent)
@@ -772,11 +772,11 @@ def skills_add(global_: bool, agents: tuple):
         _add_to_git_exclude(base_path, '.agents/')
 
     # Output
-    console.print(f'[green]EZVals skill v{version} installed:[/green]')
+    console.print(f'[green]Evals skill v{version} installed:[/green]')
     if created_agents_dir:
-        console.print(f'  Source: .agents/skills/ezvals/ (created)')
+        console.print(f'  Source: .agents/skills/evals/ (created)')
     else:
-        console.print(f'  Source: .{canonical_agent}/skills/ezvals/')
+        console.print(f'  Source: .{canonical_agent}/skills/evals/')
 
     if linked_agents:
         console.print(f'  Linked: {", ".join(f".{a}" for a in linked_agents)}')
@@ -784,13 +784,13 @@ def skills_add(global_: bool, agents: tuple):
     if created_agents_dir and not global_:
         console.print('\n[dim]Note: Added .agents/ to .git/info/exclude[/dim]')
 
-    console.print('\n[cyan]Invoke with /ezvals in your agent.[/cyan]')
+    console.print('\n[cyan]Invoke with /evals in your agent.[/cyan]')
 
 
 @skills_group.command('remove')
 @click.option('--global', '-g', 'global_', is_flag=True, help='Remove from global location (home directory)')
 def skills_remove(global_: bool):
-    """Remove EZVals skill from agents."""
+    """Remove evals skill from agents."""
     import shutil
 
     base_path = Path.home() if global_ else Path.cwd()
@@ -798,7 +798,7 @@ def skills_remove(global_: bool):
 
     # Remove from all agent directories
     for agent in SUPPORTED_AGENTS:
-        skill_path = base_path / f'.{agent}' / 'skills' / 'ezvals'
+        skill_path = base_path / f'.{agent}' / 'skills' / 'evals'
         if skill_path.exists() or skill_path.is_symlink():
             if skill_path.is_symlink():
                 skill_path.unlink()
@@ -807,15 +807,15 @@ def skills_remove(global_: bool):
             removed.append(agent)
 
     # Also check .agents/
-    agents_skill_path = base_path / '.agents' / 'skills' / 'ezvals'
+    agents_skill_path = base_path / '.agents' / 'skills' / 'evals'
     if agents_skill_path.exists():
         shutil.rmtree(agents_skill_path)
         removed.append('agents')
 
     if removed:
-        console.print(f'[green]Removed EZVals skill from: {", ".join(f".{a}" for a in removed)}[/green]')
+        console.print(f'[green]Removed evals skill from: {", ".join(f".{a}" for a in removed)}[/green]')
     else:
-        console.print('[yellow]No EZVals skill installation found.[/yellow]')
+        console.print('[yellow]No evals skill installation found.[/yellow]')
 
 
 @skills_group.command('doctor')
@@ -840,17 +840,17 @@ def skills_doctor(global_: bool):
     canonical_label = None
 
     # Check .agents/ first as potential canonical
-    agents_path = base_path / '.agents' / 'skills' / 'ezvals'
+    agents_path = base_path / '.agents' / 'skills' / 'evals'
     if agents_path.exists() and not agents_path.is_symlink():
         canonical_path = agents_path
-        canonical_label = '.agents/skills/ezvals/'
+        canonical_label = '.agents/skills/evals/'
 
     # Check agent dirs
     for agent in SUPPORTED_AGENTS:
-        skill_path = base_path / f'.{agent}' / 'skills' / 'ezvals'
+        skill_path = base_path / f'.{agent}' / 'skills' / 'evals'
         if skill_path.exists() and not skill_path.is_symlink():
             canonical_path = skill_path
-            canonical_label = f'.{agent}/skills/ezvals/'
+            canonical_label = f'.{agent}/skills/evals/'
             break
 
     if canonical_path:
@@ -872,22 +872,22 @@ def skills_doctor(global_: bool):
         # Check symlinks
         console.print('  Symlinks:')
         for agent in SUPPORTED_AGENTS:
-            skill_path = base_path / f'.{agent}' / 'skills' / 'ezvals'
+            skill_path = base_path / f'.{agent}' / 'skills' / 'evals'
             if skill_path == canonical_path:
                 continue
 
             if skill_path.is_symlink():
                 target = skill_path.resolve()
                 if target == canonical_path.resolve():
-                    console.print(f'    .{agent}/skills/ezvals    [green]✓ linked[/green]')
+                    console.print(f'    .{agent}/skills/evals    [green]✓ linked[/green]')
                 else:
-                    console.print(f'    .{agent}/skills/ezvals    [yellow]⚠ linked elsewhere[/yellow]')
+                    console.print(f'    .{agent}/skills/evals    [yellow]⚠ linked elsewhere[/yellow]')
             elif skill_path.exists():
-                console.print(f'    .{agent}/skills/ezvals    [yellow]⚠ copy (not symlink)[/yellow]')
+                console.print(f'    .{agent}/skills/evals    [yellow]⚠ copy (not symlink)[/yellow]')
             else:
-                console.print(f'    .{agent}/skills/ezvals    [dim]✗ not installed[/dim]')
+                console.print(f'    .{agent}/skills/evals    [dim]✗ not installed[/dim]')
     else:
-        console.print('  [yellow]No EZVals skill found.[/yellow]')
+        console.print('  [yellow]No evals skill found.[/yellow]')
 
     console.print()
     console.print("[dim]Run 'ezvals skills add' to install or fix.[/dim]")

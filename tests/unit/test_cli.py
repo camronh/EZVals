@@ -416,7 +416,7 @@ class TestSkillsCommands:
     def test_skills_help(self):
         result = self.runner.invoke(cli, ['skills', '--help'])
         assert result.exit_code == 0
-        assert 'Manage EZVals agent skills' in result.output
+        assert 'Manage evals agent skill' in result.output
         assert 'add' in result.output
         assert 'remove' in result.output
         assert 'doctor' in result.output
@@ -436,16 +436,16 @@ class TestSkillsCommands:
             result = self.runner.invoke(cli, ['skills', 'add'])
             assert result.exit_code == 0
             assert 'installed' in result.output
-            assert '.claude/skills/ezvals/' in result.output
+            assert '.claude/skills/evals/' in result.output
 
             # Verify canonical location exists
-            canonical = Path('.claude/skills/ezvals/SKILL.md')
+            canonical = Path('.claude/skills/evals/SKILL.md')
             assert canonical.exists()
-            assert 'EZVals' in canonical.read_text()
+            assert 'evals' in canonical.read_text()
 
             # Verify symlinks created
             for agent in ['codex', 'cursor', 'windsurf', 'kiro', 'roo']:
-                symlink = Path(f'.{agent}/skills/ezvals')
+                symlink = Path(f'.{agent}/skills/evals')
                 assert symlink.exists() or symlink.is_symlink()
 
     def test_skills_add_creates_agents_fallback(self):
@@ -453,10 +453,10 @@ class TestSkillsCommands:
         with self.runner.isolated_filesystem():
             result = self.runner.invoke(cli, ['skills', 'add'])
             assert result.exit_code == 0
-            assert '.agents/skills/ezvals/' in result.output
+            assert '.agents/skills/evals/' in result.output
 
             # Verify .agents/ was created
-            assert Path('.agents/skills/ezvals/SKILL.md').exists()
+            assert Path('.agents/skills/evals/SKILL.md').exists()
 
     def test_skills_add_with_specific_agents(self):
         """skills add --agents only links specified agents"""
@@ -465,10 +465,10 @@ class TestSkillsCommands:
             assert result.exit_code == 0
 
             # Should only create specified agents
-            assert Path('.claude/skills/ezvals').exists() or Path('.agents/skills/ezvals').exists()
-            assert Path('.cursor/skills/ezvals').exists()
+            assert Path('.claude/skills/evals').exists() or Path('.agents/skills/evals').exists()
+            assert Path('.cursor/skills/evals').exists()
             # Should not create others
-            assert not Path('.codex/skills/ezvals').exists()
+            assert not Path('.codex/skills/evals').exists()
 
     def test_skills_remove_cleans_up(self):
         """skills remove should remove skill from all agents"""
@@ -482,15 +482,15 @@ class TestSkillsCommands:
             assert 'Removed' in result.output
 
             # Verify skill dirs removed
-            assert not Path('.claude/skills/ezvals').exists()
-            assert not Path('.agents/skills/ezvals').exists()
+            assert not Path('.claude/skills/evals').exists()
+            assert not Path('.agents/skills/evals').exists()
 
     def test_skills_remove_when_not_installed(self):
         """skills remove when nothing installed should report that"""
         with self.runner.isolated_filesystem():
             result = self.runner.invoke(cli, ['skills', 'remove'])
             assert result.exit_code == 0
-            assert 'No EZVals skill installation found' in result.output
+            assert 'No evals skill installation found' in result.output
 
     def test_skills_doctor_shows_status(self):
         """skills doctor should show installation status"""
@@ -498,7 +498,7 @@ class TestSkillsCommands:
             # Not installed
             result = self.runner.invoke(cli, ['skills', 'doctor'])
             assert result.exit_code == 0
-            assert 'No EZVals skill found' in result.output
+            assert 'No evals skill found' in result.output
 
             # Install
             self.runner.invoke(cli, ['skills', 'add'])
@@ -506,7 +506,7 @@ class TestSkillsCommands:
             # Now should show installed
             result = self.runner.invoke(cli, ['skills', 'doctor'])
             assert result.exit_code == 0
-            assert 'skills/ezvals/' in result.output
+            assert 'skills/evals/' in result.output
             assert 'linked' in result.output
 
     def test_skills_doctor_shows_version(self):
@@ -527,7 +527,7 @@ class TestSkillsCommands:
 
             # Modify the skill file
             skill_path = None
-            for p in [Path('.claude/skills/ezvals/SKILL.md'), Path('.agents/skills/ezvals/SKILL.md')]:
+            for p in [Path('.claude/skills/evals/SKILL.md'), Path('.agents/skills/evals/SKILL.md')]:
                 if p.exists():
                     skill_path = p
                     break

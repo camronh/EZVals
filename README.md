@@ -353,7 +353,7 @@ ezvals skills add
 ### Install from marketplace (latest)
 
 ```bash
-npx skills add camronh/ezvals-skill
+npx skills add camronh/evals-skill
 ```
 
 ### Check installation
@@ -362,7 +362,7 @@ npx skills add camronh/ezvals-skill
 ezvals skills doctor
 ```
 
-The skill installs to `.claude/skills/ezvals/`, `.cursor/skills/ezvals/`, etc., with symlinks ensuring all agents share the same source. Invoke with `/ezvals` in your AI coding agent.
+The skill installs to `.claude/skills/evals/`, `.cursor/skills/evals/`, etc., with symlinks ensuring all agents share the same source. Invoke with `/evals` in your AI coding agent.
 
 ## Contributing
 

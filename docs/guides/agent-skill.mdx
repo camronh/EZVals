@@ -1,0 +1,139 @@
+---
+title: "Agent Skill"
+description: "Teach AI agents how to write evals"
+---
+
+# Agent Skill
+
+EZVals includes a skill that teaches AI coding agents how to write and analyze evaluations.
+
+## What's a Skill?
+
+Skills are markdown files that provide context and instructions to AI coding agents like Claude Code, Cursor, and others. When you ask your agent to help with evals, it can reference the skill to understand:
+
+- EZVals API and patterns
+- Best practices for eval design
+- Grading strategies (code vs model vs human)
+- Patterns for different agent types
+
+## Installation
+
+### From Package (Version-Matched)
+
+Install the skill that matches your installed EZVals version:
+
+```bash
+pip install ezvals
+ezvals skills add
+```
+
+This installs to your current project directory.
+
+### Global Installation
+
+Install globally for all projects:
+
+```bash
+ezvals skills add --global
+```
+
+### From Marketplace (Latest)
+
+Install the latest version from the skills marketplace:
+
+```bash
+npx skills add camronh/evals-skill
+```
+
+## Usage
+
+After installation, invoke the skill in your AI coding agent:
+
+```
+/evals
+```
+
+Or just ask about evals - agents will automatically detect and use the skill based on context.
+
+## What's Included
+
+The skill provides comprehensive guidance across multiple reference files:
+
+| File | Purpose |
+|------|---------|
+| **SKILL.md** | Overview and navigation hub |
+| **EZVALS_REFERENCE.md** | Complete API reference for @eval, EvalContext, @parametrize |
+| **BEST_PRACTICES.md** | Eval design principles from Anthropic's research |
+| **GRADERS.md** | Choosing between code, model, and human graders |
+| **AGENT_EVALS.md** | Patterns for coding, conversational, research agents |
+| **ROADMAP.md** | Zero-to-one guide for building evals |
+
+## Example Prompts
+
+Try these prompts with your AI coding agent:
+
+### Getting Started
+- "Help me write my first eval for my customer support agent"
+- "What's the best way to evaluate my RAG pipeline?"
+- "Set up an eval suite for my coding assistant"
+
+### Writing Evals
+- "Create an eval that tests my agent's ability to handle refund requests"
+- "Write a parametrized eval for testing sentiment analysis across edge cases"
+- "How do I test multi-turn conversations?"
+
+### Improving Evals
+- "My eval is flaky - help me make it more deterministic"
+- "Should I use code-based or model-based grading for this eval?"
+- "Review my evals and suggest improvements"
+
+### Analysis
+- "Analyze my eval results and suggest improvements"
+- "Help me understand why my agent is failing this eval"
+- "What patterns do you see in these failures?"
+
+## Managing the Skill
+
+### Check Installation
+
+```bash
+ezvals skills doctor
+```
+
+Shows installation status, version, and symlink health.
+
+### Remove Skill
+
+```bash
+ezvals skills remove
+```
+
+### Reinstall
+
+```bash
+ezvals skills add
+```
+
+Overwrites existing installation with fresh files.
+
+## How It Works
+
+The skill is installed to agent-specific directories:
+
+```
+.claude/skills/evals/     # For Claude Code
+.cursor/skills/evals/     # For Cursor
+.codex/skills/evals/      # For Codex
+...
+```
+
+If no agent directories exist, it creates `.agents/skills/evals/` as a fallback and creates symlinks to it.
+
+## Keeping Updated
+
+When you upgrade EZVals, run `ezvals skills add` again to get the latest skill content:
+
+```bash
+pip install --upgrade ezvals
+ezvals skills add
+```
