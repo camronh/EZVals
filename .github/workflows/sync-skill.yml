@@ -1,0 +1,51 @@
+name: Sync Skill to Marketplace
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate skill version matches tag
+        run: |
+          TAG=${GITHUB_REF#refs/tags/v}
+          SKILL_VER=$(grep -oP 'Version:\s*\K[0-9.]+' ezvals/skills/ezvals/SKILL.md)
+          if [ "$TAG" != "$SKILL_VER" ]; then
+            echo "Error: Tag version ($TAG) does not match skill version ($SKILL_VER)"
+            exit 1
+          fi
+          echo "Version validated: $TAG"
+
+      - name: Sync to marketplace repo
+        uses: cpina/github-action-push-to-another-repository@main
+        env:
+          SSH_DEPLOY_KEY: ${{ secrets.SKILL_REPO_DEPLOY_KEY }}
+        with:
+          source-directory: 'ezvals/skills/ezvals'
+          destination-github-username: 'camronh'
+          destination-repository-name: 'ezvals-skill'
+          target-branch: main
+          commit-message: 'Sync from EZVals ${{ github.ref_name }}'
+
+      - name: Tag marketplace repo
+        env:
+          SSH_DEPLOY_KEY: ${{ secrets.SKILL_REPO_DEPLOY_KEY }}
+        run: |
+          # Set up SSH
+          mkdir -p ~/.ssh
+          echo "$SSH_DEPLOY_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+          # Clone marketplace repo and tag
+          GIT_SSH_COMMAND="ssh -i ~/.ssh/deploy_key" git clone git@github.com:camronh/ezvals-skill.git /tmp/skill-repo
+          cd /tmp/skill-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ github.ref_name }}" -m "Release ${{ github.ref_name }}"
+          GIT_SSH_COMMAND="ssh -i ~/.ssh/deploy_key" git push origin "${{ github.ref_name }}"

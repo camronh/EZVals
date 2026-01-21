@@ -340,6 +340,30 @@ ezvals serve examples
 
 Results are saved to `.ezvals/runs/` with the pattern `{run_name}_{timestamp}.json`.
 
+## Agent Skill
+
+EZVals includes a skill that teaches AI coding agents how to write and analyze evals.
+
+### Install from package (version-matched)
+
+```bash
+ezvals skills add
+```
+
+### Install from marketplace (latest)
+
+```bash
+npx skills add camronh/ezvals-skill
+```
+
+### Check installation
+
+```bash
+ezvals skills doctor
+```
+
+The skill installs to `.claude/skills/ezvals/`, `.cursor/skills/ezvals/`, etc., with symlinks ensuring all agents share the same source. Invoke with `/ezvals` in your AI coding agent.
+
 ## Contributing
 
 ```bash
