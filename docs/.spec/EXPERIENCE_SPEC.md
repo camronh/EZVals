@@ -11,7 +11,7 @@ This is the canonical source of truth for what EZVals enables users to do and ho
 
 | Document | Covers |
 |----------|--------|
-| [EXPERIENCE_SPEC_PYTHON.md](./EXPERIENCE_SPEC_PYTHON.md) | Python API: `@eval`, `EvalContext`, `@parametrize`, schemas |
+| [EXPERIENCE_SPEC_PYTHON.md](./EXPERIENCE_SPEC_PYTHON.md) | Python API: `@eval`, `EvalContext`, `cases`, schemas |
 | [EXPERIENCE_SPEC_CLI.md](./EXPERIENCE_SPEC_CLI.md) | CLI: `ezvals run`, `ezvals serve`, flags, exit codes |
 | [EXPERIENCE_SPEC_WEBUI.md](./EXPERIENCE_SPEC_WEBUI.md) | Web UI: table view, detail view, editing, export, REST API |
 
@@ -23,7 +23,7 @@ This is the canonical source of truth for what EZVals enables users to do and ho
 
 EZVals is a **pytest-inspired, code-first evaluation framework** for LLM applications and AI agents.
 
-1. **Write evals like tests** - If you know pytest, you know EZVals. Use `assert`, `@parametrize`, and decorators.
+1. **Write evals like tests** - If you know pytest, you know EZVals. Use `assert`, `cases`, and decorators.
 
 2. **Everything lives locally** - Datasets, code, and results are version-controlled together. No cloud dependencies.
 
@@ -62,7 +62,7 @@ EZVals is a **pytest-inspired, code-first evaluation framework** for LLM applica
 
 | Capability | What It Enables | Spec |
 |------------|-----------------|------|
-| `@parametrize` | Multiple test cases from one function | [Python](./EXPERIENCE_SPEC_PYTHON.md#parametrize-decorator) |
+| `cases=` | Multiple test cases from one function | [Python](./EXPERIENCE_SPEC_PYTHON.md#cases) |
 | `store()` | Set all context fields with explicit params | [Python](./EXPERIENCE_SPEC_PYTHON.md#the-store-method) |
 | File-level defaults | Shared config across evals | [Python](./EXPERIENCE_SPEC_PYTHON.md#file-level-defaults) |
 | Evaluators | Reusable post-processing | [Python](./EXPERIENCE_SPEC_PYTHON.md#evaluators) |
@@ -170,7 +170,7 @@ These are mistakes new users commonly make.
 | What User Does | What Happens | Fix |
 |----------------|--------------|-----|
 | `@eval` without `ctx: EvalContext` parameter | Works, but assertions don't create scores | Add `ctx: EvalContext` parameter |
-| `@parametrize` above `@eval` | Discovery fails silently | Put `@eval` above `@parametrize` |
+| `@eval` used with `cases` in the wrong order | Discovery fails silently | Keep `@eval` as the only decorator and use `cases=` |
 
 ### Clear Errors
 
@@ -184,7 +184,7 @@ These are mistakes new users commonly make.
 | Path doesn't exist | `Error: Path nonexistent.py does not exist` (exit 1) |
 | Invalid path type | `ValueError: Path some_file.txt is neither a Python file nor a directory` |
 | Concurrency = 0 | `ValueError: concurrency must be at least 1, got 0` |
-| Parametrize count mismatch | `ValueError: Expected 3 values, got 2` |
+| Cases count mismatch | `ValueError: Expected 3 values, got 2` |
 
 ---
 

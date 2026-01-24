@@ -39,7 +39,7 @@ poetry add ezvals --group dev
     Aligned with your local env. Branch to experiment!
   </Card>
   <Card title="Pytest-Inspired" icon="flask-vial">
-    Use `assert`, `parametrize`, and simple decorators.
+    Use `assert`, `cases`, and simple decorators.
   </Card>
   <Card title="Full Flexibility" icon="sliders">
     Use the same evaluator across a dataset or case-by-case
@@ -57,11 +57,11 @@ poetry add ezvals --group dev
 Evaluating a simple sentiment analyzer against a ground truth dataset:
 
 ```python
-from ezvals import eval, parametrize, EvalContext
+from ezvals import eval, EvalContext
 
 @eval(
   input="I love this product!",  # Prompt
-  reference="positive"           # Ground Truth
+  reference="positive",          # Ground Truth
   dataset="sentiment"            # Label for filtering
 )
 async def test_sentiment_analysis(ctx: EvalContext):
@@ -72,17 +72,19 @@ async def test_sentiment_analysis(ctx: EvalContext):
     assert ctx.output == ctx.reference, f"Expected {ctx.reference}, got {ctx.output}"
 ```
 
-Or use `@parametrize` to apply eval to a dataset:
+Or use `cases=` to apply eval to a dataset:
 
 ```python
-@eval(dataset="sentiment")
-@parametrize("input,reference", [
-    ("I love this product!", "positive"),
-    ("This is terrible", "negative"),
-    ("It's okay I guess", "neutral"),
-])
+@eval(
+  dataset="sentiment",
+  cases=[
+      {"input": "I love this product!", "reference": "positive"},
+      {"input": "This is terrible", "reference": "negative"},
+      {"input": "It's okay I guess", "reference": "neutral"},
+  ],
+)
 async def test_sentiment_batch(ctx: EvalContext):
-    # Parametrized data is injected into the ctx
+    # Case data is injected into the ctx
     ctx.output = await analyze_sentiment(ctx.input)
 
     assert ctx.output == ctx.reference, f"Expected {ctx.reference}, got {ctx.output}"
