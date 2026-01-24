@@ -10,7 +10,7 @@ Follow these steps:
 - Read key changed files to understand what was implemented
 - Summarize the features/changes in the branch
 
-## 2. Update CHANGELOG.md
+## 2. Update docs/changelog.mdx
 - Add entries to the "Unreleased" section
 - Use these prefixes:
   - `Added:` for new features
