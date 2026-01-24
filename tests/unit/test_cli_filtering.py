@@ -22,17 +22,19 @@ def func_b(): return EvalResult(input='b', output='b')
             assert 'Total Functions: 1' in result.output
             assert 'Total Evaluations: 1' in result.output
 
-    def test_cli_run_specific_parametrized_function(self):
-        """Test CLI can run parametrized function variants"""
+    def test_cli_run_specific_case_function(self):
+        """Test CLI can run case variants"""
         runner = CliRunner()
         with runner.isolated_filesystem():
             with open('test_cli_param.py', 'w') as f:
                 f.write("""
-from ezvals import eval, EvalResult, parametrize
+from ezvals import eval, EvalResult, EvalContext
 
-@parametrize("val", [1, 2])
-@eval()
-def param_func(val): return EvalResult(input=str(val), output=str(val))
+@eval(cases=[
+    {"input": 1},
+    {"input": 2},
+])
+def param_func(ctx: EvalContext): return EvalResult(input=str(ctx.input), output=str(ctx.input))
 """)
 
             # Test running base name (should run all variants)
@@ -120,4 +122,3 @@ def func_c(): return EvalResult(input='c', output='c')
             assert result.exit_code == 0
             assert 'Total Functions: 1' in result.output
             assert 'Total Evaluations: 1' in result.output
-

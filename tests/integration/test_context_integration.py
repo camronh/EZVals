@@ -2,8 +2,8 @@
 
 import pytest
 import asyncio
-from ezvals import eval, EvalContext, parametrize, EvalResult
-from ezvals.parametrize import generate_eval_functions
+from ezvals import eval, EvalContext, EvalResult
+from ezvals.cases import generate_eval_functions
 
 
 class TestSimpleContextUsage:
@@ -90,19 +90,19 @@ class TestContextManager:
         assert len(result.scores) == 1
 
 
-class TestParametrizeAutoMapping:
-    """Test Pattern 4: Parametrize with auto-mapping"""
+class TestCasesAutoMapping:
+    """Test Pattern 4: Cases with auto-mapping"""
 
-    def test_parametrize_auto_mapping(self):
-        """Test parametrize auto-populates context fields"""
+    def test_cases_auto_mapping(self):
+        """Test cases auto-populates context fields"""
 
-        @eval(dataset="test", default_score_key="accuracy")
-        @parametrize(
-            "input,reference",
-            [
-                ("positive text", "positive"),
-                ("negative text", "negative"),
-                ("neutral text", "neutral"),
+        @eval(
+            dataset="test",
+            default_score_key="accuracy",
+            cases=[
+                {"input": "positive text", "reference": "positive"},
+                {"input": "negative text", "reference": "negative"},
+                {"input": "neutral text", "reference": "neutral"},
             ],
         )
         def test_sentiment(ctx: EvalContext):
@@ -117,7 +117,7 @@ class TestParametrizeAutoMapping:
 
             ctx.store(output=detected, scores=detected == ctx.reference)
 
-        # Execute all parametrized tests
+        # Execute all case variants
         eval_functions = generate_eval_functions(test_sentiment)
 
         assert len(eval_functions) == 3
@@ -131,20 +131,26 @@ class TestParametrizeAutoMapping:
         assert results[2].input == "neutral text"
 
 
-class TestParametrizeCustomParams:
-    """Test Pattern 5: Parametrize with custom params"""
+class TestCasesCustomParams:
+    """Test Pattern 5: Cases with custom params"""
 
     def test_calculator_with_custom_params(self):
-        """Test parametrize with custom param names"""
+        """Test cases with custom param names"""
 
-        @eval(dataset="test", default_score_key="correctness")
-        @parametrize(
-            "operation,a,b,expected",
-            [("add", 2, 3, 5), ("multiply", 4, 7, 28), ("subtract", 10, 3, 7)],
+        @eval(
+            dataset="test",
+            default_score_key="correctness",
+            cases=[
+                {"input": {"operation": "add", "a": 2, "b": 3}, "reference": 5},
+                {"input": {"operation": "multiply", "a": 4, "b": 7}, "reference": 28},
+                {"input": {"operation": "subtract", "a": 10, "b": 3}, "reference": 7},
+            ],
         )
-        def test_calculator(ctx: EvalContext, operation, a, b, expected):
-            ctx.input = {"operation": operation, "a": a, "b": b}
-            ctx.reference = expected
+        def test_calculator(ctx: EvalContext):
+            operation = ctx.input["operation"]
+            a = ctx.input["a"]
+            b = ctx.input["b"]
+            expected = ctx.reference
 
             # Perform calculation
             operations = {
@@ -303,19 +309,25 @@ class TestAssertionPreservation:
 
 
 class TestMetadataFromParams:
-    """Test Pattern 8: Manual metadata extraction with parametrize"""
+    """Test Pattern 8: Manual metadata extraction with cases"""
 
     @pytest.mark.asyncio
-    async def test_metadata_with_parametrize(self):
-        """Test manually adding params to metadata with parametrize"""
+    async def test_metadata_with_cases(self):
+        """Test manually adding params to metadata with cases"""
 
         @eval(
             dataset="test",
             default_score_key="quality",
+            cases=[
+                {"input": {"model": "model-a", "temperature": 0.0}},
+                {"input": {"model": "model-a", "temperature": 1.0}},
+                {"input": {"model": "model-b", "temperature": 0.0}},
+                {"input": {"model": "model-b", "temperature": 1.0}},
+            ],
         )
-        @parametrize("model", ["model-a", "model-b"])
-        @parametrize("temperature", [0.0, 1.0])
-        async def test_func(ctx: EvalContext, model, temperature):
+        async def test_func(ctx: EvalContext):
+            model = ctx.input["model"]
+            temperature = ctx.input["temperature"]
             ctx.input = {"prompt": "Test", "model": model, "temp": temperature}
             await asyncio.sleep(0.01)
 
@@ -345,9 +357,13 @@ class TestUltraMinimal:
     def test_ultra_minimal_eval(self):
         """Test the absolute shortest possible eval"""
 
-        @eval(dataset="test", default_score_key="accuracy")
-        @parametrize(
-            "input,reference", [("I love this!", "positive"), ("Terrible!", "negative")]
+        @eval(
+            dataset="test",
+            default_score_key="accuracy",
+            cases=[
+                {"input": "I love this!", "reference": "positive"},
+                {"input": "Terrible!", "reference": "negative"},
+            ],
         )
         def test_ultra_minimal(ctx: EvalContext):
             sentiment = "positive" if "love" in ctx.input.lower() else "negative"

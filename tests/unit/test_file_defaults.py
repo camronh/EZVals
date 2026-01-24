@@ -15,7 +15,7 @@ class TestFileDefaults:
         """Tests in a file with ezvals_defaults should inherit those defaults."""
         test_file = tmp_path / "test_with_defaults.py"
         test_file.write_text("""
-from ezvals import eval
+from ezvals import eval, EvalContext
 from ezvals.context import EvalResult
 
 ezvals_defaults = {
@@ -171,11 +171,11 @@ def test_with_decorator_metadata():
             "experiment": "A"  # From decorator
         }
 
-    def test_parametrized_functions_with_file_defaults(self, tmp_path: Path):
-        """Parametrized functions should inherit file defaults."""
-        test_file = tmp_path / "test_parametrized.py"
+    def test_case_functions_with_file_defaults(self, tmp_path: Path):
+        """Case-expanded functions should inherit file defaults."""
+        test_file = tmp_path / "test_cases.py"
         test_file.write_text("""
-from ezvals import eval, parametrize
+from ezvals import eval
 from ezvals.context import EvalResult
 
 ezvals_defaults = {
@@ -183,15 +183,14 @@ ezvals_defaults = {
     "labels": ["production"],
 }
 
-@parametrize("input,expected", [
-    ("2+2", "4"),
-    ("3+3", "6"),
+@eval(cases=[
+    {"input": "2+2", "reference": "4"},
+    {"input": "3+3", "reference": "6"},
 ])
-@eval
-def test_math(input, expected):
+def test_math(ctx: EvalContext):
     return EvalResult(
-        input=input,
-        output=expected,
+        input=ctx.input,
+        output=ctx.reference,
         scores={"correctness": 1.0}
     )
 """)
@@ -199,7 +198,7 @@ def test_math(input, expected):
         discovery = EvalDiscovery()
         functions = discovery.discover(str(tmp_path))
 
-        # Should create 2 parametrized instances
+        # Should create 2 case instances
         assert len(functions) == 2
 
         # Both should inherit file defaults
