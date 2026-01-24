@@ -3,8 +3,7 @@ from pathlib import Path
 from threading import Lock, Thread, Event
 from typing import Optional, List, Dict, Any
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.templating import Jinja2Templates
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, Response
 from starlette.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -104,11 +103,12 @@ def create_app(
 ) -> FastAPI:
     """Create a FastAPI application serving evaluation results from JSON files."""
 
-    templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
     static_dir = Path(__file__).resolve().parent.parent / "static"
+    assets_dir = static_dir / "assets"
     store = ResultsStore(results_dir)
     app = FastAPI()
-    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
 
     app.state.active_run_id = active_run_id
     app.state.store = store
@@ -262,14 +262,20 @@ def create_app(
 
         Thread(target=_run_evals, daemon=True).start()
 
+    def _serve_ui_index() -> FileResponse:
+        index_file = static_dir / "index.html"
+        if not index_file.exists():
+            raise HTTPException(status_code=500, detail="UI assets not built")
+        return FileResponse(index_file)
+
     @app.get("/")
-    def index(request: Request):
-        return templates.TemplateResponse("index.html", {"request": request})
+    def index():
+        return _serve_ui_index()
 
     @app.get("/runs/{run_id}/results/{index}")
-    def result_detail_page(request: Request, run_id: str, index: int):
-        """Page view for a single result."""
-        # Validate run_id and index exist before returning template
+    def result_detail_page(run_id: str, index: int):
+        """SPA entry for a single result."""
+        # Validate run_id and index exist before returning UI
         rid = app.state.active_run_id if run_id in ("latest", app.state.active_run_id) else run_id
         try:
             summary = store.load_run(rid)
@@ -280,7 +286,7 @@ def create_app(
         if index < 0 or index >= len(results):
             raise HTTPException(status_code=404, detail="Result not found")
 
-        return templates.TemplateResponse("detail.html", {"request": request})
+        return _serve_ui_index()
 
     @app.get("/api/runs/{run_id}/results/{index}")
     def result_detail_api(run_id: str, index: int):
@@ -826,5 +832,15 @@ def create_app(
         config.update(body)
         save_config(config)
         return {"ok": True, "config": config}
+
+    @app.get("/{asset_path:path}")
+    def spa_fallback(asset_path: str):
+        """Serve static assets or fall back to the SPA entry."""
+        if asset_path.startswith("api") or asset_path.startswith("results"):
+            raise HTTPException(status_code=404, detail="Not found")
+        file_path = static_dir / asset_path
+        if file_path.is_file():
+            return FileResponse(file_path)
+        return _serve_ui_index()
 
     return app

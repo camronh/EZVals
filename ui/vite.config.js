@@ -14,6 +14,11 @@ export default defineConfig({
       '@': path.resolve(__dirname, 'src'),
     },
   },
+  build: {
+    outDir: path.resolve(__dirname, '../ezvals/static'),
+    assetsDir: 'assets',
+    emptyOutDir: true,
+  },
   server: {
     host: '127.0.0.1',
     port: 5173,
