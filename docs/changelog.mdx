@@ -7,7 +7,9 @@ description: "All notable changes to EZVals"
 
 - Changed: Replaced `@parametrize` with `cases=` on `@eval` using list-of-dict cases.
 - Changed: Case dicts can override `input`, `reference`, `metadata`, `dataset`, `labels`, `default_score_key`, `timeout`, `target`, and `evaluators`; `id` controls variant naming.
+- Changed: Web UI rebuilt with React and Vite for improved maintainability. No user-facing behavior changes.
 - Removed: `@parametrize` decorator and tuple-based case syntax.
+- Fixed: Run button incorrectly showed "Stop" instead of "Run" on fresh page load when no evaluations were running.
 
 ## 0.1.1 - 2026-01-03
 
