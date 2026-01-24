@@ -71,6 +71,10 @@
         "api-reference/eval-result",
         "api-reference/score"
       ]
+    },
+    {
+      "group": "Resources",
+      "pages": ["changelog"]
     }
   ],
   "footerSocials": {
