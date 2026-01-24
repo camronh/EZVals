@@ -24,6 +24,26 @@ from ezvals.config import load_config
 console = Console()
 
 
+def _is_port_available(port: int) -> bool:
+    """Check if a port is available for binding."""
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind(("127.0.0.1", port))
+            return True
+        except OSError:
+            return False
+
+
+def _find_available_port(start_port: int, max_attempts: int = 10) -> int:
+    """Find an available port starting from start_port."""
+    for offset in range(max_attempts):
+        port = start_port + offset
+        if _is_port_available(port):
+            return port
+    raise click.ClickException(f"No available ports found in range {start_port}-{start_port + max_attempts - 1}")
+
+
 class ProgressReporter:
     """Pytest-style progress reporter for evaluation runs"""
 
@@ -425,6 +445,11 @@ def _serve(
     if not functions:
         console.print("[yellow]No evaluations found matching the criteria.[/yellow]")
 
+    requested_port = port
+    port = _find_available_port(port)
+    if port != requested_port:
+        console.print(f"[yellow]Port {requested_port} in use → using {port}[/yellow]")
+
     url = f"http://127.0.0.1:{port}"
     console.print(f"\n[bold green]EZVals UI[/bold green] serving at: [bold blue]{url}[/bold blue]")
     if auto_run:
@@ -562,6 +587,11 @@ def _serve_from_json(
 
     if not source_exists:
         console.print(f"[yellow]Warning: Source eval path '{eval_path}' not found. View-only mode (rerun disabled).[/yellow]")
+
+    requested_port = port
+    port = _find_available_port(port)
+    if port != requested_port:
+        console.print(f"[yellow]Port {requested_port} in use → using {port}[/yellow]")
 
     url = f"http://127.0.0.1:{port}"
     console.print(f"\n[bold green]EZVals UI[/bold green] serving at: [bold blue]{url}[/bold blue]")
