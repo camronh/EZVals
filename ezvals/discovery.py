@@ -90,7 +90,7 @@ class EvalDiscovery:
         
         if function_name:
             # Filter by function name
-            # Match exact name or parametrized variants (e.g., "func" matches "func[param1]")
+            # Match exact name or case variants (e.g., "func" matches "func[param1]")
             filtered = [
                 f for f in filtered
                 if f.func.__name__ == function_name
@@ -131,7 +131,7 @@ class EvalDiscovery:
             if not isinstance(file_defaults, dict):
                 file_defaults = {}
 
-            from ezvals.parametrize import generate_eval_functions
+            from ezvals.cases import generate_eval_functions
 
             def get_line_number(func):
                 try:
@@ -142,11 +142,11 @@ class EvalDiscovery:
             functions_to_add = []
             for name, obj in inspect.getmembers(module):
                 if isinstance(obj, EvalFunction):
-                    # Check for mutual exclusion: input_loader and @parametrize cannot be used together
-                    if obj.input_loader and hasattr(obj, '__param_sets__'):
-                        raise ValueError(f"Cannot use both @parametrize and input_loader on {name}")
+                    # Check for mutual exclusion: input_loader and cases cannot be used together
+                    if obj.input_loader and hasattr(obj, '__case_sets__'):
+                        raise ValueError(f"Cannot use both cases and input_loader on {name}")
                     line_number = get_line_number(obj.func)
-                    if hasattr(obj, '__param_sets__'):
+                    if hasattr(obj, '__case_sets__'):
                         for func in generate_eval_functions(obj):
                             self._apply_file_defaults(func, file_defaults)
                             if func.dataset == 'default':

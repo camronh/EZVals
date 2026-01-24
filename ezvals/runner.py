@@ -526,13 +526,13 @@ def run_evals(
     limit: Optional[int] = None,
 ) -> List[EvalResult]:
     """Run evals programmatically. Accepts a list of eval functions and/or paths."""
-    from .parametrize import generate_eval_functions
+    from .cases import generate_eval_functions
 
     functions: List[EvalFunction] = []
     for item in evals:
         if isinstance(item, EvalFunction):
-            if hasattr(item.func, '__param_sets__'):
-                functions.extend(generate_eval_functions(item.func, item))
+            if hasattr(item.func, '__case_sets__'):
+                functions.extend(generate_eval_functions(item))
             else:
                 functions.append(item)
         elif isinstance(item, str):

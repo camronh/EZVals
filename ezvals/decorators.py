@@ -356,8 +356,8 @@ class EvalFunction:
         return self._apply_evaluators_sync(result)
 
     def __call__(self, *args, **kwargs) -> Union[EvalResult, List[EvalResult]]:
-        # Check if this is a parametrized function - run all variants
-        if hasattr(self.func, '__param_sets__'):
+        # Check if this is a case-expanded function - run all variants
+        if hasattr(self.func, '__case_sets__'):
             return self._run_all_variants(*args, **kwargs)
 
         # Run single eval - return as-is (single EvalResult or list if function returns list)
@@ -406,9 +406,9 @@ class EvalFunction:
             return self._execute_sync(*args, **kwargs)
 
     def _run_all_variants(self, *args, **kwargs) -> List[EvalResult]:
-        """Run all parametrized variants and collect results."""
-        from .parametrize import generate_eval_functions
-        variants = generate_eval_functions(self.func, self)
+        """Run all case variants and collect results."""
+        from .cases import generate_eval_functions
+        variants = generate_eval_functions(self)
         all_results = []
         for variant in variants:
             result = variant._execute(*args, **kwargs)
@@ -420,7 +420,7 @@ class EvalFunction:
 
     async def call_async(self, *args, **kwargs) -> Union[EvalResult, List[EvalResult]]:
         """Async version of __call__."""
-        if hasattr(self.func, '__param_sets__'):
+        if hasattr(self.func, '__case_sets__'):
             return self._run_all_variants(*args, **kwargs)
 
         if self.is_async:
@@ -441,16 +441,22 @@ def eval(
     metadata: Optional[Dict[str, Any]] = None,
     timeout: Optional[float] = None,
     input_loader: Optional[Callable] = None,
+    cases: Optional[Any] = None,
 ):
     # Support both @eval and @eval()
-    if callable(dataset) and labels is None and evaluators is None and timeout is None and input_loader is None:
+    if callable(dataset) and labels is None and evaluators is None and timeout is None and input_loader is None and cases is None:
         # Called as @eval without parentheses
         func = dataset
         return EvalFunction(func, dataset=None, labels=None, evaluators=None, target=None)
 
     # Called as @eval() or @eval(dataset=..., labels=..., evaluators=...)
     def decorator(func: Callable):
-        return EvalFunction(
+        if cases is not None:
+            if input_loader is not None:
+                raise ValueError("Cannot use both cases and input_loader on the same eval function")
+            from .cases import apply_cases
+            apply_cases(func, cases)
+        eval_func = EvalFunction(
             func=func,
             dataset=dataset,
             labels=labels,
@@ -463,4 +469,7 @@ def eval(
             timeout=timeout,
             input_loader=input_loader,
         )
+        if cases is not None and eval_func.context_param is None:
+            raise ValueError("cases requires the evaluation function to accept a context parameter")
+        return eval_func
     return decorator
