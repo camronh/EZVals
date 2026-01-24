@@ -50,7 +50,7 @@ const COLUMN_DEFS = [
 const RUN_MODE_KEY = 'ezvals:runMode'
 
 function hasRunningResults(data) {
-  return (data?.results || []).some((r) => ['pending', 'running', 'not_started'].includes(r.result?.status))
+  return (data?.results || []).some((r) => ['pending', 'running'].includes(r.result?.status))
 }
 
 function buildRowSearchText(row) {
