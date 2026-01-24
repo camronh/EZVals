@@ -163,7 +163,7 @@ async def test_installation_guide(ctx: EvalContext):
 ```python
 # evals/sentiment_analysis.py
 
-from ezvals import eval, parametrize, EvalContext
+from ezvals import eval, EvalContext
 
 # Shared evaluators
 def check_confidence(result):
@@ -185,10 +185,9 @@ ezvals_defaults = {
 }
 
 # All evals inherit defaults
-@eval
-@parametrize("input,reference", [
-    ("I love this!", "positive"),
-    ("This is terrible", "negative"),
+@eval(cases=[
+    {"input": "I love this!", "reference": "positive"},
+    {"input": "This is terrible", "reference": "negative"},
 ])
 async def test_basic_sentiment(ctx: EvalContext):
     result = await analyze(ctx.input)

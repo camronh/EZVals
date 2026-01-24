@@ -7,7 +7,7 @@ that makes evaluations incredibly clean and intuitive.
 
 import time
 import asyncio
-from ezvals import eval, EvalContext, parametrize
+from ezvals import eval, EvalContext
 import random
 
 
@@ -123,18 +123,21 @@ async def test_context_manager():
 
 
 # ============================================================================
-# Pattern 5: Parametrize with Auto-Mapping (MAGICAL!)
+# Pattern 5: Cases with Auto-Mapping (MAGICAL!)
 # ============================================================================
 
-@eval(dataset="sentiment_analysis", default_score_key="correctness")
-@parametrize("input,reference", [
-    ("I love this product!", "positive"),
-    ("This is terrible", "negative"),
-    ("It's okay I guess", "neutral"),
-])
-def test_parametrize_auto_mapping(ctx: EvalContext):
-    """Parametrize fields named 'input' and 'reference' auto-populate ctx!"""
-    # ctx.input and ctx.reference already set by parametrize!
+@eval(
+    dataset="sentiment_analysis",
+    default_score_key="correctness",
+    cases=[
+        {"input": "I love this product!", "reference": "positive"},
+        {"input": "This is terrible", "reference": "negative"},
+        {"input": "It's okay I guess", "reference": "neutral"},
+    ],
+)
+def test_cases_auto_mapping(ctx: EvalContext):
+    """Case fields named 'input' and 'reference' auto-populate ctx!"""
+    # ctx.input and ctx.reference already set by cases!
 
     # Simulate sentiment analysis
     sentiment_map = {
@@ -153,20 +156,24 @@ def test_parametrize_auto_mapping(ctx: EvalContext):
 
 
 # ============================================================================
-# Pattern 6: Parametrize with Custom Params
+# Pattern 6: Cases with Custom Params
 # ============================================================================
 
-@eval(dataset="math_operations", default_score_key="correctness")
-@parametrize("operation,a,b,expected", [
-    ("add", 2, 3, 5),
-    ("multiply", 4, 7, 28),
-    ("subtract", 10, 3, 7),
-])
-def test_calculator(ctx: EvalContext, operation, a, b, expected):
-    """Custom param names - passed as function arguments"""
-    # Set input and reference manually from params
-    ctx.input = {"operation": operation, "a": a, "b": b}
-    ctx.reference = expected
+@eval(
+    dataset="math_operations",
+    default_score_key="correctness",
+    cases=[
+        {"input": {"operation": "add", "a": 2, "b": 3}, "reference": 5},
+        {"input": {"operation": "multiply", "a": 4, "b": 7}, "reference": 28},
+        {"input": {"operation": "subtract", "a": 10, "b": 3}, "reference": 7},
+    ],
+)
+def test_calculator(ctx: EvalContext):
+    """Custom params are stored in ctx.input"""
+    operation = ctx.input["operation"]
+    a = ctx.input["a"]
+    b = ctx.input["b"]
+    expected = ctx.reference
 
     # Perform calculation
     operations = {
@@ -228,13 +235,17 @@ async def test_assertion_preservation(ctx: EvalContext):
 # Pattern 9: Track Parameters in Metadata
 # ============================================================================
 
-@eval(dataset="model_config")
-@parametrize("model,temperature", [
-    ("gpt-3.5", 0.0),
-    ("gpt-4", 1.0),
-])
-async def test_track_params(ctx: EvalContext, model, temperature):
+@eval(
+    dataset="model_config",
+    cases=[
+        {"input": {"model": "gpt-3.5", "temperature": 0.0}},
+        {"input": {"model": "gpt-4", "temperature": 1.0}},
+    ],
+)
+async def test_track_params(ctx: EvalContext):
     """Store parameters in metadata for tracking"""
+    model = ctx.input["model"]
+    temperature = ctx.input["temperature"]
     ctx.input = f"Test with {model}"
     ctx.store(metadata={"model": model, "temperature": temperature})
 
@@ -246,11 +257,14 @@ async def test_track_params(ctx: EvalContext, model, temperature):
 # Pattern 10: Ultra-Minimal (THE DREAM!)
 # ============================================================================
 
-@eval(dataset="sentiment", default_score_key="correctness")
-@parametrize("input,reference", [
-    ("I love this!", "positive"),
-    ("Terrible!", "negative"),
-])
+@eval(
+    dataset="sentiment",
+    default_score_key="correctness",
+    cases=[
+        {"input": "I love this!", "reference": "positive"},
+        {"input": "Terrible!", "reference": "negative"},
+    ],
+)
 def test_ultra_minimal(ctx: EvalContext):
     """The absolute shortest possible eval - 2 lines!"""
     sentiment = "positive" if "love" in ctx.input.lower() else "negative"

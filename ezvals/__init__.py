@@ -1,10 +1,9 @@
 from ezvals.decorators import eval
 from ezvals.schemas import EvalResult, TraceData
-from ezvals.parametrize import parametrize
 from ezvals.context import EvalContext
 from ezvals.runner import run_evals
 
-__all__ = ["eval", "EvalResult", "TraceData", "parametrize", "EvalContext", "run_evals"]
+__all__ = ["eval", "EvalResult", "TraceData", "EvalContext", "run_evals"]
 
 # Resolve version from installed package metadata to avoid hard-coding.
 try:  # Python 3.8+

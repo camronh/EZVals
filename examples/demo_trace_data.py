@@ -7,7 +7,7 @@ This file demonstrates how to use ctx.store() for:
 - Adding custom trace properties
 """
 
-from ezvals import eval, EvalContext, parametrize
+from ezvals import eval, EvalContext
 
 
 # =============================================================================
@@ -139,38 +139,44 @@ async def test_rag_with_trace_data(ctx: EvalContext):
 # =============================================================================
 
 
-@eval
-@parametrize(
-    "provider,messages",
-    [
-        (
-            "openai",
-            [
-                {"role": "user", "content": "Hello"},
-                {"role": "assistant", "content": "Hi there!"},
-            ],
-        ),
-        (
-            "anthropic",
-            [
-                {"role": "user", "content": [{"type": "text", "text": "Hello"}]},
-                {
-                    "role": "assistant",
-                    "content": [{"type": "text", "text": "Hi there!"}],
-                },
-            ],
-        ),
-        (
-            "custom",
-            [
-                {"speaker": "human", "text": "Hello"},
-                {"speaker": "bot", "text": "Hi there!"},
-            ],
-        ),
+@eval(
+    cases=[
+        {
+            "input": {
+                "provider": "openai",
+                "messages": [
+                    {"role": "user", "content": "Hello"},
+                    {"role": "assistant", "content": "Hi there!"},
+                ],
+            }
+        },
+        {
+            "input": {
+                "provider": "anthropic",
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "Hello"}]},
+                    {
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": "Hi there!"}],
+                    },
+                ],
+            }
+        },
+        {
+            "input": {
+                "provider": "custom",
+                "messages": [
+                    {"speaker": "human", "text": "Hello"},
+                    {"speaker": "bot", "text": "Hi there!"},
+                ],
+            }
+        },
     ],
 )
-def test_universal_message_format(ctx: EvalContext, provider, messages):
+def test_universal_message_format(ctx: EvalContext):
     """Messages are stored as-is, regardless of format"""
+    provider = ctx.input["provider"]
+    messages = ctx.input["messages"]
     ctx.input = f"Test {provider} format"
     ctx.store(
         messages=messages,

@@ -2,6 +2,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+- Changed: Replaced `@parametrize` with `cases=` on `@eval` using list-of-dict cases.
+- Changed: Case dicts can override `input`, `reference`, `metadata`, `dataset`, `labels`, `default_score_key`, `timeout`, `target`, and `evaluators`; `id` controls variant naming.
+- Removed: `@parametrize` decorator and tuple-based case syntax.
+
 ## 0.1.1 - 2026-01-03
 
 - Changed: Stats bar error count now always displays (shows 0 when no errors) for consistent layout.

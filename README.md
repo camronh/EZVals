@@ -190,49 +190,57 @@ def test_negative(ctx: EvalContext):
 
 **Priority:** Decorator parameters > File defaults > Built-in defaults
 
-### `@parametrize`
+### Cases (`cases=`)
 
-Generate multiple evals from one function. Place `@eval` above `@parametrize`.
+Generate multiple evals from one function with the `cases=` argument on `@eval`.
 
-When parameter names match EvalContext fields (`input`, `reference`, `metadata`, etc.), they automatically populate the context:
+Cases are list-of-dict overrides for the same fields you can pass to `@eval` (plus `id`).
 
 ```python
-from ezvals import parametrize
-
-@eval(dataset="sentiment")
-@parametrize("input,reference", [
-    ("I love this!", "positive"),
-    ("This is terrible", "negative"),
-    ("It's okay I guess", "neutral"),
-])
+@eval(
+    dataset="sentiment",
+    cases=[
+        {"input": "I love this!", "reference": "positive"},
+        {"input": "This is terrible", "reference": "negative"},
+        {"input": "It's okay I guess", "reference": "neutral"},
+    ],
+)
 def test_sentiment(ctx: EvalContext):
     ctx.output = analyze_sentiment(ctx.input)
     assert ctx.output == ctx.reference
 ```
 
-**Custom parameters:**
+**Custom case data:**
 
 ```python
-@eval(dataset="math")
-@parametrize("a,b,expected", [
-    (2, 3, 5),
-    (4, 7, 28),
-])
-def test_calculator(ctx: EvalContext, a, b, expected):
-    ctx.input = {"a": a, "b": b}
-    ctx.output = a + b
-    assert ctx.output == expected
+@eval(
+    dataset="math",
+    cases=[
+        {"input": {"a": 2, "b": 3}, "reference": 5},
+        {"input": {"a": 4, "b": 7}, "reference": 28},
+    ],
+)
+def test_calculator(ctx: EvalContext):
+    ctx.output = ctx.input["a"] + ctx.input["b"]
+    assert ctx.output == ctx.reference
 ```
 
-**Cartesian product (stacked parametrize):**
+**Explicit grids:**
 
 ```python
-@eval(dataset="models")
-@parametrize("model", ["gpt-4", "gpt-3.5"])
-@parametrize("temperature", [0.0, 0.7, 1.0])
-def test_model_grid(ctx: EvalContext, model, temperature):
-    ctx.input = {"model": model, "temperature": temperature}
-    ctx.output = run_model(model, temperature)
+@eval(
+    dataset="models",
+    cases=[
+        {"input": {"model": "gpt-4", "temperature": 0.0}},
+        {"input": {"model": "gpt-4", "temperature": 0.7}},
+        {"input": {"model": "gpt-4", "temperature": 1.0}},
+        {"input": {"model": "gpt-3.5", "temperature": 0.0}},
+        {"input": {"model": "gpt-3.5", "temperature": 0.7}},
+        {"input": {"model": "gpt-3.5", "temperature": 1.0}},
+    ],
+)
+def test_model_grid(ctx: EvalContext):
+    ctx.output = run_model(ctx.input["model"], ctx.input["temperature"])
     assert ctx.output is not None
 ```
 

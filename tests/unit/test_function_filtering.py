@@ -22,15 +22,17 @@ def other_func(): return EvalResult(input='c', output='d')
         assert len(funcs) == 1
         assert funcs[0].func.__name__ == "target_func"
 
-    def test_filter_parametrized_base_name(self, tmp_path):
-        """Test filtering parametrized function by base name returns all variants"""
+    def test_filter_case_base_name(self, tmp_path):
+        """Test filtering case-expanded function by base name returns all variants"""
         d = tmp_path / "test_param.py"
         d.write_text("""
-from ezvals import eval, EvalResult, parametrize
+from ezvals import eval, EvalResult, EvalContext
 
-@parametrize("val", [1, 2])
-@eval()
-def param_func(val): return EvalResult(input=str(val), output=str(val))
+@eval(cases=[
+    {"input": 1},
+    {"input": 2},
+])
+def param_func(ctx: EvalContext): return EvalResult(input=str(ctx.input), output=str(ctx.input))
 """)
         
         discovery = EvalDiscovery()
@@ -40,15 +42,17 @@ def param_func(val): return EvalResult(input=str(val), output=str(val))
         names = {f.func.__name__ for f in funcs}
         assert names == {"param_func[0]", "param_func[1]"}
 
-    def test_filter_parametrized_specific_variant(self, tmp_path):
-        """Test filtering parametrized function by specific variant name"""
+    def test_filter_case_specific_variant(self, tmp_path):
+        """Test filtering case-expanded function by specific variant name"""
         d = tmp_path / "test_param_specific.py"
         d.write_text("""
-from ezvals import eval, EvalResult, parametrize
+from ezvals import eval, EvalResult, EvalContext
 
-@parametrize("val", [1, 2])
-@eval()
-def param_func(val): return EvalResult(input=str(val), output=str(val))
+@eval(cases=[
+    {"input": 1},
+    {"input": 2},
+])
+def param_func(ctx: EvalContext): return EvalResult(input=str(ctx.input), output=str(ctx.input))
 """)
         
         discovery = EvalDiscovery()
@@ -117,4 +121,3 @@ def func_prod2(): return EvalResult(input='p2', output='p2')
         assert len(funcs) == 1
         assert funcs[0].func.__name__ == "func_prod"
         assert "prod" in funcs[0].labels
-

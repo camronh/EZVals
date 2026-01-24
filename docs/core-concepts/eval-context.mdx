@@ -30,14 +30,16 @@ async def test_capital(ctx: EvalContext):
     assert ctx.output == ctx.reference
 ```
 
-With `@parametrize`, special parameter names (`input`, `reference`, `metadata`, `trace_data`, `latency`) auto-populate context fields:
+With `cases=`, `input` and `reference` in each case auto-populate the context fields:
 
 ```python
-@eval(dataset="sentiment")
-@parametrize("input,reference", [
-    ("I love this!", "positive"),
-    ("This is terrible", "negative"),
-])
+@eval(
+    dataset="sentiment",
+    cases=[
+        {"input": "I love this!", "reference": "positive"},
+        {"input": "This is terrible", "reference": "negative"},
+    ],
+)
 async def test_sentiment(ctx: EvalContext):
     ctx.output = await analyze_sentiment(ctx.input)
     assert ctx.output == ctx.reference
@@ -152,18 +154,19 @@ async def test_auto_pass(ctx: EvalContext):
 
 ## Custom Parameters
 
-For parametrized tests with custom parameter names, include them in your function signature:
+For case-based tests with custom data, store it in `ctx.input`:
 
 ```python
-@eval(dataset="demo")
-@parametrize("prompt,expected_category", [
-    ("I want a refund", "complaint"),
-    ("Thank you!", "praise"),
-])
-async def test_classification(ctx: EvalContext, prompt, expected_category):
-    ctx.input = prompt
-    ctx.output = await classify(prompt)
-    assert ctx.output == expected_category
+@eval(
+    dataset="demo",
+    cases=[
+        {"input": {"prompt": "I want a refund", "expected_category": "complaint"}},
+        {"input": {"prompt": "Thank you!", "expected_category": "praise"}},
+    ],
+)
+async def test_classification(ctx: EvalContext):
+    ctx.output = await classify(ctx.input["prompt"])
+    assert ctx.output == ctx.input["expected_category"]
 ```
 
 ## Run Metadata (for Observability)

@@ -44,17 +44,19 @@ async def test_arithmetic(ctx: EvalContext):
     assert ctx.output == ctx.reference
 ```
 
-### With Parametrize
+### With Cases
 
-Assertions work naturally with parametrized tests:
+Assertions work naturally with case-based tests:
 
 ```python
-@eval(dataset="sentiment")
-@parametrize("input,reference", [
-    ("I love this!", "positive"),
-    ("This is terrible", "negative"),
-    ("It's okay", "neutral"),
-])
+@eval(
+    dataset="sentiment",
+    cases=[
+        {"input": "I love this!", "reference": "positive"},
+        {"input": "This is terrible", "reference": "negative"},
+        {"input": "It's okay", "reference": "neutral"},
+    ],
+)
 async def test_sentiment(ctx: EvalContext):
     ctx.output = await classify_sentiment(ctx.input)
     assert ctx.output == ctx.reference

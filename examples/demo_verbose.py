@@ -1,7 +1,7 @@
 """
 Verbose examples to test UI rendering of long inputs/outputs.
 """
-from ezvals import eval, EvalResult, parametrize, EvalContext
+from ezvals import eval, EvalResult, EvalContext
 
 LONG_ARTICLE = """The rapid advancement of artificial intelligence has fundamentally transformed how we approach software development, data analysis, and decision-making processes across industries. Machine learning models, particularly large language models (LLMs), have demonstrated remarkable capabilities in understanding and generating human-like text, leading to applications ranging from automated customer service to sophisticated code generation tools.
 
@@ -391,11 +391,13 @@ STRUCTURED_SCENARIOS = [
     },
 ]
 
-@eval(dataset="structured_data", labels=["verbose"])
-@parametrize("scenario_idx", [0, 1])
-def test_structured_data_processing(ctx: EvalContext, scenario_idx):
+@eval(dataset="structured_data", labels=["verbose"], cases=[
+    {"input": {"scenario_idx": 0}},
+    {"input": {"scenario_idx": 1}},
+])
+def test_structured_data_processing(ctx: EvalContext):
     """Test handling of complex structured inputs"""
-    scenario = STRUCTURED_SCENARIOS[scenario_idx]
+    scenario = STRUCTURED_SCENARIOS[ctx.input["scenario_idx"]]
     output = {
         "status": "processed",
         "scenario": scenario["name"],
