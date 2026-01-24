@@ -6,7 +6,7 @@ description: Configure and register evaluation functions
 The `@eval` decorator marks functions as evaluations. Here's a complete example:
 
 ```python
-from ezvals import eval, parametrize, EvalContext
+from ezvals import eval, EvalContext
 
 @eval(
     dataset="customer_service",
@@ -155,7 +155,7 @@ Each example from the loader becomes a separate eval run. The loader is called l
 - Or return objects with `.input`, `.reference`, `.metadata` attributes
 
 <Note>
-`input_loader` cannot be combined with `input=`, `reference=`, or `@parametrize`.
+`input_loader` cannot be combined with `input=`, `reference=`, or `cases=`.
 </Note>
 
 ## Sync and Async
@@ -196,3 +196,4 @@ def test_batch():
 | `target` | callable | Pre-hook to run before evaluation |
 | `evaluators` | list[callable] | Post-processing score functions |
 | `input_loader` | callable | Async/sync function returning examples |
+| `cases` | list[dict] | Case definitions that expand into multiple eval variants |

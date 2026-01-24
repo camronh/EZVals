@@ -15,8 +15,8 @@ Follow these steps in order:
 - Understand what features/fixes/changes are being shipped
 
 
-## 3. Update CHANGELOG.md
-- Add entries to the "Unreleased" section at the top (below "All notable changes...")
+## 3. Update docs/changelog.mdx
+- Add entries to the "Unreleased" section at the top (below the frontmatter)
 - If no "Unreleased" section exists, create one: `## Unreleased`
 - Analyze the git diff to auto-generate changelog entries
 - Use these prefixes based on change type:
@@ -71,8 +71,8 @@ Follow these steps in order:
 **Skip this step unless the user explicitly asked to ship to main.**
 
 If shipping to main:
-1. Don't ask the user what version number to use (suggest next alpha based on CHANGELOG)
-2. Update CHANGELOG.md: change `## Unreleased` to `## <version> - <today's date>`
+1. Don't ask the user what version number to use (suggest next alpha based on docs/changelog.mdx)
+2. Update docs/changelog.mdx: change `## Unreleased` to `## <version> - <today's date>`
 3. Update `pyproject.toml` version to match
 4. Commit: `git commit -m "release <version>"`
 5. Push dev: `git push origin dev`

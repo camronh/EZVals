@@ -1,6 +1,6 @@
 """Tests for the input_loader functionality"""
 import pytest
-from ezvals import eval, EvalResult, EvalContext, parametrize
+from ezvals import eval, EvalResult, EvalContext
 from ezvals.runner import EvalRunner
 from ezvals.decorators import EvalFunction
 
@@ -105,7 +105,7 @@ def test_func(ctx: EvalContext):
         assert summary["total_evaluations"] == 0
 
     def test_function_names_have_index(self, tmp_path):
-        """Expanded functions should have [idx] suffix like parametrize"""
+        """Expanded functions should have [idx] suffix like cases"""
         test_file = tmp_path / "test_func_names.py"
         test_file.write_text("""
 from ezvals import eval, EvalContext
@@ -159,18 +159,21 @@ class TestInputLoaderValidation:
             def test_func(ctx: EvalContext):
                 pass
 
-    def test_mutually_exclusive_with_parametrize(self, tmp_path, capsys):
-        """Cannot combine input_loader with @parametrize"""
+    def test_mutually_exclusive_with_cases(self, tmp_path, capsys):
+        """Cannot combine input_loader with cases"""
         test_file = tmp_path / "test_mutual_exclusion.py"
         test_file.write_text("""
-from ezvals import eval, EvalContext, parametrize
+from ezvals import eval, EvalContext
 
 def my_loader():
     return [{"input": "x"}]
 
-@eval(input_loader=my_loader)
-@parametrize("value", [1, 2, 3])
-def test_func(ctx: EvalContext, value):
+@eval(input_loader=my_loader, cases=[
+    {"input": 1},
+    {"input": 2},
+    {"input": 3},
+])
+def test_func(ctx: EvalContext):
     pass
 """)
 
@@ -179,7 +182,7 @@ def test_func(ctx: EvalContext, value):
 
         # Discovery should fail and print a warning
         captured = capsys.readouterr()
-        assert "@parametrize and input_loader" in captured.out
+        assert "cases and input_loader" in captured.out
         # No functions discovered since file import failed
         assert summary["total_evaluations"] == 0
 

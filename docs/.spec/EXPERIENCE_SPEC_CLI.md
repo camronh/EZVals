@@ -35,7 +35,7 @@ Scenario: Run a specific function
   When the user runs `ezvals run evals.py::test_refund`
   Then only test_refund runs
 
-Scenario: Run a parametrized variant
+Scenario: Run a case variant
   When the user runs `ezvals run evals.py::test_math[2][3][5]`
   Then only that specific variant runs
 ```
@@ -347,4 +347,3 @@ Scenario: Concurrency set to zero
 | `--run-name` | str | auto | Run name |
 | `--results-dir` | path | .ezvals/sessions | Results directory |
 | `--run` | flag | false | Auto-run all evals on startup |
-

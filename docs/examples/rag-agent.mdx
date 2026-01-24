@@ -1,6 +1,6 @@
 ---
 title: RAG Agent Evaluation
-description: Evaluating a retrieval-augmented generation agent with parametrized datasets
+description: Evaluating a retrieval-augmented generation agent with case datasets
 ---
 
 # RAG Agent Evaluation
@@ -33,7 +33,7 @@ flowchart LR
 ## The Eval
 
 ```python
-from ezvals import eval, parametrize, EvalContext
+from ezvals import eval, EvalContext
 
 async def run_agent(ctx: EvalContext):
     results = await run_rag_agent(ctx.input)
@@ -41,15 +41,18 @@ async def run_agent(ctx: EvalContext):
     ctx.metadata["source_docs"] = results.metadata["source_docs"]
 
 
-@eval(target=run_agent, dataset="rag_qa")
-@parametrize("input,reference", [
-    ("What is our refund policy?", "30-day money-back guarantee"),
-    ("How do I reset my password?", "Click 'Forgot Password' on the login page"),
-    ("What payment methods do you accept?", "Visa, Mastercard, and PayPal"),
-    ("How long does shipping take?", "3-5 business days for standard shipping"),
-    ("Can I change my order after placing it?", "Within 1 hour of placing the order"),
-    # ... hundreds more rows
-])
+@eval(
+    target=run_agent,
+    dataset="rag_qa",
+    cases=[
+        {"input": "What is our refund policy?", "reference": "30-day money-back guarantee"},
+        {"input": "How do I reset my password?", "reference": "Click 'Forgot Password' on the login page"},
+        {"input": "What payment methods do you accept?", "reference": "Visa, Mastercard, and PayPal"},
+        {"input": "How long does shipping take?", "reference": "3-5 business days for standard shipping"},
+        {"input": "Can I change my order after placing it?", "reference": "Within 1 hour of placing the order"},
+        # ... hundreds more rows
+    ],
+)
 async def test_rag_agent(ctx: EvalContext):
     """Evaluate a RAG Agent for correctness and hallucinations"""
     # LLM-as-a-Judge for hallucination
@@ -69,7 +72,7 @@ async def test_rag_agent(ctx: EvalContext):
 
 ## What's Happening
 
-**Parametrized dataset** — The `@parametrize` decorator creates one eval run per row. Each row sets `ctx.input` and `ctx.reference` automatically.
+**Case dataset** — `cases=` creates one eval run per row. Each row sets `ctx.input` and `ctx.reference` automatically.
 
 **Target function** — The `run_agent` target runs before the eval body, populating `ctx.output` and storing source docs in metadata.
 

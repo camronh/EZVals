@@ -5,7 +5,7 @@ description: When each test case needs its own logic
 
 # Granular Evals
 
-Sometimes you can't parametrize. Each test case has unique logic—different ways of deriving ground truth, different validation. EZVals handles this naturally.
+Sometimes you can't use cases. Each test case has unique logic—different ways of deriving ground truth, different validation. EZVals handles this naturally.
 
 ## The Problem
 
@@ -118,7 +118,7 @@ Use granular evals when:
 - Validation logic varies significantly per test
 - You're testing diverse agent capabilities in one suite
 
-Use parametrized evals when:
+Use case-based evals when:
 - All test cases share the same logic
 - You have a large dataset of input/output pairs
 - Ground truth is known upfront

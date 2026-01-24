@@ -7,7 +7,7 @@ This document specifies the Python API experience for EZVals.
 ## Public API
 
 ```python
-from ezvals import eval, EvalResult, TraceData, parametrize, EvalContext, run_evals
+from ezvals import eval, EvalResult, TraceData, EvalContext, run_evals
 ```
 
 | Export | Type | Purpose |
@@ -15,7 +15,6 @@ from ezvals import eval, EvalResult, TraceData, parametrize, EvalContext, run_ev
 | `eval` | decorator | Mark functions as evaluations |
 | `EvalResult` | dataclass | Immutable result container |
 | `TraceData` | class | Structured trace/debug data storage |
-| `parametrize` | decorator | Generate multiple test cases |
 | `EvalContext` | class | Mutable builder for results |
 | `run_evals` | function | Programmatic execution |
 
@@ -55,6 +54,7 @@ Scenario: Pre-populated context fields
 | `target` | callable | None | Pre-hook that runs first |
 | `evaluators` | list[callable] | [] | Post-processing score functions |
 | `input_loader` | callable | None | Async/sync function that returns examples |
+| `cases` | list[dict] | None | Case definitions that expand into multiple eval variants |
 
 ### Return Types
 
@@ -310,79 +310,65 @@ Scenario: Multiple assertions
 
 ---
 
-## `@parametrize` Decorator
+## `cases=` (on `@eval`)
 
 **Intent:** User wants to generate multiple test cases from one function.
 
 ### Basic Usage
 
 ```python
-@eval(dataset="math")
-@parametrize("a,b,expected", [
-    (2, 3, 5),
-    (10, 20, 30),
-])
-def test_add(ctx: EvalContext, a, b, expected):
-    ctx.output = a + b
-    assert ctx.output == expected
+@eval(
+    dataset="math",
+    cases=[
+        {"input": {"a": 2, "b": 3}, "reference": 5},
+        {"input": {"a": 10, "b": 20}, "reference": 30},
+    ],
+)
+def test_add(ctx: EvalContext):
+    ctx.output = ctx.input["a"] + ctx.input["b"]
+    assert ctx.output == ctx.reference
 ```
 
 ### Auto-Mapping Special Names
 
 ```gherkin
-Scenario: Parameters named input/reference auto-populate context
-  Given @parametrize("input,reference", [("hello", "world")])
+Scenario: input/reference in cases auto-populate context
+  Given cases=[{"input": "hello", "reference": "world"}]
   When evaluation runs
   Then ctx.input = "hello" and ctx.reference = "world"
-  And parameters don't need to be in function signature
 ```
 
-**Special parameter names:** `input`, `reference`, `metadata`, `trace_data`, `latency`, `dataset`, `labels`
+**Allowed case keys:** `input`, `reference`, `metadata`, `dataset`, `labels`, `default_score_key`, `timeout`, `target`, `evaluators`, `id`
 
 ### Per-Case Dataset and Labels
 
 ```gherkin
 Scenario: Per-case dataset overrides function dataset
-  Given @eval(dataset="default")
-  And @parametrize("input,dataset", [("a", "custom"), ("b", None)])
+  Given @eval(dataset="default", cases=[{"input": "a", "dataset": "custom"}, {"input": "b", "dataset": None}])
   When evaluations run
   Then first case has dataset="custom"
-  And second case has dataset="default"
+  And second case has dataset=None
 
 Scenario: Per-case labels merge with function labels
-  Given @eval(labels=["base"])
-  And @parametrize("input,labels", [("a", ["extra"]), ("b", None)])
+  Given @eval(labels=["base"], cases=[{"input": "a", "labels": ["extra"]}, {"input": "b", "labels": None}])
   When evaluations run
   Then first case has labels=["base", "extra"]
-  And second case has labels=["base"]
+  And second case has labels=[]
   And duplicate labels are not added
-```
-
-### Custom Parameter Names
-
-```gherkin
-Scenario: Custom parameters require function signature
-  Given @parametrize("prompt,expected", [...])
-  And function is def test(ctx: EvalContext, prompt, expected)
-  Then prompt and expected are available in function body
 ```
 
 ### Test IDs
 
 ```python
-@parametrize("x", [1, 2, 3], ids=["low", "mid", "high"])
+@eval(cases=[
+    {"id": "low", "input": 1},
+    {"id": "mid", "input": 2},
+    {"id": "high", "input": 3},
+])
 # Creates: test[low], test[mid], test[high]
 
-@parametrize("x", [1, 2, 3])  # No ids
+@eval(cases=[{"input": 1}, {"input": 2}, {"input": 3}])  # No ids
 # Creates: test[0], test[1], test[2]
-```
-
-### Cartesian Product
-
-```python
-@parametrize("model", ["gpt-4", "claude"])
-@parametrize("temp", [0.0, 1.0])
-# Creates 4 evaluations: [model][temp], e.g. [gpt-4][0.0]
 ```
 
 ### Loading Test Cases from File
@@ -393,8 +379,7 @@ import json
 with open("test_cases.json") as f:
     cases = json.load(f)  # [{"input": "...", "reference": "..."}, ...]
 
-@eval(dataset="from_file")
-@parametrize("input,reference", [(c["input"], c["reference"]) for c in cases])
+@eval(dataset="from_file", cases=cases)
 def test_from_file(ctx: EvalContext):
     ctx.output = agent(ctx.input)
     assert ctx.output == ctx.reference
@@ -488,8 +473,8 @@ Scenario: Mutually exclusive with input=/reference=
   Given @eval(input="x", input_loader=fn)
   Then ValueError raised at decoration time
 
-Scenario: Mutually exclusive with @parametrize
-  Given @eval(input_loader=fn) with @parametrize
+Scenario: Mutually exclusive with cases
+  Given @eval(input_loader=fn) with cases
   Then ValueError raised at discovery time
 ```
 
@@ -656,14 +641,16 @@ def test_comprehensive(ctx: EvalContext):
     ])
 ```
 
-### Pattern 3: Parametrized Dataset
+### Pattern 3: Case Dataset
 
 ```python
-@eval(dataset="sentiment")
-@parametrize("input,reference", [
-    ("I love this!", "positive"),
-    ("This is terrible", "negative"),
-])
+@eval(
+    dataset="sentiment",
+    cases=[
+        {"input": "I love this!", "reference": "positive"},
+        {"input": "This is terrible", "reference": "negative"},
+    ],
+)
 def test_sentiment(ctx: EvalContext):
     ctx.output = classify(ctx.input)
     assert ctx.output == ctx.reference

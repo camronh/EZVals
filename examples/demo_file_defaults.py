@@ -5,7 +5,7 @@ This shows how to set global properties at the file level that all tests inherit
 similar to pytest's pytestmark pattern.
 """
 
-from ezvals import eval, parametrize, EvalContext
+from ezvals import eval, EvalContext
 
 
 def analyze_sentiment(ctx: EvalContext):
@@ -101,15 +101,14 @@ def test_empty_input(ctx: EvalContext):
     )
 
 
-@eval
-@parametrize("text,expected", [
-    ("Great product!", "positive"),
-    ("Worst experience ever", "negative"),
-    ("It's fine", "neutral"),
+@eval(cases=[
+    {"input": "Great product!", "reference": "positive"},
+    {"input": "Worst experience ever", "reference": "negative"},
+    {"input": "It's fine", "reference": "neutral"},
 ])
-def test_sentiment_parametrized(ctx: EvalContext, text, expected):
+def test_sentiment_cases(ctx: EvalContext):
     """
-    Parametrized tests also inherit file-level defaults.
+    Case-expanded tests also inherit file-level defaults.
     All three generated test cases will have:
     - dataset: sentiment_analysis
     - labels: ["production", "nlp"]
@@ -117,11 +116,9 @@ def test_sentiment_parametrized(ctx: EvalContext, text, expected):
     - metadata: {"model": "gpt-4", "version": "v1.0"}
     """
     # Simulate sentiment analysis
-    output = expected  # In reality, this would call an LLM or model
+    output = ctx.reference  # In reality, this would call an LLM or model
 
     ctx.store(
-        input=text,
         output=output,
-        reference=expected,
-        scores=1.0 if output == expected else 0.0
+        scores=1.0 if output == ctx.reference else 0.0
     )
