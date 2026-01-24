@@ -145,7 +145,8 @@ def generate_eval_functions(func: Callable) -> List[EvalFunction]:
             timeout=timeout,
         )
 
-        # EvalFunction infers dataset from func name when None; override if explicitly set
+        # EvalFunction infers dataset from func name when passed None. If the case
+        # explicitly sets dataset (even to None), override the inferred value.
         if 'dataset' in case:
             eval_func.dataset = dataset
 
@@ -153,6 +154,8 @@ def generate_eval_functions(func: Callable) -> List[EvalFunction]:
             eval_func._provided_labels = getattr(eval_settings, '_provided_labels', None)
             eval_func._provided_evaluators = getattr(eval_settings, '_provided_evaluators', None)
 
+        # When a case explicitly sets labels/evaluators, mark them as "provided" (even as empty)
+        # to prevent file defaults from being re-applied during discovery.
         if 'labels' in case:
             eval_func._provided_labels = []
         if 'evaluators' in case:

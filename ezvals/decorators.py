@@ -454,7 +454,16 @@ def eval(
         if cases is not None:
             if input_loader is not None:
                 raise ValueError("Cannot use both cases and input_loader on the same eval function")
+            # Validate context param early before constructing EvalFunction
             from .cases import apply_cases
+            sig = inspect.signature(func)
+            has_context = any(
+                param.annotation is EvalContext or
+                (isinstance(param.annotation, str) and param.annotation.split(".")[-1] == "EvalContext")
+                for param in sig.parameters.values()
+            )
+            if not has_context:
+                raise ValueError("cases requires the evaluation function to accept a context parameter")
             apply_cases(func, cases)
         eval_func = EvalFunction(
             func=func,
@@ -469,7 +478,5 @@ def eval(
             timeout=timeout,
             input_loader=input_loader,
         )
-        if cases is not None and eval_func.context_param is None:
-            raise ValueError("cases requires the evaluation function to accept a context parameter")
         return eval_func
     return decorator
