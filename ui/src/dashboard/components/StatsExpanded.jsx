@@ -124,7 +124,16 @@ export default function StatsExpanded({
           {stats.runName ? (
             <div className="stats-info-row group">
               <span className="stats-info-label">run</span>
-              {sessionRuns.length > 1 ? (
+              {editingRunName ? (
+                <input
+                  className="font-mono text-sm bg-zinc-800 border border-zinc-600 rounded px-1 w-28 text-white outline-none focus:border-zinc-500"
+                  value={runNameDraft}
+                  onChange={(e) => setRunNameDraft(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') onRunNameSave(); if (e.key === 'Escape') setEditingRunName(false) }}
+                  onBlur={() => setEditingRunName(false)}
+                  autoFocus
+                />
+              ) : sessionRuns.length > 1 ? (
                 <button
                   ref={runDropdownExpandedRef}
                   id="run-dropdown-expanded"
@@ -135,17 +144,7 @@ export default function StatsExpanded({
                   {currentRunLabel} <span className="dropdown-arrow">v</span>
                 </button>
               ) : (
-                editingRunName ? (
-                  <input
-                    className="font-mono text-sm bg-zinc-800 border border-zinc-600 rounded px-1 w-28 text-white outline-none focus:border-zinc-500"
-                    value={runNameDraft}
-                    onChange={(e) => setRunNameDraft(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') onRunNameSave(); if (e.key === 'Escape') setEditingRunName(false) }}
-                    onBlur={() => setEditingRunName(false)}
-                  />
-                ) : (
-                  <CopyableText text={stats.runName} className="stats-run copyable cursor-pointer hover:text-zinc-300" />
-                )
+                <CopyableText text={stats.runName} className="stats-run copyable cursor-pointer hover:text-zinc-300" />
               )}
               <button
                 className="edit-run-btn-expanded ml-1 text-zinc-600 transition hover:text-zinc-400"

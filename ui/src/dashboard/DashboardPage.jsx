@@ -1000,6 +1000,7 @@ export default function DashboardPage() {
           return (
             <button
               key={run.run_id}
+              data-run-id={run.run_id}
               className={`compare-option${isCurrent ? ' current-run' : ''}`}
               onClick={async () => {
                 if (run.run_id !== data?.run_id) {

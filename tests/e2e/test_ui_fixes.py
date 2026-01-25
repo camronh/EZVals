@@ -205,8 +205,9 @@ class TestSkeletonOnError:
                 output_cell = error_row.locator("td[data-col='output']")
 
                 # Should show dash, not skeleton (no animate-pulse class)
+                # React UI uses "--" (double hyphen) instead of em dash
                 expect(output_cell.locator(".animate-pulse")).to_have_count(0)
-                expect(output_cell).to_contain_text("—")
+                expect(output_cell).to_contain_text("--")
 
                 browser.close()
 
@@ -334,8 +335,10 @@ class TestMessagesPane:
                 pane = page.locator("#messages-pane")
                 expect(pane).not_to_have_class(re.compile(r"translate-x-full"))
 
-                # Click outside the pane (on the main content area)
-                page.locator("#app").click(position={"x": 10, "y": 200}, force=True)
+                # Click the close button in the pane header to close it
+                # (React UI doesn't close on outside click, uses explicit close button)
+                close_btn = pane.locator("button").first
+                close_btn.click()
                 time.sleep(0.3)
 
                 # Pane should now be closed (has translate-x-full)
