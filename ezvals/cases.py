@@ -1,26 +1,17 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, get_type_hints
 import inspect
 
 from ezvals.decorators import EvalFunction
 from ezvals.context import EvalContext
+from ezvals.types import EvalCase
+
+# Derive allowed case keys from EvalCase TypedDict (excludes 'id' which is handled separately)
+RESERVED_CASE_KEYS = set(get_type_hints(EvalCase).keys()) - {"id"}
 
 
-RESERVED_CASE_KEYS = {
-    "input",
-    "reference",
-    "metadata",
-    "dataset",
-    "labels",
-    "default_score_key",
-    "timeout",
-    "target",
-    "evaluators",
-}
-
-
-def _normalize_cases(cases: Any) -> Tuple[List[Dict[str, Any]], List[Optional[str]]]:
+def _normalize_cases(cases: List[EvalCase]) -> Tuple[List[Dict[str, Any]], List[Optional[str]]]:
     if not isinstance(cases, (list, tuple)):
         raise ValueError("cases must be a list of dicts")
 
@@ -44,7 +35,7 @@ def _normalize_cases(cases: Any) -> Tuple[List[Dict[str, Any]], List[Optional[st
     return case_sets, case_ids
 
 
-def apply_cases(func: Callable, cases: Any) -> Callable:
+def apply_cases(func: Callable, cases: List[EvalCase]) -> Callable:
     if cases is None:
         return func
     case_sets, case_ids = _normalize_cases(cases)

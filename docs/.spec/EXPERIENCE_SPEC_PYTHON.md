@@ -7,7 +7,7 @@ This document specifies the Python API experience for EZVals.
 ## Public API
 
 ```python
-from ezvals import eval, EvalResult, TraceData, EvalContext, run_evals
+from ezvals import eval, EvalResult, TraceData, EvalContext, run_evals, EvalCase
 ```
 
 | Export | Type | Purpose |
@@ -17,6 +17,7 @@ from ezvals import eval, EvalResult, TraceData, EvalContext, run_evals
 | `TraceData` | class | Structured trace/debug data storage |
 | `EvalContext` | class | Mutable builder for results |
 | `run_evals` | function | Programmatic execution |
+| `EvalCase` | TypedDict | Schema for `cases` array items |
 
 ---
 
@@ -42,19 +43,21 @@ Scenario: Pre-populated context fields
 
 ### Decorator Parameters
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `input` | Any | None | Pre-populate ctx.input |
-| `reference` | Any | None | Pre-populate ctx.reference |
-| `dataset` | str | filename | Group name for filtering |
-| `labels` | list[str] | [] | Tags for filtering |
-| `metadata` | dict | {} | Pre-populate ctx.metadata |
-| `default_score_key` | str | "correctness" | Key for auto-added scores |
-| `timeout` | float | None | Max execution time (seconds) |
-| `target` | callable | None | Pre-hook that runs first |
-| `evaluators` | list[callable] | [] | Post-processing score functions |
-| `input_loader` | callable | None | Async/sync function that returns examples |
-| `cases` | list[dict] | None | Case definitions that expand into multiple eval variants |
+| Parameter | Type | Default | Description | Per-case? |
+|-----------|------|---------|-------------|-----------|
+| `input` | Any | None | Pre-populate ctx.input | ✓ |
+| `reference` | Any | None | Pre-populate ctx.reference | ✓ |
+| `dataset` | str | filename | Group name for filtering | ✓ |
+| `labels` | list[str] | [] | Tags for filtering | ✓ (merges) |
+| `metadata` | dict | {} | Pre-populate ctx.metadata | ✓ (merges) |
+| `default_score_key` | str | "correctness" | Key for auto-added scores | ✓ |
+| `timeout` | float | None | Max execution time (seconds) | ✓ |
+| `target` | callable | None | Pre-hook that runs first | ✓ |
+| `evaluators` | list[callable] | [] | Post-processing score functions | ✓ |
+| `input_loader` | callable | None | Async/sync function that returns examples | — |
+| `cases` | list[EvalCase] | None | Case definitions that expand into multiple eval variants | — |
+
+**Per-case column:** Parameters marked ✓ can be overridden per-case in the `cases` array. See [cases=](#cases-on-eval) for details.
 
 ### Return Types
 
@@ -314,31 +317,34 @@ Scenario: Multiple assertions
 
 **Intent:** User wants to generate multiple test cases from one function.
 
-### Basic Usage
+Each case can override any decorator parameter marked with ✓ in the [Decorator Parameters](#decorator-parameters) table, plus a case-specific `id` field. Import `EvalCase` for type checking:
 
 ```python
-@eval(
-    dataset="math",
-    cases=[
-        {"input": {"a": 2, "b": 3}, "reference": 5},
-        {"input": {"a": 10, "b": 20}, "reference": 30},
-    ],
-)
+from ezvals import eval, EvalContext, EvalCase
+
+cases: list[EvalCase] = [
+    {"input": {"a": 2, "b": 3}, "reference": 5},
+    {"input": {"a": 10, "b": 20}, "reference": 30},
+]
+
+@eval(dataset="math", cases=cases)
 def test_add(ctx: EvalContext):
     ctx.output = ctx.input["a"] + ctx.input["b"]
     assert ctx.output == ctx.reference
 ```
 
-### Auto-Mapping Special Names
+### Case Fields
 
-```gherkin
-Scenario: input/reference in cases auto-populate context
-  Given cases=[{"input": "hello", "reference": "world"}]
-  When evaluation runs
-  Then ctx.input = "hello" and ctx.reference = "world"
-```
+Cases use the same parameters as the `@eval` decorator (see table above), plus:
 
-**Allowed case keys:** `input`, `reference`, `metadata`, `dataset`, `labels`, `default_score_key`, `timeout`, `target`, `evaluators`, `id`
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | str | Test case identifier (case-specific, not on decorator) |
+
+**Override behavior:**
+- Most fields override the decorator value
+- `labels`: Merges with decorator labels (no duplicates)
+- `metadata`: Merges with decorator metadata
 
 ### Per-Case Dataset and Labels
 
