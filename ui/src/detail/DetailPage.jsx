@@ -319,6 +319,10 @@ export default function DetailPage() {
   const [messagesOpen, setMessagesOpen] = useState(false)
   const [collapsed, setCollapsed] = useState({ metadata: false, trace: false })
   const [comparison, setComparison] = useState(null)
+  const [editingAnnotation, setEditingAnnotation] = useState(false)
+  const [annotationDraft, setAnnotationDraft] = useState('')
+  const [annotationSaving, setAnnotationSaving] = useState(false)
+  const [annotationError, setAnnotationError] = useState(null)
   const [inputWidth, setInputWidth] = useState(50)
   const [refHeight, setRefHeight] = useState(150)
   const [sidebarWidth, setSidebarWidth] = useState(320)
@@ -421,6 +425,7 @@ export default function DetailPage() {
 
   useEffect(() => {
     const handleKey = (event) => {
+      if (editingAnnotation) return
       if (event.key === 'Escape') {
         window.location.href = '/'
       } else if (event.key === 'ArrowUp') {
@@ -431,7 +436,7 @@ export default function DetailPage() {
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [data, runId])
+  }, [data, runId, editingAnnotation])
 
   useEffect(() => {
     const handleMouseMove = (e) => {
@@ -508,6 +513,50 @@ export default function DetailPage() {
       setIsRerunning(false)
     }
   }, [data, isRerunning, runId])
+
+  const handleAnnotationSave = useCallback(async () => {
+    const newAnnotation = annotationDraft.trim() || null
+    const currentAnnotation = data?.result?.result?.annotation || null
+
+    if (newAnnotation === currentAnnotation) {
+      setEditingAnnotation(false)
+      setAnnotationError(null)
+      return
+    }
+
+    setAnnotationSaving(true)
+    setAnnotationError(null)
+
+    try {
+      const resp = await fetch(`/api/runs/${encodeURIComponent(runId)}/results/${index}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ result: { annotation: newAnnotation } }),
+      })
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}))
+        throw new Error(err.detail || 'Failed to save annotation')
+      }
+
+      setData((prev) => ({
+        ...prev,
+        result: {
+          ...prev.result,
+          result: {
+            ...prev.result.result,
+            annotation: newAnnotation,
+          },
+        },
+      }))
+
+      setEditingAnnotation(false)
+    } catch (err) {
+      setAnnotationError(err.message || 'Save failed')
+    } finally {
+      setAnnotationSaving(false)
+    }
+  }, [annotationDraft, data?.result?.result?.annotation, index, runId])
 
   if (loading && !data) {
     return (
@@ -858,12 +907,95 @@ export default function DetailPage() {
             ) : null}
 
             <div className="flex-1">
-              <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 bg-zinc-100/50 dark:bg-zinc-800/30">Annotation</div>
+              <div className="flex items-center justify-between px-3 py-2 bg-zinc-100/50 dark:bg-zinc-800/30">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Annotation</span>
+                {!editingAnnotation && (
+                  <button
+                    className="flex h-5 w-5 items-center justify-center rounded text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-300"
+                    title="Edit annotation"
+                    onClick={() => {
+                      setAnnotationDraft(result.annotation || '')
+                      setEditingAnnotation(true)
+                      setAnnotationError(null)
+                    }}
+                  >
+                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+
               <div className="p-3">
-                {result.annotation ? (
+                {editingAnnotation ? (
+                  <div className="space-y-2">
+                    <textarea
+                      className="w-full min-h-[80px] rounded border border-zinc-300 bg-white px-2 py-1.5 text-xs text-zinc-700 placeholder-zinc-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:placeholder-zinc-500 dark:focus:border-blue-500"
+                      value={annotationDraft}
+                      onChange={(e) => setAnnotationDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                          setEditingAnnotation(false)
+                          setAnnotationError(null)
+                        }
+                        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                          handleAnnotationSave()
+                        }
+                      }}
+                      placeholder="Add annotation..."
+                      autoFocus
+                      disabled={annotationSaving}
+                    />
+
+                    {annotationError && (
+                      <div className="text-[11px] text-rose-500">{annotationError}</div>
+                    )}
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-zinc-400">
+                        <kbd className="rounded border border-zinc-300 bg-white px-1 font-mono dark:border-zinc-600 dark:bg-zinc-800">Cmd+Enter</kbd> save
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          className="rounded border border-zinc-300 bg-white px-2 py-1 text-[11px] text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600"
+                          onClick={() => {
+                            setEditingAnnotation(false)
+                            setAnnotationError(null)
+                          }}
+                          disabled={annotationSaving}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          className="flex items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-600 hover:bg-emerald-500/20 disabled:opacity-50 dark:text-emerald-400"
+                          onClick={handleAnnotationSave}
+                          disabled={annotationSaving}
+                        >
+                          {annotationSaving && (
+                            <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                          )}
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : result.annotation ? (
                   <div className="whitespace-pre-wrap text-xs text-zinc-700 dark:text-zinc-300">{result.annotation}</div>
                 ) : (
-                  <div className="text-xs italic text-zinc-400 dark:text-zinc-500">No annotation</div>
+                  <button
+                    className="text-xs italic text-zinc-400 dark:text-zinc-500 hover:text-blue-500 dark:hover:text-blue-400"
+                    onClick={() => {
+                      setAnnotationDraft('')
+                      setEditingAnnotation(true)
+                      setAnnotationError(null)
+                    }}
+                  >
+                    + Add annotation
+                  </button>
                 )}
               </div>
             </div>
@@ -871,7 +1003,7 @@ export default function DetailPage() {
             <div className="flex-shrink-0 px-3 py-2 border-t border-blue-200/60 bg-zinc-100/30 dark:border-zinc-800 dark:bg-zinc-800/20">
               <div className="flex items-center gap-4 text-[10px] text-zinc-400">
                 <span><kbd className="rounded border border-zinc-300 bg-white px-1 font-mono dark:border-zinc-600 dark:bg-zinc-800">↑↓</kbd> nav</span>
-                <span><kbd className="rounded border border-zinc-300 bg-white px-1 font-mono dark:border-zinc-600 dark:bg-zinc-800">Esc</kbd> back</span>
+                <span><kbd className="rounded border border-zinc-300 bg-white px-1 font-mono dark:border-zinc-600 dark:bg-zinc-800">Esc</kbd> {editingAnnotation ? 'cancel' : 'back'}</span>
               </div>
             </div>
           </div>

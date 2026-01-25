@@ -123,6 +123,104 @@ def test_annotation_via_patch(tmp_path: Path):
     assert data["results"][0]["result"].get("annotation") in (None, "")
 
 
+def test_annotation_multiline_and_special_chars(tmp_path: Path):
+    """Test annotation with multiline text, special characters, and unicode."""
+    store = ResultsStore(tmp_path / "runs")
+    summary = make_summary()
+    run_id = store.save_run(summary, "2024-01-01T00-00-00Z")
+
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+    client = TestClient(app)
+
+    # Multiline annotation
+    multiline = "Line 1\nLine 2\nLine 3"
+    r = client.patch(f"/api/runs/{run_id}/results/0", json={"result": {"annotation": multiline}})
+    assert r.status_code == 200
+    data = client.get(f"/api/runs/{run_id}/results/0").json()
+    assert data["result"]["result"]["annotation"] == multiline
+
+    # Special characters
+    special = "Test with <html> & \"quotes\" and 'apostrophes'"
+    r = client.patch(f"/api/runs/{run_id}/results/0", json={"result": {"annotation": special}})
+    assert r.status_code == 200
+    data = client.get(f"/api/runs/{run_id}/results/0").json()
+    assert data["result"]["result"]["annotation"] == special
+
+    # Unicode characters
+    unicode_text = "Unicode: \u4e2d\u6587 \U0001F600 \u00e9\u00e8"
+    r = client.patch(f"/api/runs/{run_id}/results/0", json={"result": {"annotation": unicode_text}})
+    assert r.status_code == 200
+    data = client.get(f"/api/runs/{run_id}/results/0").json()
+    assert data["result"]["result"]["annotation"] == unicode_text
+
+
+def test_annotation_empty_string_vs_null(tmp_path: Path):
+    """Test that empty string annotation is handled correctly."""
+    store = ResultsStore(tmp_path / "runs")
+    summary = make_summary()
+    run_id = store.save_run(summary, "2024-01-01T00-00-00Z")
+
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+    client = TestClient(app)
+
+    # Set annotation first
+    client.patch(f"/api/runs/{run_id}/results/0", json={"result": {"annotation": "test"}})
+
+    # Empty string should be accepted (UI trims to null, but API accepts empty)
+    r = client.patch(f"/api/runs/{run_id}/results/0", json={"result": {"annotation": ""}})
+    assert r.status_code == 200
+    data = client.get(f"/api/runs/{run_id}/results/0").json()
+    assert data["result"]["result"]["annotation"] in ("", None)
+
+
+def test_annotation_on_different_results(tmp_path: Path):
+    """Test annotations can be set on different result indices independently."""
+    store = ResultsStore(tmp_path / "runs")
+    summary = make_summary()
+    run_id = store.save_run(summary, "2024-01-01T00-00-00Z")
+
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+    client = TestClient(app)
+
+    # Set annotation on result 0
+    r0 = client.patch(f"/api/runs/{run_id}/results/0", json={"result": {"annotation": "First"}})
+    assert r0.status_code == 200
+
+    # Set annotation on result 1
+    r1 = client.patch(f"/api/runs/{run_id}/results/1", json={"result": {"annotation": "Second"}})
+    assert r1.status_code == 200
+
+    # Verify both are independent
+    data0 = client.get(f"/api/runs/{run_id}/results/0").json()
+    data1 = client.get(f"/api/runs/{run_id}/results/1").json()
+    assert data0["result"]["result"]["annotation"] == "First"
+    assert data1["result"]["result"]["annotation"] == "Second"
+
+    # Update one doesn't affect other
+    client.patch(f"/api/runs/{run_id}/results/0", json={"result": {"annotation": "Updated"}})
+    data0 = client.get(f"/api/runs/{run_id}/results/0").json()
+    data1 = client.get(f"/api/runs/{run_id}/results/1").json()
+    assert data0["result"]["result"]["annotation"] == "Updated"
+    assert data1["result"]["result"]["annotation"] == "Second"
+
+
+def test_annotation_persists_to_storage(tmp_path: Path):
+    """Test that annotations are persisted to the JSON file."""
+    store = ResultsStore(tmp_path / "runs")
+    summary = make_summary()
+    run_id = store.save_run(summary, "2024-01-01T00-00-00Z")
+
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+    client = TestClient(app)
+
+    # Set annotation
+    client.patch(f"/api/runs/{run_id}/results/0", json={"result": {"annotation": "Persisted note"}})
+
+    # Verify in storage directly
+    data = store.load_run(run_id)
+    assert data["results"][0]["result"]["annotation"] == "Persisted note"
+
+
 def test_export_endpoints(tmp_path: Path):
     store = ResultsStore(tmp_path / "runs")
     summary = make_summary()
