@@ -27,7 +27,7 @@ def _clear_project_modules(directory: Path) -> None:
     exclude_patterns = ['.venv', 'venv', 'site-packages', '.tox', '.nox', '__pycache__']
 
     to_remove = []
-    for name, mod in sys.modules.items():
+    for name, mod in list(sys.modules.items()):
         mod_file = getattr(mod, '__file__', None)
         if mod_file:
             try:

@@ -422,7 +422,7 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             rerun_row = page.locator(f"tr[data-row='main'][data-row-id='{rerun_idx}']")
             rerun_row.locator(".row-checkbox").click()
             expect(page.locator("#play-btn-text")).to_have_text("Rerun")
-            expect(page.locator("#run-dropdown-toggle")).to_be_hidden()
+            expect(page.locator("#run-dropdown-toggle")).to_be_visible()
 
             # Selective rerun updates only selected row.
             page.locator("#play-btn").click()

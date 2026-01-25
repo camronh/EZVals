@@ -177,15 +177,15 @@ class TestSelectionUI:
                 # Button should still show "Rerun" (no count in new design)
                 expect(play_btn_text).to_have_text("Rerun")
 
-                # Dropdown should be hidden when selection is active
-                expect(dropdown_toggle).to_be_hidden()
+                # Dropdown should still be visible with selections (user can choose Rerun or New Run)
+                expect(dropdown_toggle).to_be_visible()
 
                 # Unselect all
                 page.locator(".row-checkbox").nth(0).click()
                 page.locator(".row-checkbox").nth(1).click()
                 page.wait_for_timeout(200)
 
-                # Back to split button with dropdown
+                # Still split button with dropdown
                 expect(dropdown_toggle).to_be_visible()
 
                 browser.close()
@@ -214,8 +214,8 @@ class TestSelectionUI:
                 # Button should show "Rerun" (no count in new design)
                 expect(page.locator("#play-btn-text")).to_have_text("Rerun")
 
-                # Dropdown should be hidden when selection active
-                expect(page.locator("#run-dropdown-toggle")).to_be_hidden()
+                # Dropdown should still be visible with selections
+                expect(page.locator("#run-dropdown-toggle")).to_be_visible()
 
                 # Click select-all again to deselect
                 page.locator("#select-all-checkbox").click()

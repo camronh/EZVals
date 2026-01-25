@@ -11,7 +11,9 @@ description: "All notable changes to EZVals"
 - Removed: `@parametrize` decorator and tuple-based case syntax.
 - Fixed: Run button incorrectly showed "Stop" instead of "Run" on fresh page load when no evaluations were running.
 - Fixed: Inline run name editing now works when multiple runs exist (dropdown visible).
+- Fixed: Race condition in discovery module when clearing cached modules (sys.modules changed during iteration).
 - Tests: Updated E2E tests for React UI migration—fixed selectors, element IDs, and interaction patterns.
+- Tests: Updated E2E tests to expect dropdown visible when rows are selected (matching current UI behavior).
 
 ## 0.1.1 - 2026-01-03
 
