@@ -487,7 +487,7 @@ export default function DashboardPage() {
       return { hidden: false, text: 'Run', showDropdown: false, isRunning }
     }
     if (hasSelections) {
-      return { hidden: false, text: 'Rerun', showDropdown: false, isRunning }
+      return { hidden: false, text: runMode === 'new' ? 'New Run' : 'Rerun', showDropdown: true, isRunning }
     }
     return { hidden: false, text: runMode === 'new' ? 'New Run' : 'Rerun', showDropdown: true, isRunning }
   }, [data, hasRunBefore, isComparisonMode, runMode, selectedIndices.size, isRunningOverride])

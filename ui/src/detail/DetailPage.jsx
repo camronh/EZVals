@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getResultKey, normalizeComparisonRuns } from '../dashboard/utils.js'
 
 const DETAIL_BODY_CLASS = 'min-h-screen bg-blue-50/40 font-sans text-zinc-800 dark:bg-neutral-950 dark:text-zinc-100'
@@ -319,6 +319,11 @@ export default function DetailPage() {
   const [messagesOpen, setMessagesOpen] = useState(false)
   const [collapsed, setCollapsed] = useState({ metadata: false, trace: false })
   const [comparison, setComparison] = useState(null)
+  const [inputWidth, setInputWidth] = useState(50)
+  const [refHeight, setRefHeight] = useState(150)
+  const [sidebarWidth, setSidebarWidth] = useState(320)
+  const resizingRef = useRef(null)
+  const containerRef = useRef(null)
 
   const comparisonRuns = useMemo(() => {
     try {
@@ -427,6 +432,50 @@ export default function DetailPage() {
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
   }, [data, runId])
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!resizingRef.current) return
+      const { type, startX, startY, startValue, container } = resizingRef.current
+      if (type === 'input-width') {
+        const dx = e.clientX - startX
+        const containerWidth = container.offsetWidth - sidebarWidth
+        const newPct = Math.max(20, Math.min(80, startValue + (dx / containerWidth) * 100))
+        setInputWidth(newPct)
+      } else if (type === 'ref-height') {
+        const dy = startY - e.clientY
+        const newHeight = Math.max(60, Math.min(400, startValue + dy))
+        setRefHeight(newHeight)
+      } else if (type === 'sidebar-width') {
+        const dx = startX - e.clientX
+        const newWidth = Math.max(200, Math.min(600, startValue + dx))
+        setSidebarWidth(newWidth)
+      }
+    }
+    const handleMouseUp = () => {
+      resizingRef.current = null
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [sidebarWidth])
+
+  const startResize = useCallback((type, e) => {
+    e.preventDefault()
+    const container = containerRef.current
+    let startValue
+    if (type === 'input-width') startValue = inputWidth
+    else if (type === 'ref-height') startValue = refHeight
+    else if (type === 'sidebar-width') startValue = sidebarWidth
+    resizingRef.current = { type, startX: e.clientX, startY: e.clientY, startValue, container }
+    document.body.style.cursor = type === 'ref-height' ? 'row-resize' : 'col-resize'
+    document.body.style.userSelect = 'none'
+  }, [inputWidth, refHeight, sidebarWidth])
 
   const handleRerun = useCallback(async () => {
     if (!data || isRerunning) return
@@ -566,7 +615,7 @@ export default function DetailPage() {
           </div>
         ) : null}
 
-        <div className="flex-1 flex min-h-0 overflow-hidden">
+        <div ref={containerRef} className="flex-1 flex min-h-0 overflow-hidden">
           <div id="main-panel" className="flex flex-col min-w-0 flex-1">
             {isComparisonMode && comparison ? (
               <div className="flex flex-col min-h-0">
@@ -636,7 +685,7 @@ export default function DetailPage() {
             ) : (
               <>
                 <div id="io-row" className="flex min-h-0" style={{ flex: '1 1 auto' }}>
-                  <div id="input-panel" className="flex flex-col min-w-0" style={{ width: '50%' }}>
+                  <div id="input-panel" className="flex flex-col min-w-0" style={{ width: `${inputWidth}%` }}>
                     <div className="data-panel-header flex items-center justify-between border-b border-blue-100 bg-blue-50/50 px-3 py-1.5 dark:border-zinc-800/60 dark:bg-zinc-900/50">
                       <span className="text-[10px] font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">Input</span>
                       <CopyButton
@@ -645,10 +694,15 @@ export default function DetailPage() {
                         title="Copy"
                       />
                     </div>
-                    <div className="data-panel-body p-3 bg-white dark:bg-zinc-900/30">
+                    <div className="data-panel-body p-3 bg-white dark:bg-zinc-900/30 overflow-auto flex-1">
                       <DataViewer content={result.input} placeholder="—" />
                     </div>
                   </div>
+
+                  <div
+                    className="resize-handle-v w-1 cursor-col-resize bg-transparent hover:bg-blue-500/30 transition-colors flex-shrink-0"
+                    onMouseDown={(e) => startResize('input-width', e)}
+                  />
 
                   <div id="output-panel" className="flex flex-col min-w-0" style={{ flex: '1 1 auto' }}>
                     <div className="data-panel-header flex items-center justify-between border-b border-blue-100 bg-emerald-50/50 px-3 py-1.5 dark:border-zinc-800/60 dark:bg-zinc-900/50">
@@ -659,14 +713,19 @@ export default function DetailPage() {
                         title="Copy"
                       />
                     </div>
-                    <div className="data-panel-body p-3 bg-white dark:bg-zinc-900/30">
+                    <div className="data-panel-body p-3 bg-white dark:bg-zinc-900/30 overflow-auto flex-1">
                       <DataViewer content={result.output} placeholder="—" />
                     </div>
                   </div>
                 </div>
 
                 {hasReference ? (
-                  <div id="ref-panel" className="flex flex-col flex-shrink-0" style={{ height: '150px', minHeight: '60px' }}>
+                  <>
+                  <div
+                    className="resize-handle-h h-1 cursor-row-resize bg-transparent hover:bg-amber-500/30 transition-colors flex-shrink-0"
+                    onMouseDown={(e) => startResize('ref-height', e)}
+                  />
+                  <div id="ref-panel" className="flex flex-col flex-shrink-0" style={{ height: `${refHeight}px`, minHeight: '60px' }}>
                     <div className="data-panel-header flex items-center justify-between border-b border-amber-200/40 bg-amber-50/50 px-3 py-1.5 dark:border-amber-500/10 dark:bg-amber-500/5">
                       <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">Reference</span>
                       <CopyButton
@@ -675,16 +734,22 @@ export default function DetailPage() {
                         title="Copy"
                       />
                     </div>
-                    <div className="data-panel-body p-3 overflow-auto bg-amber-50/30 dark:bg-amber-500/5">
+                    <div className="data-panel-body p-3 overflow-auto bg-amber-50/30 dark:bg-amber-500/5 flex-1">
                       <DataViewer content={result.reference} placeholder="—" />
                     </div>
                   </div>
+                  </>
                 ) : null}
               </>
             )}
           </div>
 
-          <div id="sidebar-panel" className="flex flex-col min-h-0 overflow-auto bg-zinc-50 dark:bg-zinc-900/50" style={{ width: '320px', minWidth: '200px' }}>
+          <div
+            className="resize-handle-v w-1 cursor-col-resize bg-transparent hover:bg-blue-500/30 transition-colors flex-shrink-0"
+            onMouseDown={(e) => startResize('sidebar-width', e)}
+          />
+
+          <div id="sidebar-panel" className="flex flex-col min-h-0 overflow-auto bg-zinc-50 dark:bg-zinc-900/50" style={{ width: `${sidebarWidth}px`, minWidth: '200px' }}>
             <div className="border-b border-blue-200/60 dark:border-zinc-800 p-3 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Status</span>

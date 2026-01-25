@@ -148,10 +148,21 @@ export default function StatsExpanded({
               )}
               <button
                 className="edit-run-btn-expanded ml-1 text-zinc-600 transition hover:text-zinc-400"
-                title="Rename run"
-                onClick={() => { setEditingRunName(true); setRunNameDraft(stats.runName || '') }}
+                title={editingRunName ? 'Save' : 'Rename run'}
+                onClick={() => {
+                  if (editingRunName) {
+                    onRunNameSave()
+                  } else {
+                    setEditingRunName(true)
+                    setRunNameDraft(stats.runName || '')
+                  }
+                }}
               >
-                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><use href="#icon-pencil"></use></svg>
+                {editingRunName ? (
+                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5" /></svg>
+                ) : (
+                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><use href="#icon-pencil"></use></svg>
+                )}
               </button>
             </div>
           ) : null}
