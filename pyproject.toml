@@ -52,3 +52,11 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["ezvals"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"ezvals/skills" = "ezvals/skills"
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/ezvals",
+]

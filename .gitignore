@@ -53,5 +53,16 @@ results/
 PRD.md
 AGENTS.md
 
+# Agent skill directories (created by ezvals skills add)
+.codex/
+.cursor/
+.windsurf/
+.kiro/
+.roo/
+.agents/
+
 
 ezvals.json
+
+# Docs assembled by workflow (not tracked in git)
+ezvals/skills/evals/ezvals-docs/

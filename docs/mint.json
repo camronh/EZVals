@@ -60,7 +60,8 @@
         "guides/patterns",
         "guides/web-ui",
         "guides/sessions",
-        "guides/evaluators"
+        "guides/evaluators",
+        "guides/agent-skill"
       ]
     },
     {

@@ -66,6 +66,17 @@ Follow these steps in order:
 ### If already on dev:
 - Push dev: `git push origin dev`
 
+## 6b. Update Skill Version (Only If Releasing)
+
+**Only do this when shipping to main (creating a release):**
+
+If the release includes changes that affect the skill content:
+- Update the version comment in `ezvals/skills/evals/SKILL.md` (the `<!-- Version: X.X.X -->` line)
+- Ensure examples and CLI commands in the skill are current
+- Run `ezvals skills doctor` to verify skill is valid
+
+The skill version MUST match the release tag for the sync workflow to pass.
+
 ## 7. Ship to Main (Only If Requested)
 
 **Skip this step unless the user explicitly asked to ship to main.**
