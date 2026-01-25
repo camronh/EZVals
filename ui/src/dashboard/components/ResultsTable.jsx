@@ -71,7 +71,6 @@ export default function ResultsTable({
               <div className="col-resizer" onMouseDown={(e) => onResizeStart(col.key, e)}></div>
             </th>
           ))}
-          <th style={{ width: '28px' }} className="bg-theme-bg px-1 py-2"></th>
         </tr>
       </thead>
       <tbody className="divide-y divide-theme-border-subtle">
@@ -212,11 +211,6 @@ export default function ResultsTable({
               </td>
               <td data-col="latency" data-value={result.latency ?? ''} className={`px-3 py-3 align-middle text-right ${hiddenSet.has('latency') ? 'hidden' : ''}`}>
                 {latencyCell}
-              </td>
-              <td className="px-1 py-3 align-middle">
-                <span className="expand-chevron text-zinc-700 group-hover:text-zinc-400">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><use href="#icon-chevron-right"></use></svg>
-                </span>
               </td>
             </tr>
           )

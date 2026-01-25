@@ -52,21 +52,18 @@ def test_rename_run_via_pencil_button(tmp_path):
             page.goto(url)
             page.wait_for_selector("#results-table")
 
-            # Collapse expanded stats to show compact view with edit button
-            page.locator("#stats-collapse-btn").click()
-            page.wait_for_timeout(200)
-
-            # Verify original name is displayed
-            run_text = page.locator("#run-name-text")
+            # Use expanded view (default) - React UI uses .stats-run class
+            run_text = page.locator(".stats-run")
             expect(run_text).to_contain_text("original-name")
 
-            # Hover to reveal edit button, then click it
-            run_text.hover()
-            edit_btn = page.locator(".edit-run-btn")
+            # Hover over the run row to reveal edit button
+            run_row = page.locator(".stats-info-row:has(.stats-run)")
+            run_row.hover()
+            edit_btn = page.locator(".edit-run-btn-expanded")
             edit_btn.click()
 
-            # Input should appear and be focused
-            input_field = page.locator("#run-name-text input")
+            # Input should appear (React uses inline input in stats-info-row)
+            input_field = page.locator(".stats-info-row input")
             expect(input_field).to_be_visible()
 
             # Clear and type new name
@@ -75,7 +72,7 @@ def test_rename_run_via_pencil_button(tmp_path):
 
             # Wait for UI to refresh and verify new name
             page.wait_for_timeout(500)
-            run_text = page.locator("#run-name-text")
+            run_text = page.locator(".stats-run")
             expect(run_text).to_contain_text("renamed-run")
 
             browser.close()
@@ -102,23 +99,19 @@ def test_rename_run_escape_cancels(tmp_path):
             page.goto(url)
             page.wait_for_selector("#results-table")
 
-            # Collapse expanded stats to show compact view with edit button
-            page.locator("#stats-collapse-btn").click()
-            page.wait_for_timeout(200)
-
-            # Click edit button
-            run_text = page.locator("#run-name-text")
-            run_text.hover()
-            page.locator(".edit-run-btn").click()
+            # Use expanded view (default)
+            run_row = page.locator(".stats-info-row:has(.stats-run)")
+            run_row.hover()
+            page.locator(".edit-run-btn-expanded").click()
 
             # Type new name but press Escape
-            input_field = page.locator("#run-name-text input")
+            input_field = page.locator(".stats-info-row input")
             input_field.fill("should-not-save")
             input_field.press("Escape")
 
             # Wait for UI to refresh and verify original name remains
             page.wait_for_timeout(500)
-            run_text = page.locator("#run-name-text")
+            run_text = page.locator(".stats-run")
             expect(run_text).to_contain_text("original-name")
 
             browser.close()
@@ -132,7 +125,7 @@ def test_rename_run_escape_cancels(tmp_path):
 
 
 def test_rename_run_via_checkmark_button(tmp_path):
-    """Clicking the checkmark button saves the rename."""
+    """Pressing Enter saves the rename."""
     store = ResultsStore(tmp_path / "runs")
     run_id = store.save_run(make_test_run(), "2024-01-01T00-00-00Z")
     app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
@@ -144,24 +137,20 @@ def test_rename_run_via_checkmark_button(tmp_path):
             page.goto(url)
             page.wait_for_selector("#results-table")
 
-            # Collapse expanded stats to show compact view with edit button
-            page.locator("#stats-collapse-btn").click()
-            page.wait_for_timeout(200)
-
-            # Click edit button
-            run_text = page.locator("#run-name-text")
-            run_text.hover()
-            edit_btn = page.locator(".edit-run-btn")
+            # Use expanded view (default)
+            run_row = page.locator(".stats-info-row:has(.stats-run)")
+            run_row.hover()
+            edit_btn = page.locator(".edit-run-btn-expanded")
             edit_btn.click()
 
-            # Type new name and click the checkmark (which replaced the pencil)
-            input_field = page.locator("#run-name-text input")
+            # Type new name and press Enter to save
+            input_field = page.locator(".stats-info-row input")
             input_field.fill("checkmark-saved")
-            edit_btn.click()  # Now it's a checkmark
+            input_field.press("Enter")
 
             # Wait for UI to refresh and verify new name
             page.wait_for_timeout(500)
-            run_text = page.locator("#run-name-text")
+            run_text = page.locator(".stats-run")
             expect(run_text).to_contain_text("checkmark-saved")
 
             browser.close()
@@ -187,23 +176,19 @@ def test_rename_run_blur_cancels(tmp_path):
             page.goto(url)
             page.wait_for_selector("#results-table")
 
-            # Collapse expanded stats to show compact view with edit button
-            page.locator("#stats-collapse-btn").click()
-            page.wait_for_timeout(200)
-
-            # Click edit button
-            run_text = page.locator("#run-name-text")
-            run_text.hover()
-            page.locator(".edit-run-btn").click()
+            # Use expanded view (default)
+            run_row = page.locator(".stats-info-row:has(.stats-run)")
+            run_row.hover()
+            page.locator(".edit-run-btn-expanded").click()
 
             # Type new name then click elsewhere to blur
-            input_field = page.locator("#run-name-text input")
+            input_field = page.locator(".stats-info-row input")
             input_field.fill("should-not-save-blur")
             page.locator("body").click()  # Click elsewhere to trigger blur
 
             # Wait for UI to refresh and verify original name remains
             page.wait_for_timeout(500)
-            run_text = page.locator("#run-name-text")
+            run_text = page.locator(".stats-run")
             expect(run_text).to_contain_text("original-name")
 
             browser.close()
@@ -217,7 +202,7 @@ def test_rename_run_blur_cancels(tmp_path):
 
 
 def test_rename_run_expanded_view(tmp_path):
-    """Rename works in expanded stats view too."""
+    """Rename works in expanded stats view."""
     store = ResultsStore(tmp_path / "runs")
     run_id = store.save_run(make_test_run(), "2024-01-01T00-00-00Z")
     app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
@@ -229,22 +214,21 @@ def test_rename_run_expanded_view(tmp_path):
             page.goto(url)
             page.wait_for_selector("#results-table")
 
-            # Don't collapse - use expanded view (default)
-            # Hover over run row to reveal edit button
-            run_row = page.locator("#run-name-expanded").locator("..")
+            # Expanded view is the default - hover over run row to reveal edit button
+            run_row = page.locator(".stats-info-row:has(.stats-run)")
             run_row.hover()
             edit_btn = page.locator(".edit-run-btn-expanded")
             edit_btn.click()
 
             # Type new name and press Enter
-            input_field = page.locator("#run-name-expanded input")
+            input_field = page.locator(".stats-info-row input")
             expect(input_field).to_be_visible()
             input_field.fill("expanded-renamed")
             input_field.press("Enter")
 
             # Wait for UI to refresh and verify new name
             page.wait_for_timeout(500)
-            run_text = page.locator("#run-name-expanded")
+            run_text = page.locator(".stats-run")
             expect(run_text).to_contain_text("expanded-renamed")
 
             browser.close()
@@ -327,25 +311,25 @@ def simple_eval():
             page.goto(url)
             page.wait_for_selector("#results-table")
 
-            # Verify initial run name in expanded view
-            run_text = page.locator("#run-name-expanded")
+            # Verify initial run name in expanded view (React uses .stats-run)
+            run_text = page.locator(".stats-run")
             expect(run_text).to_contain_text("auto-generated")
 
             # Edit the run name before running
-            run_row = run_text.locator("..")
+            run_row = page.locator(".stats-info-row:has(.stats-run)")
             run_row.hover()
             edit_btn = page.locator(".edit-run-btn-expanded")
             edit_btn.click()
 
             # Type new name and save
-            input_field = page.locator("#run-name-expanded input")
+            input_field = page.locator(".stats-info-row input")
             expect(input_field).to_be_visible()
             input_field.fill("my-custom-name")
             input_field.press("Enter")
 
             # Wait for UI to refresh and verify new name is shown
             page.wait_for_timeout(500)
-            run_text = page.locator("#run-name-expanded")
+            run_text = page.locator(".stats-run")
             expect(run_text).to_contain_text("my-custom-name")
 
             # Now click Run to trigger the first run

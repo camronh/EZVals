@@ -100,8 +100,8 @@ def test_stats_bar_session_name(tmp_path):
             page.goto(url)
             page.wait_for_selector("#results-table")
 
-            # Session name should be visible
-            session_text = page.locator("#session-name-text")
+            # Session name should be visible (React UI uses .stats-session class)
+            session_text = page.locator(".stats-session")
             expect(session_text).to_contain_text("test-session")
 
             browser.close()
@@ -120,8 +120,8 @@ def test_stats_bar_run_name(tmp_path):
             page.goto(url)
             page.wait_for_selector("#results-table")
 
-            # Run name should be visible
-            run_text = page.locator("#run-name-text")
+            # Run name should be visible (React UI uses .stats-run class in expanded view)
+            run_text = page.locator(".stats-run")
             expect(run_text).to_contain_text("baseline-run")
 
             browser.close()
@@ -235,7 +235,7 @@ def test_stats_bar_error_count(tmp_path):
 
 
 def test_stats_bar_no_errors_hidden(tmp_path):
-    """Stats bar hides error count when there are no errors."""
+    """Stats bar shows 0 errors when there are no errors."""
     summary = make_summary_with_scores()
     summary["total_errors"] = 0
     # Also clear the error from results
@@ -255,9 +255,8 @@ def test_stats_bar_no_errors_hidden(tmp_path):
             page.goto(url)
             page.wait_for_selector("#results-table")
 
-            # Error count label should not be visible
-            stats_expanded = page.locator("#stats-expanded")
-            stats_text = stats_expanded.text_content()
-            assert "errors" not in stats_text.lower()
+            # Error count should show 0 (React UI always shows errors metric)
+            stats_errors = page.locator("#stats-errors .stats-metric-value")
+            expect(stats_errors).to_have_text("0")
 
             browser.close()

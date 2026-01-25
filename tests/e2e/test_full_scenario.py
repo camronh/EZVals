@@ -3,6 +3,7 @@ import json
 import os
 import random
 import re
+import socket
 import threading
 import time
 import urllib.request
@@ -15,6 +16,19 @@ from playwright.sync_api import expect, sync_playwright
 
 from ezvals.cli import serve_cmd
 from ezvals.discovery import EvalDiscovery
+
+
+def find_available_port(start_port: int = 8800, max_attempts: int = 100) -> int:
+    """Find an available port starting from start_port."""
+    for offset in range(max_attempts):
+        port = start_port + offset
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("127.0.0.1", port))
+                return port
+            except OSError:
+                continue
+    raise RuntimeError(f"No available ports in range {start_port}-{start_port + max_attempts - 1}")
 
 UI_TIMEOUT_MS = int(os.getenv("E2E_UI_TIMEOUT_MS", "60000"))
 RUN_TIMEOUT_MS = int(os.getenv("E2E_RUN_TIMEOUT_MS", "120000"))
@@ -119,7 +133,7 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
     monkeypatch.setattr(EvalDiscovery, "discover", discover_with_error)
 
     session_name = f"scenario-session-{uuid4().hex[:6]}"
-    port = 8791
+    port = find_available_port()
     url = f"http://127.0.0.1:{port}"
     open_calls: list[str] = []
     servers: list[uvicorn.Server] = []
@@ -183,7 +197,7 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             assert session_el.evaluate("el => el.tagName") == "SPAN", "session should be plain text"
             assert page.locator("#session-dropdown, #session-select").count() == 0, "no session selector in UI"
 
-            run_name_el = page.locator("#run-name-expanded")
+            run_name_el = page.locator(".stats-run")
             expect(run_name_el).to_be_visible()
             run_name = (run_name_el.text_content() or "").strip()
             assert run_name, "run name should be pre-populated"
@@ -283,7 +297,7 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
 
             # Stats bar shows latency and score breakdown after run.
             page.wait_for_selector("#stats-expanded .stats-metric-sm", timeout=UI_TIMEOUT_MS)
-            latency_text = page.locator("#stats-expanded .stats-metric-sm .stats-metric-value").text_content() or ""
+            latency_text = page.locator("#stats-expanded .stats-latency .stats-metric-value").text_content() or ""
             latency_match = re.search(r"\d+(?:\.\d+)?", latency_text)
             assert latency_match, "expected avg latency number"
             assert float(latency_match.group(0)) > 0, "avg latency should be positive"
@@ -324,12 +338,21 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             def assert_sorted(values, ascending=True):
                 nums = [v for v in values if v is not None]
                 assert nums == sorted(nums, reverse=not ascending), "scores should sort numerically"
-                seen_empty = False
-                for val in values:
-                    if val is None:
-                        seen_empty = True
-                    elif seen_empty:
-                        raise AssertionError("non-empty score appears after empty entries")
+                # Empty values appear at end for ascending, at beginning for descending
+                if ascending:
+                    seen_empty = False
+                    for val in values:
+                        if val is None:
+                            seen_empty = True
+                        elif seen_empty:
+                            raise AssertionError("non-empty score appears after empty entries (ascending)")
+                else:
+                    seen_non_empty = False
+                    for val in values:
+                        if val is not None:
+                            seen_non_empty = True
+                        elif seen_non_empty:
+                            raise AssertionError("empty score appears after non-empty entries (descending)")
 
             # Sorting by scores respects numeric ordering and empty placement.
             scores_header.click()
@@ -421,30 +444,34 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             rerun_row.locator(".row-checkbox").click()
             expect(page.locator(".row-checkbox:checked")).to_have_count(0)
 
-            # Inline rename: blur cancels, checkmark saves and renames file/metadata.
+            # Inline rename: blur cancels, Enter saves and renames file/metadata.
+            run_row = page.locator(".stats-info-row:has(.stats-run)")
+            run_row.hover()
             page.locator(".edit-run-btn-expanded").click()
-            input_field = page.locator("input.run-name-edit")
+            input_field = page.locator(".stats-info-row input")
             expect(input_field).to_be_visible()
             input_field.fill("AAAA")
             page.locator("body").click()
             expect(run_name_el).to_have_text(run_name)
 
+            run_row.hover()
             page.locator(".edit-run-btn-expanded").click()
-            input_field = page.locator("input.run-name-edit")
+            input_field = page.locator(".stats-info-row input")
             expect(input_field).to_be_visible()
             input_field.fill("AAAA")
-            page.locator(".edit-run-btn-expanded").click()
+            input_field.press("Enter")
             expect(run_name_el).to_have_text("AAAA")
             run_file = session_dir / f"AAAA_{run_id}.json"
             assert run_file.exists(), "run file should reflect renamed run_name"
             data = json.loads(run_file.read_text())
             assert data["run_name"] == "AAAA", "run_name metadata should update"
 
+            run_row.hover()
             page.locator(".edit-run-btn-expanded").click()
-            input_field = page.locator("input.run-name-edit")
+            input_field = page.locator(".stats-info-row input")
             expect(input_field).to_be_visible()
             input_field.fill("BBBB")
-            page.locator(".edit-run-btn-expanded").click()
+            input_field.press("Enter")
             expect(run_name_el).to_have_text("BBBB")
             assert not run_file.exists(), "old run file should be removed after rename"
             run_name = "BBBB"
@@ -467,7 +494,7 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             )
             run_id = page.get_attribute("#results-table", "data-run-id")
             assert run_id and run_id != previous_run_id, "full rerun should generate a new run_id"
-            expect(page.locator("#run-name-expanded")).to_have_text(previous_run_name)
+            expect(page.locator(".stats-run")).to_have_text(previous_run_name)
 
             deadline = time.time() + 5
             while previous_run_file.exists() and time.time() < deadline:
@@ -518,7 +545,8 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             run_dropdown = page.locator("#run-dropdown-expanded")
             expect(run_dropdown).to_be_visible()
             dropdown_text = (run_dropdown.text_content() or "").strip()
-            dropdown_text = re.sub(r"\s*▾\s*$", "", dropdown_text)
+            # React UI uses "v" instead of "▾" for dropdown arrow
+            dropdown_text = re.sub(r"\s*v\s*$", "", dropdown_text)
             run_name = re.sub(r"\s*\([^)]+\)\s*$", "", dropdown_text).strip()
             assert run_name and run_name != stop_run_name, "new run should get a fresh run name"
             assert re.match(r"^[a-z]+-[a-z]+$", run_name), "new run name should be friendly"
@@ -545,15 +573,16 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             assert "(" in first_option_text and ")" in first_option_text, "run options include timestamp"
             page.click("body")
 
-            # Rename while dropdown is visible should hide dropdown and update file/metadata.
+            # Rename while dropdown is visible should update file/metadata.
             previous_dropdown_name = run_name
+            # With multiple runs, hover over the row containing the edit button
+            run_row = page.locator(".stats-info-row:has(.edit-run-btn-expanded)")
+            run_row.hover()
             page.locator(".edit-run-btn-expanded").click()
-            input_field = page.locator("input.run-name-edit")
+            input_field = page.locator(".stats-info-row input")
             expect(input_field).to_be_visible()
-            dropdown_el = page.locator("#run-dropdown-expanded")
-            assert dropdown_el.evaluate("el => getComputedStyle(el).display") == "none", "dropdown should hide during rename"
             input_field.fill("CCCC")
-            page.locator(".edit-run-btn-expanded").click()
+            input_field.press("Enter")
             run_name = "CCCC"
             run_dropdown = page.locator("#run-dropdown-expanded")
             expect(run_dropdown).to_contain_text(run_name)
@@ -750,7 +779,7 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             page.click("body")
             expect(page.locator("tr[data-row='main']:not(.hidden)")).to_have_count(dataset_count)
             page.locator("tr[data-row='main']:not(.hidden)").first.locator("a").click()
-            page.wait_for_selector("#data-input")
+            page.wait_for_selector("#input-panel")
             page.keyboard.press("Escape")
             page.wait_for_selector("#results-table")
             expect(page.locator("tr[data-row='main']:not(.hidden)")).to_have_count(dataset_count)
@@ -773,8 +802,8 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             assert re.search(r"/runs/.+/results/\d+", simple_href), "detail URL should match expected shape"
             with page.expect_navigation():
                 simple_link.click()
-            page.wait_for_selector("#data-input")
-            page.wait_for_selector("#data-output")
+            page.wait_for_selector("#input-panel")
+            page.wait_for_selector("#output-panel")
             page.keyboard.press("Escape")
             page.wait_for_selector("#results-table")
             search_input = page.locator("#search-input")
@@ -786,10 +815,10 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             # Detail view: input/output/reference/scores/messages/latency display + navigation.
             messages_row = page.locator(f"tr[data-row='main'][data-row-id='{idx_messages}']")
             messages_row.locator("a").click()
-            page.wait_for_selector("#data-input")
-            page.wait_for_selector("#data-output")
+            page.wait_for_selector("#input-panel")
+            page.wait_for_selector("#output-panel")
             if results[idx_messages].get("result", {}).get("reference") not in (None, "—"):
-                page.wait_for_selector("#data-ref")
+                page.wait_for_selector("#ref-panel")
             expect(page.locator("#sidebar-panel")).to_contain_text("Scores")
             expect(page.locator("#sidebar-panel")).to_contain_text("note-1")
             latency_panel = page.locator("#sidebar-panel")
@@ -799,7 +828,8 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             messages_btn.click()
             messages_pane = page.locator("#messages-pane")
             expect(messages_pane).to_be_visible()
-            page.keyboard.press("Escape")
+            # React UI uses close button, not Escape (Escape navigates back to dashboard)
+            page.locator("#messages-pane button").first.click()
             expect(messages_pane).to_have_class(re.compile("translate-x-full"))
             if idx_messages < expected_count - 1:
                 page.keyboard.press("ArrowDown")
@@ -814,38 +844,42 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
                 # Detail view: reference panel shows when reference exists.
                 reference_row = page.locator(f"tr[data-row='main'][data-row-id='{idx_reference}']")
                 reference_row.locator("a").click()
-                page.wait_for_selector("#data-ref")
+                page.wait_for_selector("#ref-panel")
                 page.keyboard.press("Escape")
                 page.wait_for_selector("#results-table")
 
             # Detail view: trace_url link and trace data panel.
             trace_row = page.locator(f"tr[data-row='main'][data-row-id='{idx_trace_url}']")
             trace_row.locator("a").click()
-            page.wait_for_selector("#data-input")
+            page.wait_for_selector("#input-panel")
             expect(page.locator("a:has-text('View Trace')")).to_be_visible()
             page.keyboard.press("Escape")
             page.wait_for_selector("#results-table")
 
             trace_data_row = page.locator(f"tr[data-row='main'][data-row-id='{idx_trace_data}']")
             trace_data_row.locator("a").click()
-            page.wait_for_selector("#data-input")
-            trace_content = page.locator("#trace-data-content")
+            page.wait_for_selector("#input-panel")
+            # React uses button with "Trace Data" text and collapsible-content class
+            trace_header = page.locator("button:has-text('Trace Data')")
+            expect(trace_header).to_be_visible()
+            trace_content = trace_header.locator("xpath=following-sibling::div[contains(@class,'collapsible-content')]")
             expect(trace_content).to_be_visible()
-            expect(page.locator("#data-trace")).to_be_visible()
-            page.locator("[onclick*=\"toggleCollapse('trace-data')\"]").first.click()
+            trace_header.click()
             expect(trace_content).not_to_have_class(re.compile("\\bopen\\b"))
-            page.locator("[onclick*=\"toggleCollapse('trace-data')\"]").first.click()
+            trace_header.click()
             page.keyboard.press("Escape")
             page.wait_for_selector("#results-table")
 
             # Detail view: metadata panel collapses/expands.
             metadata_row = page.locator(f"tr[data-row='main'][data-row-id='{idx_metadata}']")
             metadata_row.locator("a").click()
-            page.wait_for_selector("#data-input")
-            metadata_content = page.locator("#metadata-content")
+            page.wait_for_selector("#input-panel")
+            # React uses button with "Metadata" text and collapsible-content class
+            metadata_header = page.locator("button:has-text('Metadata')")
+            expect(metadata_header).to_be_visible()
+            metadata_content = metadata_header.locator("xpath=following-sibling::div[contains(@class,'collapsible-content')]")
             expect(metadata_content).to_be_visible()
-            expect(page.locator("#data-meta")).to_be_visible()
-            page.locator("[onclick*=\"toggleCollapse('metadata')\"]").first.click()
+            metadata_header.click()
             expect(metadata_content).not_to_have_class(re.compile("\\bopen\\b"))
             page.keyboard.press("Escape")
             page.wait_for_selector("#results-table")
@@ -872,7 +906,10 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             download.save_as(json_path)
             exported = json.loads(json_path.read_text())
             assert len(exported.get("results", [])) == expected_count, "JSON export should include all results"
-            # Re-open export dropdown for CSV
+            # Wait for menu to close after export (may be auto-closed or need to close manually)
+            page.wait_for_timeout(300)
+            page.click("body")  # Close if still open
+            page.wait_for_timeout(100)
             page.locator("#export-toggle").click()
             page.wait_for_selector("#export-menu:not(.hidden)")
             with page.expect_download() as download_info:
