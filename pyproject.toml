@@ -1,6 +1,6 @@
 [project]
 name = "ezvals"
-version = "0.1.2"
+version = "0.1.3"
 description = "A lightweight, code-first evaluation framework for testing AI agents and LLM applications"
 authors = [{ name = "EZVals Team" }]
 readme = "README.md"
