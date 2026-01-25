@@ -1,3 +1,4 @@
+import socket
 import threading
 import time
 from contextlib import contextmanager
@@ -6,8 +7,15 @@ import uvicorn
 
 
 @contextmanager
-def run_server(app, host: str = "127.0.0.1", port: int = 8765):
-    """Run a uvicorn server in a background thread for the duration of the context."""
+def run_server(app, host: str = "127.0.0.1"):
+    """Run a uvicorn server in a background thread with a dynamically assigned port."""
+    # Get a free port by binding to port 0
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind((host, 0))
+    port = sock.getsockname()[1]
+    sock.close()
+
     config = uvicorn.Config(app, host=host, port=port, log_level="warning")
     server = uvicorn.Server(config)
 

@@ -45,7 +45,7 @@ def test_rename_run_via_pencil_button(tmp_path):
     run_id = store.save_run(make_test_run(), "2024-01-01T00-00-00Z")
     app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
 
-    with run_server(app, port=8768) as url:
+    with run_server(app) as url:
         with sync_playwright() as p:
             browser = p.chromium.launch()
             page = browser.new_page()
@@ -92,7 +92,7 @@ def test_rename_run_escape_cancels(tmp_path):
     run_id = store.save_run(make_test_run(), "2024-01-01T00-00-00Z")
     app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
 
-    with run_server(app, port=8769) as url:
+    with run_server(app) as url:
         with sync_playwright() as p:
             browser = p.chromium.launch()
             page = browser.new_page()
@@ -130,7 +130,7 @@ def test_rename_run_via_checkmark_button(tmp_path):
     run_id = store.save_run(make_test_run(), "2024-01-01T00-00-00Z")
     app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
 
-    with run_server(app, port=8770) as url:
+    with run_server(app) as url:
         with sync_playwright() as p:
             browser = p.chromium.launch()
             page = browser.new_page()
@@ -169,7 +169,7 @@ def test_rename_run_blur_cancels(tmp_path):
     run_id = store.save_run(make_test_run(), "2024-01-01T00-00-00Z")
     app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
 
-    with run_server(app, port=8771) as url:
+    with run_server(app) as url:
         with sync_playwright() as p:
             browser = p.chromium.launch()
             page = browser.new_page()
@@ -207,7 +207,7 @@ def test_rename_run_expanded_view(tmp_path):
     run_id = store.save_run(make_test_run(), "2024-01-01T00-00-00Z")
     app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
 
-    with run_server(app, port=8772) as url:
+    with run_server(app) as url:
         with sync_playwright() as p:
             browser = p.chromium.launch()
             page = browser.new_page()
@@ -304,7 +304,7 @@ def simple_eval():
         discovered_functions=functions,
     )
 
-    with run_server(app, port=8773) as url:
+    with run_server(app) as url:
         with sync_playwright() as p:
             browser = p.chromium.launch()
             page = browser.new_page()

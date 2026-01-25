@@ -1,32 +1,12 @@
 """
 E2E tests for error handling in the web UI.
 """
-import threading
-import time
-
 from playwright.sync_api import sync_playwright, expect, Route
-import uvicorn
 
 from ezvals.server import create_app
 from ezvals.storage import ResultsStore
 
-
-def run_server(app, host: str = "127.0.0.1", port: int = 8767):
-    """Context manager to run uvicorn server in background thread."""
-    class _Runner:
-        def __enter__(self):
-            config = uvicorn.Config(app, host=host, port=port, log_level="warning")
-            self.server = uvicorn.Server(config)
-            self.thread = threading.Thread(target=self.server.run, daemon=True)
-            self.thread.start()
-            time.sleep(0.5)
-            return f"http://{host}:{port}"
-
-        def __exit__(self, exc_type, exc, tb):
-            self.server.should_exit = True
-            self.thread.join(timeout=3)
-
-    return _Runner()
+from conftest import run_server
 
 
 def make_completed_summary():
