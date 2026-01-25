@@ -25,14 +25,13 @@ This ensures your dataset targets real problems. Many teams waste effort testing
 When you're making focused changes—adjusting a prompt, fixing a specific bug—a small dataset is fine. You want quick feedback on whether the change helped or hurt.
 
 ```python
-from ezvals import eval, parametrize, EvalContext
+from ezvals import eval, EvalContext
 
 # Quick iteration dataset
-@eval(dataset="returns")
-@parametrize("input,reference", [
-    ("What's the return policy?", "30 days"),
-    ("Can I return opened items?", "unopened only"),
-    ("Do I need a receipt?", "receipt required"),
+@eval(dataset="returns", cases=[
+    {"input": "What's the return policy?", "reference": "30 days"},
+    {"input": "Can I return opened items?", "reference": "unopened only"},
+    {"input": "Do I need a receipt?", "reference": "receipt required"},
 ])
 def test_returns_quick(ctx: EvalContext):
     ctx.output = agent(ctx.input)
@@ -274,11 +273,12 @@ BILLING_ALL = BILLING_BASIC + BILLING_EDGE_CASES
 **Using in evals:**
 
 ```python
-from ezvals import eval, parametrize, EvalContext
+from ezvals import eval, EvalContext
 from datasets.categories.billing import BILLING_ALL
 
-@eval(dataset="billing")
-@parametrize("input,reference", [(c["input"], c["expected"]) for c in BILLING_ALL])
+@eval(dataset="billing", cases=[
+    {"input": c["input"], "reference": c["expected"]} for c in BILLING_ALL
+])
 def test_billing_accuracy(ctx: EvalContext):
     ctx.output = agent(ctx.input)
     assert ctx.reference in ctx.output.lower()

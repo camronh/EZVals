@@ -98,12 +98,11 @@ You don't need elaborate infrastructure to start evaluating. The minimum viable 
 3. A way to check if the output is acceptable
 
 ```python
-from ezvals import eval, parametrize, EvalContext
+from ezvals import eval, EvalContext
 
-@eval(dataset="basic_qa")
-@parametrize("input,reference", [
-    ("What's the return policy?", "30 days"),
-    ("How do I cancel?", "account settings"),
+@eval(dataset="basic_qa", cases=[
+    {"input": "What's the return policy?", "reference": "30 days"},
+    {"input": "How do I cancel?", "reference": "account settings"},
 ])
 def test_basic_qa(ctx: EvalContext):
     ctx.output = my_agent(ctx.input)
@@ -156,8 +155,9 @@ def json_valid(output: str) -> float:
 from datasets.support_questions import SUPPORT_QUESTIONS
 from graders.string_match import contains_any
 
-@eval(dataset="support")
-@parametrize("input,reference", [(q["question"], q["expected"]) for q in SUPPORT_QUESTIONS])
+@eval(dataset="support", cases=[
+    {"input": q["question"], "reference": q["expected"]} for q in SUPPORT_QUESTIONS
+])
 def test_support_accuracy(ctx: EvalContext):
     ctx.output = support_agent(ctx.input)
     assert contains_any(ctx.output, [ctx.reference])

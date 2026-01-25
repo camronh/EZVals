@@ -19,14 +19,13 @@ At its worst, you have a list of test prompts in a notes file that you paste one
 **The fix:** Build even a minimal eval. A script that runs your test queries in parallel and shows you a table of inputs/outputs. You still review manually, but you've escaped caveman testing.
 
 ```python
-from ezvals import eval, parametrize, EvalContext
+from ezvals import eval, EvalContext
 
 # Minimal escape from caveman testing
-@eval(dataset="routing")
-@parametrize("input,reference", [
-    ("Route me to sales", "555-0100"),
-    ("I have a billing question", "555-0200"),
-    ("Technical support", "555-0300"),
+@eval(dataset="routing", cases=[
+    {"input": "Route me to sales", "reference": "555-0100"},
+    {"input": "I have a billing question", "reference": "555-0200"},
+    {"input": "Technical support", "reference": "555-0300"},
 ])
 def test_routing(ctx: EvalContext):
     ctx.output = agent(ctx.input)

@@ -65,7 +65,7 @@ Three components you need:
 ## Basic Example: RAG Agent
 
 ```python
-from ezvals import eval, parametrize, EvalContext
+from ezvals import eval, EvalContext
 
 # The target: a RAG agent that answers questions
 def rag_agent(question: str) -> str:
@@ -73,11 +73,10 @@ def rag_agent(question: str) -> str:
     return llm.generate(question, context=docs)
 
 # The eval: combines target, dataset, and grader
-@eval(dataset="rag_qa")
-@parametrize("input,reference", [
-    ("What is the return policy?", "30 days"),
-    ("How do I contact support?", "support@example.com"),
-    ("What payment methods are accepted?", "credit card"),
+@eval(dataset="rag_qa", cases=[
+    {"input": "What is the return policy?", "reference": "30 days"},
+    {"input": "How do I contact support?", "reference": "support@example.com"},
+    {"input": "What payment methods are accepted?", "reference": "credit card"},
 ])
 def test_rag_accuracy(ctx: EvalContext):
     ctx.output = rag_agent(ctx.input)
@@ -87,7 +86,7 @@ def test_rag_accuracy(ctx: EvalContext):
 
 Run with: `ezvals run`
 
-This eval runs your RAG agent against each test case and reports which passed. The `@parametrize` decorator generates three separate evals from one function. Failed assertions become failing scores with the assertion message as notes.
+This eval runs your RAG agent against each test case and reports which passed. The `cases` parameter generates three separate evals from one function. Failed assertions become failing scores with the assertion message as notes.
 
 ## Agent Workflow Instructions
 
@@ -213,7 +212,7 @@ Write the eval using EZVals patterns:
 - quickstart.mdx - Getting started
 - decorators.mdx - The @eval decorator options
 - eval-context.mdx - EvalContext API (input, output, reference, store())
-- parametrize.mdx - @parametrize for multiple test cases
+- cases.mdx - Using cases for multiple test cases
 - scoring.mdx - Scoring with assertions and ctx.store()
 - evaluators.mdx - Post-processing evaluator functions
 - file-defaults.mdx - ezvals_defaults for shared config
