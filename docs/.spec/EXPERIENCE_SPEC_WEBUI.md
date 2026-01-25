@@ -162,13 +162,61 @@ Scenario: Navigate between results
 
 ## Inline Editing
 
-```gherkin
-Scenario: Edit annotations
-  Given the detail view is open
-  When the user adds annotation text
-  Then the annotation saves to the JSON file
-  And annotations persist across page reloads
+### Annotation Editing
 
+The annotation section in the detail view sidebar allows adding, editing, and removing annotations.
+
+```gherkin
+Scenario: Add annotation via pencil icon
+  Given the detail view is open
+  And no annotation exists
+  When the user clicks the pencil icon next to "Annotation"
+  Then a textarea appears with placeholder "Add annotation..."
+  And Save/Cancel buttons appear
+  And keyboard hint shows "Cmd+Enter save"
+
+Scenario: Add annotation via placeholder link
+  Given the detail view is open
+  And no annotation exists
+  When the user clicks "+ Add annotation"
+  Then the textarea edit mode activates
+
+Scenario: Save annotation
+  Given the user is editing an annotation
+  When the user types text and clicks Save (or presses Cmd+Enter)
+  Then the annotation saves to the JSON file via PATCH API
+  And the view returns to read-only mode showing the annotation text
+  And the annotation persists across page reloads
+
+Scenario: Cancel annotation edit
+  Given the user is editing an annotation
+  When the user clicks Cancel (or presses Escape)
+  Then changes are discarded
+  And the view returns to read-only mode
+
+Scenario: Clear annotation
+  Given an annotation exists
+  When the user edits and clears all text, then saves
+  Then the annotation is removed (set to null)
+  And the placeholder "+ Add annotation" reappears
+
+Scenario: Keyboard navigation disabled while editing
+  Given the user is editing an annotation
+  When the user presses arrow keys or Escape
+  Then arrow keys work normally in textarea (no result navigation)
+  And Escape cancels edit instead of navigating back
+  And footer shows "Esc cancel" instead of "Esc back"
+```
+
+**Annotation UI States:**
+- **View mode (no annotation)**: Shows clickable "+ Add annotation" link
+- **View mode (has annotation)**: Shows annotation text with pencil edit icon in header
+- **Edit mode**: Shows textarea with Save/Cancel buttons and Cmd+Enter hint
+- **Saving**: Shows spinner on Save button, buttons disabled
+
+### Score Editing
+
+```gherkin
 Scenario: Edit scores
   Given the detail view is open
   When the user modifies a score's value, passed, or notes
@@ -176,8 +224,8 @@ Scenario: Edit scores
 ```
 
 **Editable Fields:**
+- Annotations (via textarea with explicit save)
 - Scores (value, passed, notes)
-- Annotations
 
 **Read-Only Fields:**
 - Input
