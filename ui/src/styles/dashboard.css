@@ -53,6 +53,13 @@
 .filter-badge { display: none; }
 .filter-badge.active { display: flex; }
 
+/* Sticky table header */
+#results-table thead {
+  position: sticky;
+  top: -1rem;
+  z-index: 10;
+}
+
 /* Table sorting indicators */
 #results-table thead th[aria-sort="ascending"]::after { content: " ▲"; font-size: 8px; color: #3b82f6; }
 #results-table thead th[aria-sort="descending"]::after { content: " ▼"; font-size: 8px; color: #3b82f6; }
