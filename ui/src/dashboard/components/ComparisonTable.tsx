@@ -1,15 +1,25 @@
-import InlineScoreBadges from './InlineScoreBadges.jsx'
-import { formatValue } from '../utils.js'
+import type { NormalizedComparisonRun, RunResultRow } from '../../types'
+import type { ComparisonMatrixEntry } from '../utils'
+import InlineScoreBadges from './InlineScoreBadges'
+import { formatValue } from '../utils'
 
-/**
- * @param {{
- *   sortedRows: Array<any>,
- *   normalizedComparisonRuns: Array<{ runId: string, runName: string, color: string }>,
- *   onToggleSort: (col: string, type: string, multi: boolean) => void,
- *   currentRunId: string | undefined,
- * }} props
- */
-export default function ComparisonTable({ sortedRows, normalizedComparisonRuns, onToggleSort, currentRunId }) {
+type ComparisonRow = {
+  key: string
+  entry: ComparisonMatrixEntry
+  index: number
+  linkRunId?: string
+  linkIndex?: number | null
+  firstResult?: RunResultRow | null
+}
+
+type ComparisonTableProps = {
+  sortedRows: ComparisonRow[]
+  normalizedComparisonRuns: NormalizedComparisonRun[]
+  onToggleSort: (col: string, type: string, multi: boolean) => void
+  currentRunId?: string
+}
+
+export default function ComparisonTable({ sortedRows, normalizedComparisonRuns, onToggleSort, currentRunId }: ComparisonTableProps) {
   return (
     <table id="results-table" className="w-full table-fixed border-collapse text-sm text-theme-text comparison-table">
       <thead>
@@ -36,7 +46,7 @@ export default function ComparisonTable({ sortedRows, normalizedComparisonRuns, 
       </thead>
       <tbody className="divide-y divide-theme-border-subtle">
         {sortedRows.map((row) => {
-          const meta = row.entry?._meta || {}
+          const meta = (row.entry?._meta || {}) as { function?: string; dataset?: string; labels?: string[] }
           const labelsHtml = meta.labels?.length ? (
             <>
               <span className="text-zinc-700">.</span>
@@ -74,7 +84,7 @@ export default function ComparisonTable({ sortedRows, normalizedComparisonRuns, 
                 )}
               </td>
               {normalizedComparisonRuns.map((run) => {
-                const entry = row.entry?.[run.runId]
+                const entry = row.entry?.[run.runId] as RunResultRow | undefined
                 const result = entry?.result
                 if (!result) {
                   return (

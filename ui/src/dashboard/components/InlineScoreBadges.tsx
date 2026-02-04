@@ -1,7 +1,11 @@
-/**
- * @param {{ scores: Array<{ key: string, value?: any, passed?: boolean | null }>, latency?: number | null }} props
- */
-export default function InlineScoreBadges({ scores, latency }) {
+import type { Score } from '../../types'
+
+type InlineScoreBadgesProps = {
+  scores: Score[]
+  latency?: number | null
+}
+
+export default function InlineScoreBadges({ scores, latency }: InlineScoreBadgesProps) {
   const items = []
   if (scores?.length) {
     scores.forEach((s, idx) => {

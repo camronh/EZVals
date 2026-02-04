@@ -1,13 +1,20 @@
-/**
- * @param {{
- *   open: boolean,
- *   onClose: () => void,
- *   onSave: (event: any) => void,
- *   settingsForm: { concurrency: string | number, results_dir: string, timeout: string | number },
- *   setSettingsForm: (updater: (prev: any) => any) => void,
- *   onToggleTheme: () => void,
- * }} props
- */
+import type { Dispatch, FormEvent, SetStateAction } from 'react'
+
+type SettingsFormState = {
+  concurrency: string
+  results_dir: string
+  timeout: string
+}
+
+type SettingsModalProps = {
+  open: boolean
+  onClose: () => void
+  onSave: (event: FormEvent<HTMLFormElement>) => void
+  settingsForm: SettingsFormState
+  setSettingsForm: Dispatch<SetStateAction<SettingsFormState>>
+  onToggleTheme: () => void
+}
+
 export default function SettingsModal({
   open,
   onClose,
@@ -15,7 +22,7 @@ export default function SettingsModal({
   settingsForm,
   setSettingsForm,
   onToggleTheme,
-}) {
+}: SettingsModalProps) {
   if (!open) {
     return <div id="settings-modal" className="fixed inset-0 z-50 hidden"></div>
   }

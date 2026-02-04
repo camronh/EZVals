@@ -1,25 +1,26 @@
-import CopyableText from './CopyableText.jsx'
-import { chipStats, getBgBarColor, getTextColor } from '../utils.js'
+import type { RefObject } from 'react'
+import type { ScoreChip, SessionRun, StatsSummary } from '../../types'
+import CopyableText from './CopyableText'
+import { chipStats, getBgBarColor, getTextColor } from '../utils'
 
-/**
- * @param {{
- *   stats: any,
- *   statsExpanded: boolean,
- *   setStatsExpanded: (value: boolean) => void,
- *   displayChips: Array<any>,
- *   displayFilteredCount: number | null,
- *   hasFilters: boolean,
- *   sessionRuns: Array<any>,
- *   currentRunLabel: string,
- *   editingRunName: boolean,
- *   runNameDraft: string,
- *   setRunNameDraft: (value: string) => void,
- *   setEditingRunName: (value: boolean) => void,
- *   onRunNameSave: () => void,
- *   onRunDropdownToggle: () => void,
- *   runDropdownCompactRef: { current: HTMLElement | null },
- * }} props
- */
+type StatsCompactProps = {
+  stats: StatsSummary
+  statsExpanded: boolean
+  setStatsExpanded: (value: boolean) => void
+  displayChips: ScoreChip[]
+  displayFilteredCount: number | null
+  hasFilters: boolean
+  sessionRuns: SessionRun[]
+  currentRunLabel: string
+  editingRunName: boolean
+  runNameDraft: string
+  setRunNameDraft: (value: string) => void
+  setEditingRunName: (value: boolean) => void
+  onRunNameSave: () => void
+  onRunDropdownToggle: () => void
+  runDropdownCompactRef: RefObject<HTMLButtonElement>
+}
+
 export default function StatsCompact({
   stats,
   statsExpanded,
@@ -36,7 +37,7 @@ export default function StatsCompact({
   onRunNameSave,
   onRunDropdownToggle,
   runDropdownCompactRef,
-}) {
+}: StatsCompactProps) {
   const { total, avgLatency, pctDone, progressPending, notStarted, progressCompleted, progressTotal } = stats
   const showFiltered = hasFilters && displayFilteredCount != null
 
@@ -76,7 +77,7 @@ export default function StatsCompact({
             {stats.sessionName ? (
               <>
                 <span className="text-[11px] font-medium uppercase tracking-wider text-theme-text-secondary">Session</span>
-                <CopyableText text={stats.sessionName} className="copyable font-mono text-[11px] text-theme-text cursor-pointer hover:text-zinc-300" />
+                <CopyableText text={stats.sessionName ?? ''} className="copyable font-mono text-[11px] text-theme-text cursor-pointer hover:text-zinc-300" />
               </>
             ) : null}
             {stats.runName ? (
@@ -109,7 +110,7 @@ export default function StatsCompact({
                         onBlur={() => setEditingRunName(false)}
                       />
                     ) : (
-                      <CopyableText text={stats.runName} className="copyable font-mono text-[11px] text-accent-link cursor-pointer hover:text-accent-link-hover" />
+                      <CopyableText text={stats.runName ?? ''} className="copyable font-mono text-[11px] text-accent-link cursor-pointer hover:text-accent-link-hover" />
                     )}
                     <button className="edit-run-btn flex h-4 w-4 items-center justify-center rounded text-zinc-600 transition hover:text-zinc-400" title="Rename run" onClick={() => { setEditingRunName(true); setRunNameDraft(stats.runName || '') }}>
                       <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><use href="#icon-pencil"></use></svg>

@@ -1,17 +1,17 @@
-import { createPortal } from 'react-dom'
+import type { CSSProperties, ReactNode, RefObject } from 'react'
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
-/**
- * @param {{
- *   anchorRef: { current: HTMLElement | null },
- *   open: boolean,
- *   onClose?: () => void,
- *   children: import('react').ReactNode,
- * }} props
- */
-export default function FloatingMenu({ anchorRef, open, onClose, children }) {
-  const menuRef = useRef(null)
-  const [style, setStyle] = useState(null)
+type FloatingMenuProps = {
+  anchorRef: RefObject<HTMLElement>
+  open: boolean
+  onClose?: () => void
+  children: ReactNode
+}
+
+export default function FloatingMenu({ anchorRef, open, onClose, children }: FloatingMenuProps) {
+  const menuRef = useRef<HTMLDivElement | null>(null)
+  const [style, setStyle] = useState<CSSProperties | null>(null)
 
   useEffect(() => {
     if (!open || !anchorRef?.current) return
@@ -26,10 +26,10 @@ export default function FloatingMenu({ anchorRef, open, onClose, children }) {
 
   useEffect(() => {
     if (!open) return
-    const handleClick = (event) => {
+    const handleClick = (event: MouseEvent) => {
       if (!menuRef.current) return
-      if (menuRef.current.contains(event.target)) return
-      if (anchorRef?.current?.contains(event.target)) return
+      if (menuRef.current.contains(event.target as Node)) return
+      if (anchorRef?.current?.contains(event.target as Node)) return
       onClose?.()
     }
     document.addEventListener('click', handleClick)

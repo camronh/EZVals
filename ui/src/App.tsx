@@ -1,5 +1,5 @@
-import DashboardPage from './dashboard/DashboardPage.jsx'
-import DetailPage from './detail/DetailPage.jsx'
+import DashboardPage from './dashboard/DashboardPage'
+import DetailPage from './detail/DetailPage'
 
 export default function App() {
   const path = window.location.pathname
