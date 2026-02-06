@@ -41,6 +41,7 @@ import SettingsModal from './components/SettingsModal'
 import ComparisonTable from './components/ComparisonTable'
 import ResultsTable from './components/ResultsTable'
 import FloatingMenu from './components/FloatingMenu'
+import PngExportModal from './components/PngExportModal'
 
 const DASHBOARD_BODY_CLASS = 'h-screen flex flex-col bg-theme-bg font-sans text-theme-text'
 
@@ -181,6 +182,7 @@ export default function DashboardPage() {
   const [columnsOpen, setColumnsOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [pngExportOpen, setPngExportOpen] = useState(false)
   const [runMenuOpen, setRunMenuOpen] = useState(false)
   const [runDropdownOpen, setRunDropdownOpen] = useState(false)
   const [compareDropdownOpen, setCompareDropdownOpen] = useState(false)
@@ -783,6 +785,11 @@ export default function DashboardPage() {
   }, [settingsForm])
 
   const handleExport = useCallback(async (format) => {
+    if (format === 'png') {
+      setExportOpen(false)
+      setPngExportOpen(true)
+      return
+    }
     const runId = data?.run_id || 'latest'
     if (format === 'json' || format === 'csv') {
       window.location.href = `/api/runs/${runId}/export/${format}`
@@ -1054,6 +1061,18 @@ export default function DashboardPage() {
         settingsForm={settingsForm}
         setSettingsForm={setSettingsForm}
         onToggleTheme={handleThemeToggle}
+      />
+
+      <PngExportModal
+        open={pngExportOpen}
+        onClose={() => setPngExportOpen(false)}
+        displayChips={displayChips}
+        displayLatency={displayLatency}
+        displayFilteredCount={displayFilteredCount}
+        totalTests={stats.total}
+        isComparisonMode={isComparisonMode}
+        normalizedComparisonRuns={normalizedComparisonRuns}
+        comparisonData={comparisonData}
       />
 
       <FloatingMenu anchorRef={statsExpanded ? runDropdownExpandedRef : runDropdownCompactRef} open={runDropdownOpen} onClose={() => setRunDropdownOpen(false)}>
