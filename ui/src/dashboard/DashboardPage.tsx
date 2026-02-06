@@ -1,4 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { FormEvent, MouseEvent as ReactMouseEvent } from 'react'
+import type {
+  ColumnDef,
+  ComparisonRun,
+  Config,
+  FilterState,
+  NormalizedComparisonRun,
+  RunButtonState,
+  RunSummary,
+  RunResultRow,
+  Score,
+  SessionRun,
+  SortStateItem,
+  StatsSummary,
+} from '../types'
 import {
   DEFAULT_HIDDEN_COLS,
   buildComparisonMatrix,
@@ -15,20 +30,21 @@ import {
   normalizeComparisonRuns,
   parseSortValue,
   summarizeStats,
+  type ComparisonMatrixEntry,
 } from './utils'
 import { useDebouncedValue, useLocalStorageState, useSessionStorageState } from './hooks'
-import DashboardIcons from './components/DashboardIcons.jsx'
-import DashboardHeader from './components/DashboardHeader.jsx'
-import StatsExpanded from './components/StatsExpanded.jsx'
-import StatsCompact from './components/StatsCompact.jsx'
-import SettingsModal from './components/SettingsModal.jsx'
-import ComparisonTable from './components/ComparisonTable.jsx'
-import ResultsTable from './components/ResultsTable.jsx'
-import FloatingMenu from './components/FloatingMenu.jsx'
+import DashboardIcons from './components/DashboardIcons'
+import DashboardHeader from './components/DashboardHeader'
+import StatsExpanded from './components/StatsExpanded'
+import StatsCompact from './components/StatsCompact'
+import SettingsModal from './components/SettingsModal'
+import ComparisonTable from './components/ComparisonTable'
+import ResultsTable from './components/ResultsTable'
+import FloatingMenu from './components/FloatingMenu'
 
 const DASHBOARD_BODY_CLASS = 'h-screen flex flex-col bg-theme-bg font-sans text-theme-text'
 
-const PILL_TONES = {
+const PILL_TONES: Record<string, string> = {
   not_started: 'text-zinc-400 bg-zinc-500/10 border border-zinc-500/40',
   pending: 'text-blue-300 bg-blue-500/10 border border-blue-500/40',
   running: 'text-cyan-300 bg-cyan-500/10 border border-cyan-500/40',
@@ -37,7 +53,7 @@ const PILL_TONES = {
   cancelled: 'text-amber-300 bg-amber-500/10 border border-amber-500/40',
 }
 
-const COLUMN_DEFS = [
+const COLUMN_DEFS: ColumnDef[] = [
   { key: 'function', label: 'Eval', width: '15%', type: 'string', align: 'left' },
   { key: 'input', label: 'Input', width: '18%', type: 'string', align: 'left' },
   { key: 'reference', label: 'Reference', width: '18%', type: 'string', align: 'left' },
@@ -49,11 +65,39 @@ const COLUMN_DEFS = [
 
 const RUN_MODE_KEY = 'ezvals:runMode'
 
-function hasRunningResults(data) {
+type DashboardRow = {
+  index: number
+  function: string
+  dataset: string
+  labels: string[]
+  result: NonNullable<RunResultRow['result']>
+  scores: Score[]
+  scoresSortValue: string | number
+  hasUrl: boolean
+  hasMessages: boolean
+  hasError: boolean
+  annotation: string
+  searchText: string
+}
+
+type ComparisonRow = {
+  key: string
+  entry: ComparisonMatrixEntry
+  index: number
+  linkRunId?: string
+  linkIndex?: number | null
+  firstResult?: RunResultRow | null
+  searchText: string
+}
+
+type ResizeState = { colKey: string; startX: number; startWidth: number }
+type SettingsFormState = { concurrency: string; results_dir: string; timeout: string }
+
+function hasRunningResults(data: RunSummary | null) {
   return (data?.results || []).some((r) => ['pending', 'running'].includes(r.result?.status))
 }
 
-function buildRowSearchText(row) {
+function buildRowSearchText(row: RunResultRow) {
   const result = row.result || {}
   const scores = result.scores || []
   const parts = [
@@ -70,10 +114,11 @@ function buildRowSearchText(row) {
   return parts.filter(Boolean).join(' ').toLowerCase()
 }
 
-function buildComparisonSearchText(entry, comparisonRuns) {
-  const parts = [entry?._meta?.function, entry?._meta?.dataset, ...(entry?._meta?.labels || [])]
+function buildComparisonSearchText(entry: ComparisonMatrixEntry, comparisonRuns: NormalizedComparisonRun[]) {
+  const meta = entry?._meta as { function?: string; dataset?: string; labels?: string[] } | undefined
+  const parts = [meta?.function, meta?.dataset, ...(meta?.labels || [])]
   comparisonRuns.forEach((run) => {
-    const row = entry?.[run.runId]
+    const row = entry?.[run.runId] as RunResultRow | undefined
     const result = row?.result
     if (!result) return
     parts.push(
@@ -90,7 +135,7 @@ function buildComparisonSearchText(entry, comparisonRuns) {
   return parts.filter(Boolean).join(' ').toLowerCase()
 }
 
-function getRowSortValue(row, col) {
+function getRowSortValue(row: DashboardRow, col: string) {
   const result = row.result || {}
   if (col === 'function') return row.function || ''
   if (col === 'input') return formatValue(result.input)
@@ -101,7 +146,7 @@ function getRowSortValue(row, col) {
     const scores = result.scores || []
     if (!scores.length) return ''
     const first = scores[0]
-    if (first.value != null) return first.value
+    if (first.value != null) return typeof first.value === 'number' ? first.value : String(first.value)
     if (first.passed === true) return 1
     if (first.passed === false) return 0
     return ''
@@ -110,13 +155,14 @@ function getRowSortValue(row, col) {
   return ''
 }
 
-function getComparisonSortValue(row, col) {
+function getComparisonSortValue(row: ComparisonRow, col: string) {
   if (col === 'function') return row.entry?._meta?.function || ''
   if (col === 'input') return formatValue(row.firstResult?.result?.input)
   if (col === 'reference') return formatValue(row.firstResult?.result?.reference)
   if (col.startsWith('output-')) {
     const runId = col.slice('output-'.length)
-    const result = row.entry?.[runId]?.result
+    const entry = row.entry?.[runId] as RunResultRow | undefined
+    const result = entry?.result
     if (!result) return ''
     const scores = result.scores || []
     const scoreText = scores.map((s) => `${s.key}:${s.value ?? ''}`).join(' ')
@@ -126,10 +172,10 @@ function getComparisonSortValue(row, col) {
 }
 
 export default function DashboardPage() {
-  const [data, setData] = useState(null)
-  const [sessionRuns, setSessionRuns] = useState([])
-  const [comparisonData, setComparisonData] = useState({})
-  const [error, setError] = useState(null)
+  const [data, setData] = useState<RunSummary | null>(null)
+  const [sessionRuns, setSessionRuns] = useState<SessionRun[]>([])
+  const [comparisonData, setComparisonData] = useState<Record<string, RunSummary>>({})
+  const [error, setError] = useState<Error | null>(null)
   const [loading, setLoading] = useState(true)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [columnsOpen, setColumnsOpen] = useState(false)
@@ -141,40 +187,40 @@ export default function DashboardPage() {
   const [addCompareOpen, setAddCompareOpen] = useState(false)
   const [editingRunName, setEditingRunName] = useState(false)
   const [runNameDraft, setRunNameDraft] = useState('')
-  const [filters, setFilters] = useSessionStorageState('ezvals:filters', defaultFilters)
-  const [search, setSearch] = useSessionStorageState('ezvals:search', '')
-  const [hiddenColumns, setHiddenColumns] = useLocalStorageState('ezvals:hidden_columns', DEFAULT_HIDDEN_COLS)
-  const [colWidths, setColWidths] = useLocalStorageState('ezvals:col_widths', {})
-  const [statsExpanded, setStatsExpanded] = useLocalStorageState('ezvals:statsExpanded', true)
-  const [runMode, setRunMode] = useLocalStorageState(RUN_MODE_KEY, 'rerun')
-  const [comparisonRuns, setComparisonRuns] = useSessionStorageState('ezvals:comparisonRuns', [])
-  const [sortState, setSortState] = useState([])
-  const [selectedIndices, setSelectedIndices] = useState(new Set())
-  const [expandedRows, setExpandedRows] = useState(new Set())
+  const [filters, setFilters] = useSessionStorageState<FilterState>('ezvals:filters', defaultFilters)
+  const [search, setSearch] = useSessionStorageState<string>('ezvals:search', '')
+  const [hiddenColumns, setHiddenColumns] = useLocalStorageState<string[]>('ezvals:hidden_columns', Array.from(DEFAULT_HIDDEN_COLS))
+  const [colWidths, setColWidths] = useLocalStorageState<Record<string, number>>('ezvals:col_widths', {})
+  const [statsExpanded, setStatsExpanded] = useLocalStorageState<boolean>('ezvals:statsExpanded', true)
+  const [runMode, setRunMode] = useLocalStorageState<string>(RUN_MODE_KEY, 'rerun')
+  const [comparisonRuns, setComparisonRuns] = useSessionStorageState<ComparisonRun[]>('ezvals:comparisonRuns', [])
+  const [sortState, setSortState] = useState<SortStateItem[]>([])
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set())
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set())
   const [isRunningOverride, setIsRunningOverride] = useState(false)
   const [hasRunBefore, setHasRunBefore] = useState(false)
   const [animateStats, setAnimateStats] = useState(false)
-  const [settingsForm, setSettingsForm] = useState({ concurrency: '', results_dir: '', timeout: '' })
+  const [settingsForm, setSettingsForm] = useState<SettingsFormState>({ concurrency: '', results_dir: '', timeout: '' })
 
-  const filtersToggleRef = useRef(null)
-  const filtersMenuRef = useRef(null)
-  const columnsToggleRef = useRef(null)
-  const columnsMenuRef = useRef(null)
-  const exportToggleRef = useRef(null)
-  const exportMenuRef = useRef(null)
-  const compareDropdownAnchorRef = useRef(null)
-  const addCompareAnchorRef = useRef(null)
-  const runDropdownExpandedRef = useRef(null)
-  const runDropdownCompactRef = useRef(null)
-  const selectAllRef = useRef(null)
-  const lastCheckedRef = useRef(null)
-  const resizeStateRef = useRef(null)
-  const headerRefs = useRef({})
+  const filtersToggleRef = useRef<HTMLButtonElement | null>(null)
+  const filtersMenuRef = useRef<HTMLDivElement | null>(null)
+  const columnsToggleRef = useRef<HTMLButtonElement | null>(null)
+  const columnsMenuRef = useRef<HTMLDivElement | null>(null)
+  const exportToggleRef = useRef<HTMLButtonElement | null>(null)
+  const exportMenuRef = useRef<HTMLDivElement | null>(null)
+  const compareDropdownAnchorRef = useRef<HTMLButtonElement | null>(null)
+  const addCompareAnchorRef = useRef<HTMLButtonElement | null>(null)
+  const runDropdownExpandedRef = useRef<HTMLButtonElement | null>(null)
+  const runDropdownCompactRef = useRef<HTMLButtonElement | null>(null)
+  const selectAllRef = useRef<HTMLInputElement | null>(null)
+  const lastCheckedRef = useRef<number | null>(null)
+  const resizeStateRef = useRef<ResizeState | null>(null)
+  const headerRefs = useRef<Record<string, HTMLElement | null>>({})
 
   const debouncedSearch = useDebouncedValue(search, 120)
   const normalizedComparisonRuns = useMemo(() => normalizeComparisonRuns(comparisonRuns), [comparisonRuns])
   const isComparisonMode = normalizedComparisonRuns.length > 1
-  const comparisonMatrix = useMemo(() => buildComparisonMatrix(comparisonData), [comparisonData])
+  const comparisonMatrix = useMemo<Record<string, ComparisonMatrixEntry>>(() => buildComparisonMatrix(comparisonData), [comparisonData])
   const comparisonDataCount = useMemo(() => Object.keys(comparisonData).length, [comparisonData])
   const hasFilters = isFilterActive(filters, debouncedSearch)
 
@@ -202,7 +248,7 @@ export default function DashboardPage() {
     try {
       const resp = await fetch('/results')
       if (!resp.ok) throw new Error('Failed to load results')
-      const next = await resp.json()
+      const next = await resp.json() as RunSummary
       setData(next)
       setLoading(false)
       setError(null)
@@ -211,12 +257,13 @@ export default function DashboardPage() {
       if (next.session_name) {
         const runsResp = await fetch(`/api/sessions/${encodeURIComponent(next.session_name)}/runs`)
         if (runsResp.ok) {
-          const runsData = await runsResp.json()
+          const runsData = await runsResp.json() as { runs?: SessionRun[] }
           setSessionRuns(runsData.runs || [])
         }
       }
     } catch (err) {
-      setError(err)
+      const nextError = err instanceof Error ? err : new Error('Failed to load results')
+      setError(nextError)
       setLoading(false)
     }
   }, [])
@@ -231,8 +278,6 @@ export default function DashboardPage() {
     if (restored.length < 2) return
 
     let active = true
-    const runIds = new Set(restored.map((r) => r.runId))
-
     async function fetchMissing() {
       for (const run of restored) {
         if (!active) return
@@ -244,7 +289,7 @@ export default function DashboardPage() {
         try {
           const resp = await fetch(`/api/runs/${encodeURIComponent(run.runId)}/data`)
           if (!resp.ok) continue
-          const runData = await resp.json()
+          const runData = await resp.json() as RunSummary
           setComparisonData((prev) => ({ ...prev, [run.runId]: runData }))
         } catch {
           // ignore fetch failures
@@ -284,8 +329,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!filtersOpen && !columnsOpen && !exportOpen && !runMenuOpen) return
-    const handleClick = (event) => {
-      const target = event.target
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as Node
       if (filtersOpen && filtersMenuRef.current && !filtersMenuRef.current.contains(target) && !filtersToggleRef.current?.contains(target)) {
         setFiltersOpen(false)
       }
@@ -313,7 +358,7 @@ export default function DashboardPage() {
   const scoreKeysMeta = useMemo(() => computeScoreKeyMeta(allResultsForFilters), [allResultsForFilters])
   const datasetLabels = useMemo(() => computeDatasetLabels(allResultsForFilters), [allResultsForFilters])
 
-  const [selectedScoreKey, setSelectedScoreKey] = useState('')
+  const [selectedScoreKey, setSelectedScoreKey] = useState<string>('')
 
   useEffect(() => {
     if (!scoreKeysMeta.all.length) return
@@ -322,14 +367,14 @@ export default function DashboardPage() {
     }
   }, [scoreKeysMeta, selectedScoreKey])
 
-  const rows = useMemo(() => {
+  const rows = useMemo<DashboardRow[]>(() => {
     return (data?.results || []).map((r, index) => {
-      const result = r.result || {}
-      const scores = result.scores || []
-      let scoresSortValue = ''
+      const result = (r.result || {}) as NonNullable<RunResultRow['result']>
+      const scores = (result.scores || []) as Score[]
+      let scoresSortValue: string | number = ''
       if (scores.length) {
         const first = scores[0]
-        if (first.value != null) scoresSortValue = first.value
+        if (first.value != null) scoresSortValue = typeof first.value === 'number' ? first.value : String(first.value)
         else if (first.passed === true) scoresSortValue = 1
         else if (first.passed === false) scoresSortValue = 0
       }
@@ -374,7 +419,7 @@ export default function DashboardPage() {
     return next
   }, [filteredRows, sortState])
 
-  const comparisonRows = useMemo(() => {
+  const comparisonRows = useMemo<ComparisonRow[]>(() => {
     if (!isComparisonMode) return []
     const keys = Object.keys(comparisonMatrix).sort()
     return keys.map((key, index) => {
@@ -390,10 +435,11 @@ export default function DashboardPage() {
           }
         }
       }
-      let firstResult = null
+      let firstResult: RunResultRow | null = null
       for (const run of normalizedComparisonRuns) {
-        if (entry?.[run.runId]?.result) {
-          firstResult = entry[run.runId]
+        const rowEntry = entry?.[run.runId] as RunResultRow | undefined
+        if (rowEntry?.result) {
+          firstResult = rowEntry
           break
         }
       }
@@ -416,7 +462,7 @@ export default function DashboardPage() {
       if (q && !row.searchText.includes(q)) return false
       if (!hasFilters) return true
       return normalizedComparisonRuns.some((run) => {
-        const entry = row.entry?.[run.runId]
+        const entry = row.entry?.[run.runId] as RunResultRow | undefined
         const result = entry?.result
         if (!result) return false
         return matchesFiltersForData(filters, {
@@ -461,9 +507,9 @@ export default function DashboardPage() {
   }, [data, hasFilters, isComparisonMode, normalizedComparisonRuns.length])
 
   const hiddenSet = useMemo(() => new Set(hiddenColumns), [hiddenColumns])
-  const stats = useMemo(() => (data ? summarizeStats(data) : summarizeStats({ results: [] })), [data])
+  const stats = useMemo<StatsSummary>(() => (data ? summarizeStats(data) : summarizeStats({ run_id: 'empty', results: [] })), [data])
   const currentRun = useMemo(() => sessionRuns.find((r) => r.run_id === stats.runId), [sessionRuns, stats.runId])
-  const currentRunLabel = currentRun ? `${currentRun.run_name || currentRun.run_id} (${formatRunTimestamp(currentRun.timestamp)})` : stats.runName
+  const currentRunLabel = currentRun ? `${currentRun.run_name || currentRun.run_id} (${formatRunTimestamp(currentRun.timestamp)})` : (stats.runName || '')
 
   const filteredStats = useMemo(() => {
     if (!hasFilters || isComparisonMode) return null
@@ -474,7 +520,7 @@ export default function DashboardPage() {
   const displayLatency = filteredStats ? filteredStats.avgLatency : stats.avgLatency
   const displayFilteredCount = filteredStats ? filteredStats.filtered : null
 
-  const runButtonState = useMemo(() => {
+  const runButtonState = useMemo<RunButtonState>(() => {
     const isRunning = isRunningOverride || hasRunningResults(data)
     const hasSelections = selectedIndices.size > 0
     if (isComparisonMode) {
@@ -492,7 +538,7 @@ export default function DashboardPage() {
     return { hidden: false, text: runMode === 'new' ? 'New Run' : 'Rerun', showDropdown: true, isRunning }
   }, [data, hasRunBefore, isComparisonMode, runMode, selectedIndices.size, isRunningOverride])
 
-  const handleToggleSort = useCallback((col, type, multi) => {
+  const handleToggleSort = useCallback((col: string, type: string, multi: boolean) => {
     setSortState((prev) => {
       const next = [...prev]
       const idx = next.findIndex((s) => s.col === col)
@@ -509,7 +555,7 @@ export default function DashboardPage() {
     })
   }, [])
 
-  const handleSelectAll = useCallback((checked) => {
+  const handleSelectAll = useCallback((checked: boolean) => {
     const visible = sortedRows.map((row) => row.index)
     setSelectedIndices((prev) => {
       const next = new Set(prev)
@@ -519,7 +565,7 @@ export default function DashboardPage() {
     })
   }, [sortedRows])
 
-  const handleRowSelect = useCallback((idx, checked, shiftKey) => {
+  const handleRowSelect = useCallback((idx: number, checked: boolean, shiftKey: boolean) => {
     setSelectedIndices((prev) => {
       const next = new Set(prev)
       if (shiftKey && lastCheckedRef.current != null) {
@@ -544,7 +590,7 @@ export default function DashboardPage() {
     })
   }, [sortedRows])
 
-  const handleRowToggle = useCallback((idx) => {
+  const handleRowToggle = useCallback((idx: number) => {
     setExpandedRows((prev) => {
       const next = new Set(prev)
       if (next.has(idx)) next.delete(idx)
@@ -553,7 +599,7 @@ export default function DashboardPage() {
     })
   }, [])
 
-  const handleResizeStart = useCallback((colKey, event) => {
+  const handleResizeStart = useCallback((colKey: string, event: ReactMouseEvent<HTMLDivElement>) => {
     event.preventDefault()
     event.stopPropagation()
     const th = headerRefs.current[colKey]
@@ -565,7 +611,7 @@ export default function DashboardPage() {
   }, [])
 
   useEffect(() => {
-    const handleMove = (event) => {
+    const handleMove = (event: MouseEvent) => {
       if (!resizeStateRef.current) return
       const { colKey, startX, startWidth } = resizeStateRef.current
       const dx = event.clientX - startX
@@ -586,7 +632,7 @@ export default function DashboardPage() {
     }
   }, [setColWidths])
 
-  const handleAddComparison = useCallback(async (runId, runName) => {
+  const handleAddComparison = useCallback(async (runId: string, runName: string) => {
     setComparisonRuns((prev) => {
       const existing = normalizeComparisonRuns(prev)
       if (existing.find((r) => r.runId === runId)) return prev
@@ -609,7 +655,7 @@ export default function DashboardPage() {
     }
   }, [data, setComparisonRuns])
 
-  const handleRemoveComparison = useCallback((runId) => {
+  const handleRemoveComparison = useCallback((runId: string) => {
     setComparisonRuns((prev) => normalizeComparisonRuns(prev).filter((r) => r.runId !== runId))
     setComparisonData((prev) => {
       const next = { ...prev }
@@ -625,7 +671,7 @@ export default function DashboardPage() {
     }
   }, [comparisonDataCount, comparisonRuns.length, normalizedComparisonRuns.length, setComparisonRuns])
 
-  const handleRunExecute = useCallback(async (mode) => {
+  const handleRunExecute = useCallback(async (mode: string) => {
     const isRunning = isRunningOverride || hasRunningResults(data)
     if (isRunning) {
       try {
@@ -638,7 +684,7 @@ export default function DashboardPage() {
     }
 
     let endpoint = '/api/runs/rerun'
-    let body = {}
+    let body: Record<string, unknown> = {}
     if (mode === 'new') {
       endpoint = '/api/runs/new'
       if (selectedIndices.size > 0) body = { indices: Array.from(selectedIndices) }
@@ -667,7 +713,8 @@ export default function DashboardPage() {
       setIsRunningOverride(true)
       loadResults(true)
     } catch (err) {
-      alert(`Run failed: ${err.message || err}`)
+      const message = err instanceof Error ? err.message : String(err)
+      alert(`Run failed: ${message}`)
     }
   }, [data, isRunningOverride, loadResults, selectedIndices])
 
@@ -688,20 +735,20 @@ export default function DashboardPage() {
     try {
       const resp = await fetch('/api/config')
       if (!resp.ok) return
-      const config = await resp.json()
+      const config = await resp.json() as Config
       setSettingsForm({
-        concurrency: config.concurrency ?? '',
+        concurrency: config.concurrency != null ? String(config.concurrency) : '',
         results_dir: config.results_dir ?? '',
-        timeout: config.timeout ?? '',
+        timeout: config.timeout != null ? String(config.timeout) : '',
       })
     } catch {
       // ignore
     }
   }, [])
 
-  const handleSettingsSave = useCallback(async (event) => {
+  const handleSettingsSave = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const payload = {}
+    const payload: Record<string, unknown> = {}
     const concurrency = parseInt(settingsForm.concurrency, 10)
     if (!Number.isNaN(concurrency)) payload.concurrency = concurrency
     const resultsDir = (settingsForm.results_dir || '').trim()
@@ -718,7 +765,8 @@ export default function DashboardPage() {
       if (!resp.ok) throw new Error('Save failed')
       setSettingsOpen(false)
     } catch (err) {
-      alert(`Failed to save settings: ${err.message || err}`)
+      const message = err instanceof Error ? err.message : String(err)
+      alert(`Failed to save settings: ${message}`)
     }
   }, [settingsForm])
 
@@ -742,7 +790,7 @@ export default function DashboardPage() {
       chips: displayChips || [],
     }
 
-    const payload = {
+    const payload: Record<string, unknown> = {
       visible_indices: visibleIndices,
       visible_columns: visibleColumns,
       stats: statsPayload,
@@ -786,7 +834,8 @@ export default function DashboardPage() {
       a.click()
       URL.revokeObjectURL(url)
     } catch (err) {
-      alert(`Export failed: ${err.message || err}`)
+      const message = err instanceof Error ? err.message : String(err)
+      alert(`Export failed: ${message}`)
     }
   }, [comparisonData, data, displayChips, displayFilteredCount, displayLatency, hasFilters, hiddenSet, isComparisonMode, normalizedComparisonRuns, sortedComparisonRows, sortedRows, stats])
 

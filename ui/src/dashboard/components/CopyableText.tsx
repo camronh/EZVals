@@ -1,9 +1,11 @@
 import { useCallback, useState } from 'react'
 
-/**
- * @param {{ text: string, className?: string }} props
- */
-export default function CopyableText({ text, className = '' }) {
+type CopyableTextProps = {
+  text: string
+  className?: string
+}
+
+export default function CopyableText({ text, className = '' }: CopyableTextProps) {
   const [copied, setCopied] = useState(false)
 
   const handleCopy = useCallback(async () => {

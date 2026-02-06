@@ -1,10 +1,79 @@
+import type { MouseEvent as ReactMouseEvent } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { getResultKey, normalizeComparisonRuns } from '../dashboard/utils.js'
+import type { ComparisonRun, NormalizedComparisonRun, RunResultRow, Score, TraceData } from '../types'
+import { getResultKey, normalizeComparisonRuns } from '../dashboard/utils'
 
 const DETAIL_BODY_CLASS = 'min-h-screen bg-blue-50/40 font-sans text-zinc-800 dark:bg-neutral-950 dark:text-zinc-100'
 const COMPARISON_STORAGE_KEY = 'ezvals:comparisonRuns'
 
-function useBodyClass(bodyClass, title) {
+type ResultDetailPayload = {
+  result: RunResultRow
+  index: number
+  total: number
+  run_id: string
+  session_name?: string | null
+  run_name?: string | null
+  eval_path?: string | null
+}
+
+type ComparisonRunDetail = {
+  runId: string
+  runName: string
+  color: string
+  evalPath: string | null
+  result: RunResultRow | null
+  resultIndex: number | null
+}
+
+type ComparisonState = {
+  baseResult: RunResultRow | null
+  runs: ComparisonRunDetail[]
+}
+
+type CollapsedState = {
+  metadata: boolean
+  trace: boolean
+}
+
+type ResizeType = 'input-width' | 'ref-height' | 'sidebar-width'
+
+type ResizeState = {
+  type: ResizeType
+  startX: number
+  startY: number
+  startValue: number
+  container: HTMLDivElement
+}
+
+type MessageItem = {
+  key: string
+  role: string
+  title: string
+  content: string
+}
+
+type MessageSchema = {
+  role?: string
+  type?: string
+  name?: string
+  tool_call_id?: string
+  content?: unknown
+  text?: unknown
+  message?: unknown
+  tool_calls?: Array<{
+    id?: string
+    function?: { name?: string; arguments?: unknown }
+    name?: string
+    args?: unknown
+    input?: unknown
+  } | Record<string, unknown>>
+}
+
+type MarkedLike = { parse: (input: string) => string }
+type DomPurifyLike = { sanitize: (input: string) => string }
+type HljsLike = { highlight: (input: string, opts: { language: string }) => { value: string } }
+
+function useBodyClass(bodyClass: string, title?: string) {
   useEffect(() => {
     if (title) document.title = title
     document.body.className = bodyClass
@@ -14,7 +83,7 @@ function useBodyClass(bodyClass, title) {
   }, [bodyClass, title])
 }
 
-function escapeHtml(str) {
+function escapeHtml(str: unknown) {
   if (str == null) return ''
   return String(str)
     .replace(/&/g, '&amp;')
@@ -22,24 +91,24 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
 }
 
-function looksLikeMarkdown(text) {
+function looksLikeMarkdown(text: string) {
   if (!text) return false
   return [/^#{1,6}\s+\S/m, /^\s*[-*+]\s+\S/m, /^\s*\d+\.\s+\S/m, /^>+\s+\S/m, /`{3,}[\s\S]*?`{3,}/m, /\[.+?\]\(.+?\)/m]
     .some((re) => re.test(text))
 }
 
-function buildRunCommand(path, name) {
+function buildRunCommand(path: string | null | undefined, name: string | null | undefined) {
   return path ? `ezvals run ${path}::${name}` : `ezvals run ${name || ''}`.trim()
 }
 
-function getLatencyColor(latency) {
+function getLatencyColor(latency?: number | null) {
   if (latency == null) return ''
   if (latency <= 1) return 'text-emerald-600 dark:text-emerald-400'
   if (latency <= 5) return 'text-blue-600 dark:text-blue-400'
   return 'text-amber-600 dark:text-amber-400'
 }
 
-function getRawText(content) {
+function getRawText(content: unknown) {
   if (content == null) return ''
   if (typeof content === 'string') return content
   if (typeof content === 'number' || typeof content === 'boolean') return String(content)
@@ -50,7 +119,7 @@ function getRawText(content) {
   }
 }
 
-function buildViewer(content, placeholder = '—') {
+function buildViewer(content: unknown, placeholder = '—') {
   if (content == null || content === '') {
     return {
       raw: '',
@@ -73,15 +142,15 @@ function buildViewer(content, placeholder = '—') {
   }
 
   if (mode === 'markdown') {
-    const marked = typeof window !== 'undefined' ? window.marked : null
-    const purifier = typeof window !== 'undefined' ? window.DOMPurify : null
+    const marked = typeof window !== 'undefined' ? (window as unknown as { marked?: MarkedLike }).marked : undefined
+    const purifier = typeof window !== 'undefined' ? (window as unknown as { DOMPurify?: DomPurifyLike }).DOMPurify : undefined
     let html = marked ? marked.parse(rawText) : `<pre class="data-pre">${escapeHtml(rawText)}</pre>`
     if (purifier) html = purifier.sanitize(html)
     return { raw: rawText, html: `<div class="data-surface markdown-body">${html}</div>` }
   }
 
   if (mode === 'json') {
-    const hljs = typeof window !== 'undefined' ? window.hljs : null
+    const hljs = typeof window !== 'undefined' ? (window as unknown as { hljs?: HljsLike }).hljs : undefined
     let highlighted = escapeHtml(rawText)
     if (hljs) {
       try {
@@ -99,7 +168,13 @@ function buildViewer(content, placeholder = '—') {
   return { raw: rawText, html: `<div class="data-surface"><pre class="data-pre">${escapeHtml(rawText)}</pre></div>` }
 }
 
-function CopyButton({ getText, className = '', title = 'Copy' }) {
+type CopyButtonProps = {
+  getText: string | (() => string)
+  className?: string
+  title?: string
+}
+
+function CopyButton({ getText, className = '', title = 'Copy' }: CopyButtonProps) {
   const [copied, setCopied] = useState(false)
 
   const handleCopy = useCallback(async () => {
@@ -127,7 +202,12 @@ function CopyButton({ getText, className = '', title = 'Copy' }) {
   )
 }
 
-function DataViewer({ content, placeholder }) {
+type DataViewerProps = {
+  content: unknown
+  placeholder?: string
+}
+
+function DataViewer({ content, placeholder }: DataViewerProps) {
   const { html, raw } = useMemo(() => buildViewer(content, placeholder), [content, placeholder])
   return (
     <div
@@ -138,7 +218,11 @@ function DataViewer({ content, placeholder }) {
   )
 }
 
-function ScoreCard({ score }) {
+type ScoreCardProps = {
+  score: Score
+}
+
+function ScoreCard({ score }: ScoreCardProps) {
   let cls = 'border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-800/50'
   let textCls = 'text-zinc-700 dark:text-zinc-300'
   let valueCls = 'text-zinc-500'
@@ -175,7 +259,12 @@ function ScoreCard({ score }) {
   )
 }
 
-function InlineScoreBadges({ scores, latency }) {
+type InlineScoreBadgesProps = {
+  scores: Score[]
+  latency?: number | null
+}
+
+function InlineScoreBadges({ scores, latency }: InlineScoreBadgesProps) {
   return (
     <div className="flex flex-wrap gap-1">
       {(scores || []).map((score, idx) => {
@@ -198,9 +287,10 @@ function InlineScoreBadges({ scores, latency }) {
   )
 }
 
-function buildMessageItems(messages) {
+function buildMessageItems(messages: MessageSchema[] | unknown) {
   if (!Array.isArray(messages) || messages.length === 0) return { raw: '', items: [] }
-  const isKnownSchema = messages.every(
+  const typedMessages = messages as MessageSchema[]
+  const isKnownSchema = typedMessages.every(
     (msg) => (msg.role || msg.type) && (msg.content !== undefined || msg.text !== undefined || msg.message !== undefined || msg.tool_calls),
   )
 
@@ -208,14 +298,14 @@ function buildMessageItems(messages) {
     return { raw: JSON.stringify(messages, null, 2), items: null }
   }
 
-  const items = []
-  for (const msg of messages) {
+  const items: MessageItem[] = []
+  for (const msg of typedMessages) {
     const role = (msg.role || msg.type || 'unknown').toLowerCase()
     if (msg.tool_calls && Array.isArray(msg.tool_calls)) {
       const toolCallsContent = msg.tool_calls.map((tc) => {
-        const fn = tc.function || tc
-        const name = fn.name || tc.name || 'tool'
-        let args = fn.arguments || tc.args || tc.input || {}
+        const fn = (tc as { function?: { name?: string; arguments?: unknown } }).function || tc
+        const name = (fn as { name?: string }).name || (tc as { name?: string }).name || 'tool'
+        let args = (fn as { arguments?: unknown }).arguments || (tc as { args?: unknown }).args || (tc as { input?: unknown }).input || {}
         let argsStr
         if (typeof args === 'string') {
           try {
@@ -240,11 +330,12 @@ function buildMessageItems(messages) {
     if (role === 'tool' || role === 'tool_result' || role === 'function') {
       let toolName = msg.name
       if (!toolName && msg.tool_call_id) {
-        for (const m of messages) {
+        for (const m of typedMessages) {
           if (!m.tool_calls) continue
-          const found = m.tool_calls.find((t) => t.id === msg.tool_call_id)
+          const found = m.tool_calls.find((t) => (t as { id?: string }).id === msg.tool_call_id)
           if (found) {
-            toolName = found.function?.name || found.name
+            const typed = found as { function?: { name?: string }; name?: string }
+            toolName = typed.function?.name || typed.name
             break
           }
         }
@@ -258,7 +349,7 @@ function buildMessageItems(messages) {
           content = JSON.stringify(JSON.parse(content), null, 2)
         } catch {
           try {
-            const jsonified = content
+            const jsonified = String(content)
               .replace(/'/g, '"')
               .replace(/True/g, 'true')
               .replace(/False/g, 'false')
@@ -282,7 +373,14 @@ function buildMessageItems(messages) {
 
     let content = msg.content || msg.text || msg.message || ''
     if (Array.isArray(content)) {
-      content = content.map((c) => (typeof c === 'string' ? c : (c.text || c.content || JSON.stringify(c)))).join('\n')
+      content = content.map((c) => {
+        if (typeof c === 'string') return c
+        if (typeof c === 'object' && c !== null) {
+          const typed = c as { text?: string; content?: string }
+          return typed.text || typed.content || JSON.stringify(c)
+        }
+        return String(c)
+      }).join('\n')
     }
     if (typeof content === 'object' && content !== null) {
       content = JSON.stringify(content, null, 2)
@@ -304,7 +402,7 @@ function buildMessageItems(messages) {
 export default function DetailPage() {
   useBodyClass(DETAIL_BODY_CLASS, 'Result Detail - EZVals')
 
-  const [{ runId, index }] = useState(() => {
+  const [{ runId, index }] = useState<{ runId: string; index: number }>(() => {
     const match = window.location.pathname.match(/\/runs\/([^/]+)\/results\/(\d+)/)
     return {
       runId: match ? match[1] : 'latest',
@@ -312,28 +410,29 @@ export default function DetailPage() {
     }
   })
 
-  const [data, setData] = useState(null)
+  const [data, setData] = useState<ResultDetailPayload | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<Error | null>(null)
   const [isRerunning, setIsRerunning] = useState(false)
   const [messagesOpen, setMessagesOpen] = useState(false)
-  const [collapsed, setCollapsed] = useState({ metadata: false, trace: false })
-  const [comparison, setComparison] = useState(null)
+  const [collapsed, setCollapsed] = useState<CollapsedState>({ metadata: false, trace: false })
+  const [comparison, setComparison] = useState<ComparisonState | null>(null)
   const [editingAnnotation, setEditingAnnotation] = useState(false)
   const [annotationDraft, setAnnotationDraft] = useState('')
   const [annotationSaving, setAnnotationSaving] = useState(false)
-  const [annotationError, setAnnotationError] = useState(null)
+  const [annotationError, setAnnotationError] = useState<string | null>(null)
   const [inputWidth, setInputWidth] = useState(50)
   const [refHeight, setRefHeight] = useState(150)
   const [sidebarWidth, setSidebarWidth] = useState(320)
-  const resizingRef = useRef(null)
-  const containerRef = useRef(null)
+  const resizingRef = useRef<ResizeState | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
 
-  const comparisonRuns = useMemo(() => {
+  const comparisonRuns = useMemo<NormalizedComparisonRun[]>(() => {
     try {
       const saved = sessionStorage.getItem(COMPARISON_STORAGE_KEY)
       if (!saved) return []
-      return normalizeComparisonRuns(JSON.parse(saved) || [])
+      const parsed = JSON.parse(saved) as ComparisonRun[]
+      return normalizeComparisonRuns(parsed || [])
     } catch {
       return []
     }
@@ -347,10 +446,11 @@ export default function DetailPage() {
     try {
       const resp = await fetch(`/api/runs/${encodeURIComponent(runId)}/results/${index}`)
       if (!resp.ok) throw new Error('Failed to load result')
-      const payload = await resp.json()
+      const payload = await resp.json() as ResultDetailPayload
       setData(payload)
     } catch (err) {
-      setError(err)
+      const nextError = err instanceof Error ? err : new Error('Failed to load result')
+      setError(nextError)
     } finally {
       setLoading(false)
     }
@@ -371,7 +471,7 @@ export default function DetailPage() {
     async function loadComparison() {
       const baseResult = data.result
       const key = baseResult ? getResultKey(baseResult) : ''
-      const runs = await Promise.all(comparisonRuns.map(async (run) => {
+      const runs: ComparisonRunDetail[] = await Promise.all(comparisonRuns.map(async (run) => {
         if (run.runId === data.run_id) {
           return {
             runId: run.runId,
@@ -385,9 +485,9 @@ export default function DetailPage() {
         try {
           const resp = await fetch(`/api/runs/${encodeURIComponent(run.runId)}/data`)
           if (!resp.ok) throw new Error('Failed')
-          const runData = await resp.json()
-          let match = null
-          let matchIndex = null
+          const runData = await resp.json() as { run_name?: string; eval_path?: string | null; results?: RunResultRow[] }
+          let match: RunResultRow | null = null
+          let matchIndex: number | null = null
           if (key && runData?.results) {
             const idx = runData.results.findIndex((r) => getResultKey(r) === key)
             if (idx >= 0) {
@@ -424,7 +524,7 @@ export default function DetailPage() {
   }, [comparisonRuns, data, isComparisonMode])
 
   useEffect(() => {
-    const handleKey = (event) => {
+    const handleKey = (event: KeyboardEvent) => {
       if (editingAnnotation) return
       if (event.key === 'Escape') {
         window.location.href = '/'
@@ -439,7 +539,7 @@ export default function DetailPage() {
   }, [data, runId, editingAnnotation])
 
   useEffect(() => {
-    const handleMouseMove = (e) => {
+    const handleMouseMove = (e: MouseEvent) => {
       if (!resizingRef.current) return
       const { type, startX, startY, startValue, container } = resizingRef.current
       if (type === 'input-width') {
@@ -470,12 +570,12 @@ export default function DetailPage() {
     }
   }, [sidebarWidth])
 
-  const startResize = useCallback((type, e) => {
+  const startResize = useCallback((type: ResizeType, e: ReactMouseEvent<HTMLDivElement>) => {
     e.preventDefault()
     const container = containerRef.current
-    let startValue
-    if (type === 'input-width') startValue = inputWidth
-    else if (type === 'ref-height') startValue = refHeight
+    if (!container) return
+    let startValue = inputWidth
+    if (type === 'ref-height') startValue = refHeight
     else if (type === 'sidebar-width') startValue = sidebarWidth
     resizingRef.current = { type, startX: e.clientX, startY: e.clientY, startValue, container }
     document.body.style.cursor = type === 'ref-height' ? 'row-resize' : 'col-resize'
@@ -495,7 +595,7 @@ export default function DetailPage() {
         const poll = async () => {
           const r = await fetch(`/api/runs/${encodeURIComponent(runId)}/results/${data.index}`)
           if (r.ok) {
-            const next = await r.json()
+            const next = await r.json() as ResultDetailPayload
             const status = next.result?.result?.status
             if (status === 'completed' || status === 'error') {
               setData(next)
@@ -539,20 +639,24 @@ export default function DetailPage() {
         throw new Error(err.detail || 'Failed to save annotation')
       }
 
-      setData((prev) => ({
-        ...prev,
-        result: {
-          ...prev.result,
+      setData((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
           result: {
-            ...prev.result.result,
-            annotation: newAnnotation,
+            ...prev.result,
+            result: {
+              ...prev.result.result,
+              annotation: newAnnotation,
+            },
           },
-        },
-      }))
+        }
+      })
 
       setEditingAnnotation(false)
     } catch (err) {
-      setAnnotationError(err.message || 'Save failed')
+      const message = err instanceof Error ? err.message : 'Save failed'
+      setAnnotationError(message)
     } finally {
       setAnnotationSaving(false)
     }
@@ -575,19 +679,20 @@ export default function DetailPage() {
   }
 
   const resultEntry = data.result
-  const result = resultEntry?.result || {}
+  const result = (resultEntry?.result || {}) as NonNullable<RunResultRow['result']>
   const status = result.status || 'completed'
   const hasReference = result.reference != null && result.reference !== '—'
   const hasMetadata = result.metadata != null && result.metadata !== '—'
-  const traceData = result.trace_data || null
-  const hasMessages = !!(traceData?.messages?.length)
-  const hasScores = Array.isArray(result.scores) && result.scores.length > 0
+  const traceData = (result.trace_data || null) as TraceData | null
+  const messages = Array.isArray(traceData?.messages) ? traceData?.messages : []
+  const hasMessages = messages.length > 0
+  const scores = Array.isArray(result.scores) ? result.scores : []
+  const hasScores = scores.length > 0
   const hasError = !!result.error
   const filteredTrace = traceData
     ? Object.fromEntries(Object.entries(traceData).filter(([k]) => k !== 'messages' && k !== 'trace_url'))
     : null
-  const messagesPayload = hasMessages ? traceData.messages : null
-  const messageData = buildMessageItems(messagesPayload || [])
+  const messageData = buildMessageItems(messages)
   const runCommand = buildRunCommand(data.eval_path, resultEntry?.function)
 
   const baseForCompare = comparison?.baseResult || resultEntry
@@ -709,7 +814,7 @@ export default function DetailPage() {
                 </div>
                 <div className="flex-1 min-h-0 grid grid-cols-1 gap-3 p-4 overflow-auto">
                   {comparison.runs.map((run) => {
-                    const runResult = run.result?.result || {}
+                    const runResult = (run.result?.result || {}) as NonNullable<RunResultRow['result']>
                     return (
                       <div key={run.runId} className="rounded border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60">
                         <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-3 py-2">
@@ -850,7 +955,7 @@ export default function DetailPage() {
                 >
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Messages</span>
                   <span className="flex items-center gap-1.5">
-                    <span className="rounded-full bg-zinc-200 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600 dark:bg-zinc-600 dark:text-zinc-200">{traceData.messages.length}</span>
+                    <span className="rounded-full bg-zinc-200 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600 dark:bg-zinc-600 dark:text-zinc-200">{messages.length}</span>
                     <svg className="h-3.5 w-3.5 text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6" /></svg>
                   </span>
                 </button>
@@ -861,7 +966,7 @@ export default function DetailPage() {
               <div className="border-b border-blue-200/60 dark:border-zinc-800">
                 <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 bg-zinc-100/50 dark:bg-zinc-800/30">Scores</div>
                 <div className="p-2 space-y-1.5">
-                  {result.scores.map((score, idx) => (
+                  {scores.map((score, idx) => (
                     <ScoreCard key={`${score.key}-${idx}`} score={score} />
                   ))}
                 </div>

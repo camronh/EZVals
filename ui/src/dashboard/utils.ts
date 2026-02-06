@@ -1,7 +1,20 @@
-export const DEFAULT_HIDDEN_COLS = ['error']
-export const COMPARISON_COLORS = ['#3b82f6', '#f97316', '#22c55e', '#a855f7']
+import type {
+  ComparisonRun,
+  FilterState,
+  FilteredStats,
+  NormalizedComparisonRun,
+  RunResultRow,
+  RunSummary,
+  Score,
+  ScoreChip,
+  StatsSummary,
+  ValueRule,
+} from '../types'
 
-export function defaultFilters() {
+export const DEFAULT_HIDDEN_COLS = ['error'] as const
+export const COMPARISON_COLORS = ['#3b82f6', '#f97316', '#22c55e', '#a855f7'] as const
+
+export function defaultFilters(): FilterState {
   return {
     valueRules: [],
     passedRules: [],
@@ -14,7 +27,7 @@ export function defaultFilters() {
   }
 }
 
-export function summarizeStats(data) {
+export function summarizeStats(data: RunSummary): StatsSummary {
   const results = data?.results || []
   const chips = data?.score_chips || []
   const totalEvaluations = data?.total_evaluations || 0
@@ -61,7 +74,7 @@ export function summarizeStats(data) {
   }
 }
 
-export function chipStats(chip, precision = 2) {
+export function chipStats(chip: ScoreChip | null | undefined, precision = 2) {
   if (!chip) return { pct: 0, value: '0' }
   if (chip.type === 'ratio') {
     const pct = chip.total > 0 ? Math.round((chip.passed / chip.total) * 100) : 0
@@ -72,35 +85,43 @@ export function chipStats(chip, precision = 2) {
   return { pct, value: avg.toFixed(precision) }
 }
 
-export function formatValue(val) {
+export function formatValue(val: unknown) {
   if (val == null) return ''
   if (typeof val === 'object') return JSON.stringify(val)
   return String(val)
 }
 
-export function getBarColor(pct) {
+export function getBarColor(pct: number) {
   return pct >= 80 ? 'vbar-green' : (pct >= 50 ? 'vbar-amber' : 'vbar-red')
 }
 
-export function getBgBarColor(pct) {
+export function getBgBarColor(pct: number) {
   return pct >= 80 ? 'bg-emerald-500' : (pct >= 50 ? 'bg-amber-500' : 'bg-rose-500')
 }
 
-export function getTextColor(pct) {
+export function getTextColor(pct: number) {
   return pct >= 80 ? 'text-accent-success' : (pct >= 50 ? 'text-amber-500' : 'text-accent-error')
 }
 
-export function formatRunTimestamp(ts) {
+export function formatRunTimestamp(ts?: number | null) {
+  if (!ts) return ''
   const d = new Date(ts * 1000)
   return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 }
 
-export function getResultKey(result) {
+export function getResultKey(result: RunResultRow) {
   return `${result.function}::${result.dataset || ''}`
 }
 
-export function buildComparisonMatrix(comparisonData) {
-  const matrix = {}
+export type ComparisonMeta = { function: string; dataset?: string | null; labels?: string[] | null }
+export type ComparisonMatrixEntry = {
+  _meta?: ComparisonMeta
+  _indices?: Record<string, number>
+  [runId: string]: RunResultRow | ComparisonMeta | Record<string, number> | undefined
+}
+
+export function buildComparisonMatrix(comparisonData: Record<string, RunSummary> | null | undefined) {
+  const matrix: Record<string, ComparisonMatrixEntry> = {}
   Object.entries(comparisonData || {}).forEach(([runId, data]) => {
     ;(data?.results || []).forEach((r, idx) => {
       const key = getResultKey(r)
@@ -113,10 +134,10 @@ export function buildComparisonMatrix(comparisonData) {
   return matrix
 }
 
-export function computeScoreKeyMeta(results) {
-  const meta = {}
+export function computeScoreKeyMeta(results: RunResultRow[]) {
+  const meta: Record<string, { hasNumeric: boolean; hasPassed: boolean }> = {}
   ;(results || []).forEach((r) => {
-    const scores = r?.result?.scores || r?.scores || []
+    const scores = r?.result?.scores || []
     scores.forEach((s) => {
       if (!s?.key) return
       if (!meta[s.key]) meta[s.key] = { hasNumeric: false, hasPassed: false }
@@ -128,9 +149,9 @@ export function computeScoreKeyMeta(results) {
   return { all, meta }
 }
 
-export function computeDatasetLabels(results) {
-  const datasets = new Set()
-  const labels = new Set()
+export function computeDatasetLabels(results: RunResultRow[]) {
+  const datasets = new Set<string>()
+  const labels = new Set<string>()
   ;(results || []).forEach((r) => {
     const ds = (r.dataset || '').trim()
     if (ds) datasets.add(ds)
@@ -139,7 +160,7 @@ export function computeDatasetLabels(results) {
   return { datasets: Array.from(datasets).sort(), labels: Array.from(labels).sort() }
 }
 
-export function compareOp(op, a, b) {
+export function compareOp(op: ValueRule['op'], a: number, b: number) {
   if (op === '>') return a > b
   if (op === '>=') return a >= b
   if (op === '<') return a < b
@@ -149,7 +170,17 @@ export function compareOp(op, a, b) {
   return false
 }
 
-export function matchesFiltersForData(filters, data) {
+type FilterDataRow = {
+  annotation?: string | null
+  dataset?: string | null
+  labels?: string[] | null
+  scores?: Score[] | null
+  hasError?: boolean
+  hasUrl?: boolean
+  hasMessages?: boolean
+}
+
+export function matchesFiltersForData(filters: FilterState | null | undefined, data: FilterDataRow) {
   const f = filters || defaultFilters()
   const annotation = (data.annotation || '').trim()
   const ds = (data.dataset || '').trim()
@@ -184,7 +215,7 @@ export function matchesFiltersForData(filters, data) {
   for (const vr of f.valueRules || []) {
     const s = scores.find((x) => x && x.key === vr.key)
     if (!s) return false
-    const val = parseFloat(s.value)
+    const val = parseFloat(String(s.value))
     if (Number.isNaN(val)) return false
     if (!compareOp(vr.op, val, vr.value)) return false
   }
@@ -196,11 +227,13 @@ export function matchesFiltersForData(filters, data) {
   return true
 }
 
-export function computeFilteredStats(rows) {
+type FilterStatRow = { result?: { latency?: number | null; scores?: Score[] | null }; resultData?: { latency?: number | null; scores?: Score[] | null }; scores?: Score[] | null }
+
+export function computeFilteredStats(rows: FilterStatRow[]): FilteredStats {
   const total = rows.length
   let latencySum = 0
   let latencyCount = 0
-  const scoreMap = {}
+  const scoreMap: Record<string, { passed: number; failed: number; bool: number; sum: number; count: number }> = {}
 
   rows.forEach((row) => {
     const result = row?.result || row?.resultData || row?.result
@@ -216,12 +249,12 @@ export function computeFilteredStats(rows) {
       const d = scoreMap[key] || (scoreMap[key] = { passed: 0, failed: 0, bool: 0, sum: 0, count: 0 })
       if (s.passed === true) { d.passed += 1; d.bool += 1 }
       else if (s.passed === false) { d.failed += 1; d.bool += 1 }
-      const val = parseFloat(s.value)
+      const val = parseFloat(String(s.value))
       if (!Number.isNaN(val)) { d.sum += val; d.count += 1 }
     })
   })
 
-  const chips = Object.entries(scoreMap).map(([key, d]) => {
+  const chips: ScoreChip[] = Object.entries(scoreMap).map(([key, d]) => {
     if (d.bool > 0) {
       return { key, type: 'ratio', passed: d.passed, total: d.passed + d.failed }
     }
@@ -234,7 +267,7 @@ export function computeFilteredStats(rows) {
   return { total, filtered: total, avgLatency: latencyCount > 0 ? latencySum / latencyCount : 0, chips }
 }
 
-export function isFilterActive(filters, search) {
+export function isFilterActive(filters: FilterState | null | undefined, search: string | null | undefined) {
   const f = filters || defaultFilters()
   const dsCount = (f.selectedDatasets?.include?.length || 0) + (f.selectedDatasets?.exclude?.length || 0)
   const lblCount = (f.selectedLabels?.include?.length || 0) + (f.selectedLabels?.exclude?.length || 0)
@@ -246,33 +279,38 @@ export function isFilterActive(filters, search) {
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
 
-export function compareValues(a, b, type, col) {
+export function compareValues(a: string | number, b: string | number, type: string, col: string) {
   if (type === 'number') {
     if (col === 'scores') {
-      const aEmpty = !isFinite(a)
-      const bEmpty = !isFinite(b)
+      const aNum = Number(a)
+      const bNum = Number(b)
+      const aEmpty = !Number.isFinite(aNum)
+      const bEmpty = !Number.isFinite(bNum)
       if (aEmpty && !bEmpty) return 1
       if (!aEmpty && bEmpty) return -1
       if (aEmpty && bEmpty) return 0
     }
-    return a - b
+    return Number(a) - Number(b)
   }
-  return collator.compare(a, b)
+  return collator.compare(String(a), String(b))
 }
 
-export function parseSortValue(value, type) {
+export function parseSortValue(value: string | number, type: string) {
   if (type === 'number') {
-    const num = parseFloat(value)
+    const num = parseFloat(String(value))
     return Number.isNaN(num) ? Number.POSITIVE_INFINITY : num
   }
   return value
 }
 
-export function normalizeComparisonRuns(runs) {
+export function normalizeComparisonRuns(runs: ComparisonRun[]) {
   if (!Array.isArray(runs)) return []
-  return runs.map((r, i) => ({
-    runId: r.runId || r.run_id,
-    runName: r.runName || r.run_name || r.runId || r.run_id,
-    color: COMPARISON_COLORS[i] || r.color,
-  })).filter((r) => r.runId)
+  return runs.map((r, i): NormalizedComparisonRun => {
+    const runId = r.runId || r.run_id || ''
+    return {
+      runId,
+      runName: r.runName || r.run_name || r.runId || r.run_id || '',
+      color: COMPARISON_COLORS[i] || r.color || COMPARISON_COLORS[0],
+    }
+  }).filter((r): r is NormalizedComparisonRun => !!r.runId)
 }

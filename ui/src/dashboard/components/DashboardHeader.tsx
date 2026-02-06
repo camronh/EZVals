@@ -1,44 +1,45 @@
-import { DEFAULT_HIDDEN_COLS, defaultFilters } from '../utils.js'
+import type { RefObject } from 'react'
+import type { ColumnDef, FilterState, RunButtonState, SortStateItem } from '../../types'
+import { DEFAULT_HIDDEN_COLS, defaultFilters } from '../utils'
 
-/**
- * @param {{
- *   search: string,
- *   setSearch: (value: string) => void,
- *   filtersOpen: boolean,
- *   columnsOpen: boolean,
- *   exportOpen: boolean,
- *   setFiltersOpen: (value: boolean | ((prev: boolean) => boolean)) => void,
- *   setColumnsOpen: (value: boolean | ((prev: boolean) => boolean)) => void,
- *   setExportOpen: (value: boolean | ((prev: boolean) => boolean)) => void,
- *   filtersToggleRef: { current: HTMLElement | null },
- *   filtersMenuRef: { current: HTMLElement | null },
- *   columnsToggleRef: { current: HTMLElement | null },
- *   columnsMenuRef: { current: HTMLElement | null },
- *   exportToggleRef: { current: HTMLElement | null },
- *   exportMenuRef: { current: HTMLElement | null },
- *   activeFilterCount: number,
- *   filters: any,
- *   setFilters: (updater: any) => void,
- *   selectedScoreKey: string,
- *   setSelectedScoreKey: (value: string) => void,
- *   scoreKeysMeta: { all: string[], meta: Record<string, any> },
- *   datasetLabels: { datasets: string[], labels: string[] },
- *   hiddenSet: Set<string>,
- *   setHiddenColumns: (value: string[]) => void,
- *   columnDefs: Array<any>,
- *   setSortState: (value: any) => void,
- *   setColWidths: (value: any) => void,
- *   handleExport: (format: string) => void,
- *   handleSettingsOpen: () => void,
- *   runButtonState: { hidden: boolean, text: string, showDropdown: boolean, isRunning: boolean },
- *   runMode: string,
- *   setRunMode: (value: string) => void,
- *   runMenuOpen: boolean,
- *   setRunMenuOpen: (value: boolean | ((prev: boolean) => boolean)) => void,
- *   isComparisonMode: boolean,
- *   onRunExecute: (mode: string) => void,
- * }} props
- */
+type DashboardHeaderProps = {
+  search: string
+  setSearch: (value: string) => void
+  filtersOpen: boolean
+  columnsOpen: boolean
+  exportOpen: boolean
+  setFiltersOpen: (value: boolean | ((prev: boolean) => boolean)) => void
+  setColumnsOpen: (value: boolean | ((prev: boolean) => boolean)) => void
+  setExportOpen: (value: boolean | ((prev: boolean) => boolean)) => void
+  filtersToggleRef: RefObject<HTMLButtonElement>
+  filtersMenuRef: RefObject<HTMLDivElement>
+  columnsToggleRef: RefObject<HTMLButtonElement>
+  columnsMenuRef: RefObject<HTMLDivElement>
+  exportToggleRef: RefObject<HTMLButtonElement>
+  exportMenuRef: RefObject<HTMLDivElement>
+  activeFilterCount: number
+  filters: FilterState
+  setFilters: (updater: FilterState | ((prev: FilterState) => FilterState)) => void
+  selectedScoreKey: string
+  setSelectedScoreKey: (value: string) => void
+  scoreKeysMeta: { all: string[]; meta: Record<string, { hasNumeric: boolean; hasPassed: boolean }> }
+  datasetLabels: { datasets: string[]; labels: string[] }
+  hiddenSet: Set<string>
+  setHiddenColumns: (value: string[]) => void
+  columnDefs: ColumnDef[]
+  setSortState: React.Dispatch<React.SetStateAction<SortStateItem[]>>
+  setColWidths: React.Dispatch<React.SetStateAction<Record<string, number>>>
+  handleExport: (format: string) => void
+  handleSettingsOpen: () => void
+  runButtonState: RunButtonState
+  runMode: string
+  setRunMode: (value: string) => void
+  runMenuOpen: boolean
+  setRunMenuOpen: (value: boolean | ((prev: boolean) => boolean)) => void
+  isComparisonMode: boolean
+  onRunExecute: (mode: string) => void
+}
+
 export default function DashboardHeader({
   search,
   setSearch,
@@ -75,7 +76,7 @@ export default function DashboardHeader({
   setRunMenuOpen,
   isComparisonMode,
   onRunExecute,
-}) {
+}: DashboardHeaderProps) {
   return (
     <header className="sticky top-0 z-40 border-b border-theme-border bg-theme-bg/95 backdrop-blur-sm">
       <div className="flex items-center justify-between px-4 py-2">
@@ -157,7 +158,7 @@ export default function DashboardHeader({
                     className="w-14 rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-[11px] text-zinc-200 focus:outline-none"
                     onKeyDown={(e) => {
                       if (e.key !== 'Enter') return
-                      const op = document.getElementById('fv-op')?.value
+                      const op = (document.getElementById('fv-op') as HTMLSelectElement | null)?.value || '>'
                       const val = parseFloat(e.currentTarget.value)
                       if (!selectedScoreKey || Number.isNaN(val)) return
                       setFilters((prev) => ({ ...prev, valueRules: [...prev.valueRules, { key: selectedScoreKey, op, value: val }] }))
@@ -168,8 +169,8 @@ export default function DashboardHeader({
                     id="add-fv"
                     className="rounded bg-blue-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-blue-500"
                     onClick={() => {
-                      const op = document.getElementById('fv-op')?.value
-                      const input = document.getElementById('fv-val')
+                      const op = (document.getElementById('fv-op') as HTMLSelectElement | null)?.value || '>'
+                      const input = document.getElementById('fv-val') as HTMLInputElement | null
                       const val = parseFloat(input?.value || '')
                       if (!selectedScoreKey || Number.isNaN(val)) return
                       setFilters((prev) => ({ ...prev, valueRules: [...prev.valueRules, { key: selectedScoreKey, op, value: val }] }))
@@ -188,7 +189,7 @@ export default function DashboardHeader({
                     id="add-fp"
                     className="rounded bg-blue-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-blue-500"
                     onClick={() => {
-                      const val = document.getElementById('fp-val')?.value === 'true'
+                      const val = (document.getElementById('fp-val') as HTMLSelectElement | null)?.value === 'true'
                       if (!selectedScoreKey) return
                       setFilters((prev) => ({ ...prev, passedRules: [...prev.passedRules, { key: selectedScoreKey, value: val }] }))
                     }}
@@ -412,7 +413,7 @@ export default function DashboardHeader({
                 </label>
               ))}
               <div className="mt-2 flex gap-1 border-t border-zinc-800 pt-2">
-                <button id="reset-columns" className="flex-1 rounded bg-zinc-800 px-2 py-1 text-[10px] text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300" onClick={() => setHiddenColumns(DEFAULT_HIDDEN_COLS)}>Reset</button>
+                <button id="reset-columns" className="flex-1 rounded bg-zinc-800 px-2 py-1 text-[10px] text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300" onClick={() => setHiddenColumns(Array.from(DEFAULT_HIDDEN_COLS))}>Reset</button>
                 <button id="reset-sorting" className="flex-1 rounded bg-zinc-800 px-2 py-1 text-[10px] text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300" onClick={() => setSortState([])}>Sort</button>
                 <button id="reset-widths" className="flex-1 rounded bg-zinc-800 px-2 py-1 text-[10px] text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300" onClick={() => setColWidths({})}>Width</button>
               </div>

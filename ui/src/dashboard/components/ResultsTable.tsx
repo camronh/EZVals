@@ -1,25 +1,42 @@
-import { formatValue } from '../utils.js'
+import type { MouseEvent, RefObject } from 'react'
+import type { ChangeEvent } from 'react'
+import type { ColumnDef, ResultData, RunSummary, Score, SortStateItem } from '../../types'
+import { formatValue } from '../utils'
 
-/**
- * @param {{
- *   data: any,
- *   rows: Array<any>,
- *   selectedIndices: Set<number>,
- *   expandedRows: Set<number>,
- *   hiddenSet: Set<string>,
- *   sortState: Array<any>,
- *   colWidths: Record<string, number>,
- *   columnDefs: Array<any>,
- *   pillTones: Record<string, string>,
- *   onToggleSort: (col: string, type: string, multi: boolean) => void,
- *   onResizeStart: (colKey: string, event: any) => void,
- *   onSelectAll: (checked: boolean) => void,
- *   onRowSelect: (idx: number, checked: boolean, shiftKey: boolean) => void,
- *   onRowToggle: (idx: number) => void,
- *   selectAllRef: { current: HTMLInputElement | null },
- *   headerRefs: { current: Record<string, HTMLElement | null> },
- * }} props
- */
+type ResultRowView = {
+  index: number
+  function: string
+  dataset: string
+  labels: string[]
+  result: ResultData
+  scores: Score[]
+  scoresSortValue: string | number
+  hasUrl: boolean
+  hasMessages: boolean
+  hasError: boolean
+  annotation: string
+  searchText: string
+}
+
+type ResultsTableProps = {
+  data: RunSummary | null
+  rows: ResultRowView[]
+  selectedIndices: Set<number>
+  expandedRows: Set<number>
+  hiddenSet: Set<string>
+  sortState: SortStateItem[]
+  colWidths: Record<string, number>
+  columnDefs: ColumnDef[]
+  pillTones: Record<string, string>
+  onToggleSort: (col: string, type: string, multi: boolean) => void
+  onResizeStart: (colKey: string, event: MouseEvent<HTMLDivElement>) => void
+  onSelectAll: (checked: boolean) => void
+  onRowSelect: (idx: number, checked: boolean, shiftKey: boolean) => void
+  onRowToggle: (idx: number) => void
+  selectAllRef: RefObject<HTMLInputElement>
+  headerRefs: RefObject<Record<string, HTMLElement | null>>
+}
+
 export default function ResultsTable({
   data,
   rows,
@@ -37,7 +54,7 @@ export default function ResultsTable({
   onRowToggle,
   selectAllRef,
   headerRefs,
-}) {
+}: ResultsTableProps) {
   return (
     <table id="results-table" data-run-id={data?.run_id} className="w-full table-fixed border-collapse text-sm text-theme-text">
       <thead>
@@ -49,7 +66,7 @@ export default function ResultsTable({
               ref={selectAllRef}
               className="accent-emerald-500"
               checked={rows.length > 0 && rows.every((row) => selectedIndices.has(row.index))}
-              onChange={(e) => onSelectAll(e.target.checked)}
+              onChange={(e) => onSelectAll(e.currentTarget.checked)}
             />
           </th>
           {columnDefs.map((col) => (
@@ -156,7 +173,8 @@ export default function ResultsTable({
               data-has-error={row.hasError}
               className={`group cursor-pointer hover:bg-theme-bg-elevated/50 transition-colors ${isNotStarted ? 'opacity-60' : ''} ${expandedRows.has(row.index) ? 'expanded' : ''}`}
               onClick={(event) => {
-                if (event.target.closest('input,button,a')) return
+                const target = event.target as HTMLElement | null
+                if (target?.closest('input,button,a')) return
                 onRowToggle(row.index)
               }}
             >
@@ -166,7 +184,10 @@ export default function ResultsTable({
                   className="row-checkbox"
                   data-row-id={row.index}
                   checked={selectedIndices.has(row.index)}
-                  onChange={(e) => onRowSelect(row.index, e.target.checked, e.nativeEvent.shiftKey)}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                    const shiftKey = (e.nativeEvent as unknown as { shiftKey?: boolean }).shiftKey === true
+                    onRowSelect(row.index, e.currentTarget.checked, shiftKey)
+                  }}
                 />
               </td>
               <td data-col="function" className={`px-3 py-3 align-middle ${hiddenSet.has('function') ? 'hidden' : ''}`}>

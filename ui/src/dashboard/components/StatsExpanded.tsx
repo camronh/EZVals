@@ -1,35 +1,36 @@
-import CopyableText from './CopyableText.jsx'
-import { chipStats, getBarColor } from '../utils.js'
+import type { ReactNode, RefObject } from 'react'
+import type { NormalizedComparisonRun, RunSummary, ScoreChip, SessionRun, StatsSummary } from '../../types'
+import CopyableText from './CopyableText'
+import { chipStats, getBarColor } from '../utils'
 
-/**
- * @param {{
- *   stats: any,
- *   statsExpanded: boolean,
- *   setStatsExpanded: (value: boolean) => void,
- *   hasFilters: boolean,
- *   displayFilteredCount: number | null,
- *   displayChips: Array<any>,
- *   displayLatency: number,
- *   isComparisonMode: boolean,
- *   normalizedComparisonRuns: Array<{ runId: string, runName: string, color: string }>,
- *   comparisonData: Record<string, any>,
- *   sessionRuns: Array<any>,
- *   currentRunLabel: string,
- *   editingRunName: boolean,
- *   runNameDraft: string,
- *   setRunNameDraft: (value: string) => void,
- *   setEditingRunName: (value: boolean) => void,
- *   onRunNameSave: () => void,
- *   onRunDropdownToggle: () => void,
- *   onAddCompareToggle: () => void,
- *   onAddMoreCompareToggle: () => void,
- *   onRemoveComparison: (runId: string) => void,
- *   runDropdownExpandedRef: { current: HTMLElement | null },
- *   compareDropdownAnchorRef: { current: HTMLElement | null },
- *   addCompareAnchorRef: { current: HTMLElement | null },
- *   animateStats: boolean,
- * }} props
- */
+type StatsExpandedProps = {
+  stats: StatsSummary
+  statsExpanded: boolean
+  setStatsExpanded: (value: boolean) => void
+  hasFilters: boolean
+  displayFilteredCount: number | null
+  displayChips: ScoreChip[]
+  displayLatency: number
+  isComparisonMode: boolean
+  normalizedComparisonRuns: NormalizedComparisonRun[]
+  comparisonData: Record<string, RunSummary>
+  sessionRuns: SessionRun[]
+  currentRunLabel: string
+  editingRunName: boolean
+  runNameDraft: string
+  setRunNameDraft: (value: string) => void
+  setEditingRunName: (value: boolean) => void
+  onRunNameSave: () => void
+  onRunDropdownToggle: () => void
+  onAddCompareToggle: () => void
+  onAddMoreCompareToggle: () => void
+  onRemoveComparison: (runId: string) => void
+  runDropdownExpandedRef: RefObject<HTMLButtonElement>
+  compareDropdownAnchorRef: RefObject<HTMLButtonElement>
+  addCompareAnchorRef: RefObject<HTMLButtonElement>
+  animateStats: boolean
+}
+
 export default function StatsExpanded({
   stats,
   statsExpanded,
@@ -56,9 +57,13 @@ export default function StatsExpanded({
   compareDropdownAnchorRef,
   addCompareAnchorRef,
   animateStats,
-}) {
+}: StatsExpandedProps) {
   const inComparison = isComparisonMode
   const chips = inComparison ? [] : displayChips
+
+  let bars: ReactNode[] = []
+  let labels: ReactNode[] = []
+  let values: ReactNode[] = []
 
   const headerContent = (() => {
     if (inComparison) {
@@ -67,7 +72,7 @@ export default function StatsExpanded({
           {stats.sessionName ? (
             <div className="stats-info-row">
               <span className="stats-info-label">session</span>
-              <CopyableText text={stats.sessionName} className="stats-session copyable cursor-pointer hover:text-zinc-300" />
+              <CopyableText text={stats.sessionName ?? ''} className="stats-session copyable cursor-pointer hover:text-zinc-300" />
             </div>
           ) : null}
           <div className="stats-info-row"><span className="stats-info-label">comparing</span></div>
@@ -118,7 +123,7 @@ export default function StatsExpanded({
           {stats.sessionName ? (
             <div className="stats-info-row">
               <span className="stats-info-label">session</span>
-              <CopyableText text={stats.sessionName} className="stats-session copyable cursor-pointer hover:text-zinc-300" />
+              <CopyableText text={stats.sessionName ?? ''} className="stats-session copyable cursor-pointer hover:text-zinc-300" />
             </div>
           ) : null}
           {stats.runName ? (
@@ -144,7 +149,7 @@ export default function StatsExpanded({
                   {currentRunLabel} <span className="dropdown-arrow">v</span>
                 </button>
               ) : (
-                <CopyableText text={stats.runName} className="stats-run copyable cursor-pointer hover:text-zinc-300" />
+                <CopyableText text={stats.runName ?? ''} className="stats-run copyable cursor-pointer hover:text-zinc-300" />
               )}
               <button
                 className="edit-run-btn-expanded ml-1 text-zinc-600 transition hover:text-zinc-400"
@@ -224,12 +229,8 @@ export default function StatsExpanded({
     </>
   ) : null
 
-  let bars = []
-  let labels = []
-  let values = []
-
   if (inComparison) {
-    const allKeys = new Set()
+    const allKeys = new Set<string>()
     Object.values(comparisonData).forEach((runData) => {
       ;(runData?.score_chips || []).forEach((chip) => allKeys.add(chip.key))
     })
