@@ -214,6 +214,18 @@ def test_comparison_filters_or_logic(tmp_path):
             page.wait_for_selector("#results-table")
             page.wait_for_selector(".comparison-chips")
 
+            initial_correctness = page.evaluate(
+                """() => {
+                    const labels = Array.from(document.querySelectorAll('.stats-chart-label'))
+                    const labelIndex = labels.findIndex((el) => el.textContent.trim() === 'correctness')
+                    if (labelIndex < 0) return null
+                    const group = document.querySelectorAll('.stats-bar-group')[labelIndex]
+                    if (!group) return null
+                    return Array.from(group.querySelectorAll('.comparison-bar-label')).map((el) => el.textContent.trim())
+                }"""
+            )
+            assert initial_correctness == ["67%", "67%"]
+
             page.click("#filters-toggle")
             page.wait_for_selector("#filters-menu.active")
             page.wait_for_selector("#key-select option[value='quality']", state="attached")
@@ -228,6 +240,18 @@ def test_comparison_filters_or_logic(tmp_path):
             # Row with low quality score should be filtered out (not in DOM in React UI)
             row_a = page.locator("tbody tr[data-row='main']").filter(has_text="test_func_a")
             expect(row_a).to_have_count(0)
+
+            filtered_correctness = page.evaluate(
+                """() => {
+                    const labels = Array.from(document.querySelectorAll('.stats-chart-label'))
+                    const labelIndex = labels.findIndex((el) => el.textContent.trim() === 'correctness')
+                    if (labelIndex < 0) return null
+                    const group = document.querySelectorAll('.stats-bar-group')[labelIndex]
+                    if (!group) return null
+                    return Array.from(group.querySelectorAll('.comparison-bar-label')).map((el) => el.textContent.trim())
+                }"""
+            )
+            assert filtered_correctness == ["100%", "100%"]
 
             browser.close()
 
