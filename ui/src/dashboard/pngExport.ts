@@ -57,6 +57,59 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath()
 }
 
+function topRoundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  ctx.beginPath()
+  ctx.moveTo(x + r, y)
+  ctx.lineTo(x + w - r, y)
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r)
+  ctx.lineTo(x + w, y + h)
+  ctx.lineTo(x, y + h)
+  ctx.lineTo(x, y + r)
+  ctx.quadraticCurveTo(x, y, x + r, y)
+  ctx.closePath()
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+  const n = parseInt(hex.replace('#', ''), 16)
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+}
+
+function drawBar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, color: string, r: number) {
+  if (h < 2) {
+    ctx.fillStyle = color
+    ctx.fillRect(x, y, w, Math.max(h, 2))
+    return
+  }
+  const [cr, cg, cb] = hexToRgb(color)
+
+  // Glow
+  ctx.save()
+  ctx.shadowColor = `rgba(${cr}, ${cg}, ${cb}, 0.35)`
+  ctx.shadowBlur = 12
+  ctx.shadowOffsetY = 4
+  topRoundRect(ctx, x, y, w, h, r)
+  ctx.fillStyle = color
+  ctx.fill()
+  ctx.restore()
+
+  // Gradient fill
+  const grad = ctx.createLinearGradient(x, y, x, y + h)
+  grad.addColorStop(0, `rgba(${cr}, ${cg}, ${cb}, 0.9)`)
+  grad.addColorStop(0.5, color)
+  grad.addColorStop(1, `rgba(${Math.max(cr - 30, 0)}, ${Math.max(cg - 30, 0)}, ${Math.max(cb - 30, 0)}, 1)`)
+  topRoundRect(ctx, x, y, w, h, r)
+  ctx.fillStyle = grad
+  ctx.fill()
+
+  // Highlight — thin lighter stripe near top
+  const hlGrad = ctx.createLinearGradient(x, y, x, y + Math.min(h * 0.35, 40))
+  hlGrad.addColorStop(0, `rgba(255, 255, 255, 0.18)`)
+  hlGrad.addColorStop(1, `rgba(255, 255, 255, 0)`)
+  topRoundRect(ctx, x, y, w, Math.min(h * 0.35, 40), r)
+  ctx.fillStyle = hlGrad
+  ctx.fill()
+}
+
 async function drawNormalMode(ctx: CanvasRenderingContext2D, data: PngExportData, colors: ReturnType<typeof getThemeColors>, logo: HTMLImageElement | null) {
   // Background
   ctx.fillStyle = colors.bg
@@ -126,9 +179,7 @@ async function drawNormalMode(ctx: CanvasRenderingContext2D, data: PngExportData
     const y = BAR_AREA_BOTTOM - h
 
     // Bar
-    ctx.fillStyle = barColor(pct)
-    roundRect(ctx, x, y, barW, h, 4)
-    ctx.fill()
+    drawBar(ctx, x, y, barW, h, barColor(pct), 6)
 
     // Percentage above bar
     ctx.fillStyle = colors.text
@@ -222,9 +273,7 @@ async function drawComparisonMode(ctx: CanvasRenderingContext2D, data: PngExport
       const h = (pct / 100) * compBarMaxH
       const y = compBarBottom - h
 
-      ctx.fillStyle = run.color
-      roundRect(ctx, x, y, singleBarW, Math.max(h, 2), 3)
-      ctx.fill()
+      drawBar(ctx, x, y, singleBarW, h, run.color, 4)
 
       // Percentage above bar
       if (pct > 0) {
