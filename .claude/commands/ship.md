@@ -70,12 +70,9 @@ Follow these steps in order:
 
 **Only do this when shipping to main (creating a release):**
 
-If the release includes changes that affect the skill content:
-- Update the version comment in `ezvals/skills/evals/SKILL.md` (the `<!-- Version: X.X.X -->` line)
-- Ensure examples and CLI commands in the skill are current
-- Run `ezvals skills doctor` to verify skill is valid
-
-The skill version MUST match the release tag for the sync workflow to pass.
+- **Always** update the version comment in `ezvals/skills/evals/SKILL.md` (the `<!-- Version: X.X.X -->` line) to match the release version
+- The skill version **MUST** match the release tag — the Sync Skill to Marketplace workflow will fail otherwise
+- If the release includes changes that affect the skill content, also ensure examples and CLI commands in the skill are current
 
 ## 7. Ship to Main (Only If Requested)
 

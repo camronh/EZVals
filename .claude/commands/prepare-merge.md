@@ -37,7 +37,13 @@ Review if changes require updates to:
 
 When updating, write docs as if they're the current state - don't mention "updated" or "changed from".
 
-## 4. Summary
+## 4. Check Skill Version (If Merging to Main)
+If preparing for a release to main:
+- Check the version in `ezvals/skills/evals/SKILL.md` (the `<!-- Version: X.X.X -->` line)
+- Flag if it doesn't match the upcoming release version
+- The Sync Skill to Marketplace CI workflow requires the skill version to match the release tag
+
+## 5. Summary
 Report:
 - What features/changes were found
 - What documentation was updated
