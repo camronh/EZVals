@@ -516,6 +516,18 @@ export default function DashboardPage() {
     return computeFilteredStats(sortedRows.map((row) => ({ result: row.result })))
   }, [hasFilters, isComparisonMode, sortedRows])
 
+  const comparisonDisplayStats = useMemo(() => {
+    if (!isComparisonMode) return {}
+    const visibleKeys = new Set(sortedComparisonRows.map((row) => row.key))
+    const next: Record<string, ReturnType<typeof computeFilteredStats>> = {}
+    normalizedComparisonRuns.forEach((run) => {
+      const runData = comparisonData[run.runId]
+      const visibleResults = (runData?.results || []).filter((result) => visibleKeys.has(getResultKey(result)))
+      next[run.runId] = computeFilteredStats(visibleResults.map((result) => ({ result: result.result })))
+    })
+    return next
+  }, [comparisonData, isComparisonMode, normalizedComparisonRuns, sortedComparisonRows])
+
   const displayChips = filteredStats ? filteredStats.chips : stats.chips
   const displayLatency = filteredStats ? filteredStats.avgLatency : stats.avgLatency
   const displayFilteredCount = filteredStats ? filteredStats.filtered : null
@@ -953,6 +965,7 @@ export default function DashboardPage() {
           isComparisonMode={isComparisonMode}
           normalizedComparisonRuns={normalizedComparisonRuns}
           comparisonData={comparisonData}
+          comparisonDisplayStats={comparisonDisplayStats}
           sessionRuns={sessionRuns}
           currentRunLabel={currentRunLabel}
           editingRunName={editingRunName}
