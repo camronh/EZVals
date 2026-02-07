@@ -337,7 +337,7 @@ function drawFooter(ctx: CanvasRenderingContext2D, colors: ReturnType<typeof get
   ctx.textBaseline = 'middle'
 
   if (logo) {
-    const logoH = 18
+    const logoH = 26
     const logoW = (logo.width / logo.height) * logoH
     const text = 'ezvals.com'
     const textW = ctx.measureText(text).width

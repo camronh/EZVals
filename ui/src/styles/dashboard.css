@@ -462,6 +462,19 @@ tr[data-row="main"] {
 .stats-chart-fill {
   width: 100%;
   transition: height 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.4s ease-out;
+  border-radius: 4px 4px 0 0;
+  position: relative;
+  overflow: hidden;
+}
+.stats-chart-fill::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 35%;
+  max-height: 40px;
+  background: linear-gradient(to bottom, rgba(255,255,255,0.18), transparent);
+  border-radius: 4px 4px 0 0;
+  pointer-events: none;
 }
 /* X-axis area - juts out from Y-axis */
 .stats-xaxis {
@@ -520,10 +533,19 @@ tr[data-row="main"] {
   opacity: 0.5;
 }
 
-/* Bar colors */
-.vbar-green { background: #10b981; }
-.vbar-amber { background: #f59e0b; }
-.vbar-red { background: #ef4444; }
+/* Bar colors — gradient + glow */
+.vbar-green {
+  background: linear-gradient(to bottom, rgba(16, 185, 129, 0.9), #10b981 50%, #0a8c62);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+}
+.vbar-amber {
+  background: linear-gradient(to bottom, rgba(245, 158, 11, 0.9), #f59e0b 50%, #c47f09);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35);
+}
+.vbar-red {
+  background: linear-gradient(to bottom, rgba(239, 68, 68, 0.9), #ef4444 50%, #c03636);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
+}
 
 /* Dynamic stats transitions */
 .stats-metric-value {
@@ -626,9 +648,19 @@ tr[data-row="main"] {
 .comparison-bar {
   width: 100%;
   transition: height 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-  border-radius: 2px 2px 0 0;
+  border-radius: 4px 4px 0 0;
   min-width: 12px;
-  height: 0%; /* Start at 0 for animation */
+  height: 0%;
+  position: relative;
+  overflow: hidden;
+}
+.comparison-bar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(255,255,255,0.15), transparent 35%, rgba(0,0,0,0.15));
+  border-radius: 4px 4px 0 0;
+  pointer-events: none;
 }
 
 /* Comparison mode: match label/value widths to bar groups */
