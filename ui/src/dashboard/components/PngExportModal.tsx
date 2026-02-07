@@ -27,12 +27,16 @@ export default function PngExportModal({
 }: PngExportModalProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [previewError, setPreviewError] = useState<string | null>(null)
   const [copyFeedback, setCopyFeedback] = useState('')
 
   useEffect(() => {
-    if (!open) return
-    setPreviewUrl(null)
-    setCopyFeedback('')
+    if (!open) {
+      setPreviewUrl(null)
+      setPreviewError(null)
+      setCopyFeedback('')
+      return
+    }
     renderPngCanvas({
       displayChips,
       displayLatency,
@@ -44,10 +48,13 @@ export default function PngExportModal({
     }).then((canvas) => {
       canvasRef.current = canvas
       setPreviewUrl(canvas.toDataURL('image/png'))
-    }).catch(() => {
-      setPreviewUrl(null)
+    }).catch((err) => {
+      console.error('PNG export error:', err)
+      setPreviewError(err?.message || 'Failed to generate preview')
     })
-  }, [open, displayChips, displayLatency, displayFilteredCount, totalTests, isComparisonMode, normalizedComparisonRuns, comparisonData])
+    // Render once when modal opens — data is captured at open time
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   if (!open) return null
 
@@ -84,7 +91,7 @@ export default function PngExportModal({
   return (
     <div id="png-export-modal" className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="absolute left-1/2 top-1/2 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-lg border border-theme-border bg-theme-bg p-5 shadow-xl">
+      <div className="absolute left-1/2 top-1/2 w-full max-w-4xl -translate-x-1/2 -translate-y-1/2 rounded-lg border border-theme-border bg-theme-bg p-5 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <span className="text-sm font-medium text-theme-text">Export PNG</span>
           <button className="text-theme-text-muted hover:text-theme-text-secondary" onClick={onClose}>
@@ -95,7 +102,9 @@ export default function PngExportModal({
         </div>
 
         <div className="flex items-center justify-center min-h-[200px]">
-          {previewUrl ? (
+          {previewError ? (
+            <span className="text-sm text-red-400">{previewError}</span>
+          ) : previewUrl ? (
             <img src={previewUrl} alt="Export preview" className="max-w-full rounded-md border border-theme-border" style={{ height: 'auto' }} />
           ) : (
             <span className="text-sm text-theme-text-muted">Generating preview...</span>

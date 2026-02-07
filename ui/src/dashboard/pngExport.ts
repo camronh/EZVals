@@ -14,7 +14,7 @@ export type PngExportData = {
 const W = 1200
 const H = 630
 const PAD = 48
-const BAR_AREA_TOP = 240
+const BAR_AREA_TOP = 160
 const BAR_AREA_BOTTOM = 520
 const BAR_MAX_H = BAR_AREA_BOTTOM - BAR_AREA_TOP
 
@@ -62,23 +62,11 @@ async function drawNormalMode(ctx: CanvasRenderingContext2D, data: PngExportData
   ctx.fillStyle = colors.bg
   ctx.fillRect(0, 0, W, H)
 
-  // Logo + title
-  let titleX = PAD
-  if (logo) {
-    const logoH = 36
-    const logoW = (logo.width / logo.height) * logoH
-    ctx.drawImage(logo, PAD, PAD, logoW, logoH)
-    titleX = PAD + logoW + 12
-  }
-  ctx.fillStyle = colors.text
-  ctx.font = 'bold 28px system-ui, -apple-system, sans-serif'
-  ctx.textBaseline = 'middle'
-  ctx.fillText('EZVals', titleX, PAD + 18)
-
   // Metrics line
-  const metricsY = PAD + 70
+  const metricsY = PAD + 24
   ctx.font = '600 22px system-ui, -apple-system, sans-serif'
   ctx.fillStyle = colors.text
+  ctx.textBaseline = 'middle'
   const testLabel = data.displayFilteredCount != null
     ? `${data.displayFilteredCount} / ${data.totalTests} tests`
     : `${data.totalTests} tests`
@@ -127,7 +115,7 @@ async function drawNormalMode(ctx: CanvasRenderingContext2D, data: PngExportData
 
   const barAreaW = W - PAD * 2
   const barGap = Math.min(40, barAreaW / chips.length * 0.3)
-  const barW = Math.min(80, (barAreaW - barGap * (chips.length - 1)) / chips.length)
+  const barW = Math.min(140, (barAreaW - barGap * (chips.length - 1)) / chips.length)
   const totalBarsW = barW * chips.length + barGap * (chips.length - 1)
   const startX = PAD + (barAreaW - totalBarsW) / 2
 
@@ -165,12 +153,7 @@ async function drawNormalMode(ctx: CanvasRenderingContext2D, data: PngExportData
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
 
-  // Footer branding
-  ctx.fillStyle = colors.muted
-  ctx.font = '400 12px system-ui, -apple-system, sans-serif'
-  ctx.textAlign = 'right'
-  ctx.fillText('ezvals.com', W - PAD, H - PAD + 10)
-  ctx.textAlign = 'left'
+  drawFooter(ctx, colors, logo)
 }
 
 async function drawComparisonMode(ctx: CanvasRenderingContext2D, data: PngExportData, colors: ReturnType<typeof getThemeColors>, logo: HTMLImageElement | null) {
@@ -178,44 +161,7 @@ async function drawComparisonMode(ctx: CanvasRenderingContext2D, data: PngExport
   ctx.fillStyle = colors.bg
   ctx.fillRect(0, 0, W, H)
 
-  // Logo + title
-  let titleX = PAD
-  if (logo) {
-    const logoH = 36
-    const logoW = (logo.width / logo.height) * logoH
-    ctx.drawImage(logo, PAD, PAD, logoW, logoH)
-    titleX = PAD + logoW + 12
-  }
-  ctx.fillStyle = colors.text
-  ctx.font = 'bold 28px system-ui, -apple-system, sans-serif'
-  ctx.textBaseline = 'middle'
-  ctx.fillText('EZVals', titleX, PAD + 18)
-
-  // Run chips
   const runs = data.normalizedComparisonRuns
-  let chipX = PAD
-  const chipY = PAD + 64
-  ctx.textBaseline = 'middle'
-  runs.forEach((run) => {
-    const runData = data.comparisonData[run.runId]
-    const testCount = runData?.results?.length || 0
-    const label = `${run.runName} (${testCount})`
-
-    // Dot
-    ctx.fillStyle = run.color
-    ctx.beginPath()
-    ctx.arc(chipX + 8, chipY, 6, 0, Math.PI * 2)
-    ctx.fill()
-
-    // Label
-    ctx.fillStyle = colors.text
-    ctx.font = '500 16px system-ui, -apple-system, sans-serif'
-    ctx.textAlign = 'left'
-    const labelW = ctx.measureText(label).width
-    ctx.fillText(label, chipX + 20, chipY)
-
-    chipX += 20 + labelW + 28
-  })
 
   // Collect all metric keys
   const allKeys = new Set<string>()
@@ -232,11 +178,12 @@ async function drawComparisonMode(ctx: CanvasRenderingContext2D, data: PngExport
     if (lat > maxLatency) maxLatency = lat
   })
 
-  // Grid lines
-  const compBarTop = 180
-  const compBarBottom = 500
+  // Layout
+  const compBarTop = PAD + 10
+  const compBarBottom = 460
   const compBarMaxH = compBarBottom - compBarTop
 
+  // Grid lines
   ctx.strokeStyle = colors.border
   ctx.lineWidth = 1
   for (let i = 0; i <= 4; i++) {
@@ -247,11 +194,13 @@ async function drawComparisonMode(ctx: CanvasRenderingContext2D, data: PngExport
     ctx.stroke()
   }
 
-  // Draw grouped bars
+  // Draw grouped bars — fill available width
   const barAreaW = W - PAD * 2
-  const groupGap = Math.min(50, barAreaW / keys.length * 0.35)
-  const groupW = Math.min(runs.length * 30 + (runs.length - 1) * 4, (barAreaW - groupGap * (keys.length - 1)) / keys.length)
-  const singleBarW = Math.max(12, (groupW - (runs.length - 1) * 4) / runs.length)
+  const groupGap = Math.min(60, barAreaW / keys.length * 0.3)
+  const availPerGroup = (barAreaW - groupGap * (keys.length - 1)) / keys.length
+  const barGapInGroup = 6
+  const singleBarW = Math.min(60, (availPerGroup - barGapInGroup * (runs.length - 1)) / runs.length)
+  const groupW = singleBarW * runs.length + barGapInGroup * (runs.length - 1)
   const totalGroupsW = groupW * keys.length + groupGap * (keys.length - 1)
   const startX = PAD + (barAreaW - totalGroupsW) / 2
 
@@ -269,7 +218,7 @@ async function drawComparisonMode(ctx: CanvasRenderingContext2D, data: PngExport
         if (chip) pct = chipStats(chip, 2).pct
       }
 
-      const x = groupX + runIdx * (singleBarW + 4)
+      const x = groupX + runIdx * (singleBarW + barGapInGroup)
       const h = (pct / 100) * compBarMaxH
       const y = compBarBottom - h
 
@@ -280,13 +229,13 @@ async function drawComparisonMode(ctx: CanvasRenderingContext2D, data: PngExport
       // Percentage above bar
       if (pct > 0) {
         ctx.fillStyle = colors.text
-        ctx.font = 'bold 11px system-ui, -apple-system, sans-serif'
+        ctx.font = 'bold 12px system-ui, -apple-system, sans-serif'
         ctx.textAlign = 'center'
         ctx.textBaseline = 'bottom'
         const label = key === '_latency'
           ? `${((runData?.average_latency || 0)).toFixed(1)}s`
           : `${Math.round(pct)}%`
-        ctx.fillText(label, x + singleBarW / 2, y - 3)
+        ctx.fillText(label, x + singleBarW / 2, y - 4)
       }
     })
 
@@ -299,15 +248,66 @@ async function drawComparisonMode(ctx: CanvasRenderingContext2D, data: PngExport
     ctx.fillText(label, groupX + groupW / 2, compBarBottom + 10)
   })
 
+  // Run key — below the graph
+  const keyY = compBarBottom + 38
+  ctx.textBaseline = 'middle'
+  // Measure total width to center the key
+  ctx.font = '500 15px system-ui, -apple-system, sans-serif'
+  let totalKeyW = 0
+  runs.forEach((run) => {
+    const runData = data.comparisonData[run.runId]
+    const testCount = runData?.results?.length || 0
+    totalKeyW += 16 + 8 + ctx.measureText(`${run.runName} (${testCount})`).width + 24
+  })
+  totalKeyW -= 24 // remove trailing gap
+
+  let chipX = (W - totalKeyW) / 2
+  runs.forEach((run) => {
+    const runData = data.comparisonData[run.runId]
+    const testCount = runData?.results?.length || 0
+    const label = `${run.runName} (${testCount})`
+
+    ctx.fillStyle = run.color
+    ctx.beginPath()
+    ctx.arc(chipX + 8, keyY, 6, 0, Math.PI * 2)
+    ctx.fill()
+
+    ctx.fillStyle = colors.text
+    ctx.font = '500 15px system-ui, -apple-system, sans-serif'
+    ctx.textAlign = 'left'
+    ctx.fillText(label, chipX + 22, keyY)
+
+    chipX += 22 + ctx.measureText(label).width + 24
+  })
+
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
 
-  // Footer branding
+  drawFooter(ctx, colors, logo)
+}
+
+function drawFooter(ctx: CanvasRenderingContext2D, colors: ReturnType<typeof getThemeColors>, logo: HTMLImageElement | null) {
+  const footerY = H - PAD + 10
   ctx.fillStyle = colors.muted
-  ctx.font = '400 12px system-ui, -apple-system, sans-serif'
+  ctx.font = '400 13px system-ui, -apple-system, sans-serif'
   ctx.textAlign = 'right'
-  ctx.fillText('ezvals.com', W - PAD, H - PAD + 10)
+  ctx.textBaseline = 'middle'
+
+  if (logo) {
+    const logoH = 18
+    const logoW = (logo.width / logo.height) * logoH
+    const text = 'ezvals.com'
+    const textW = ctx.measureText(text).width
+    const totalW = logoW + 6 + textW
+    const startX = W - PAD - totalW
+    ctx.drawImage(logo, startX, footerY - logoH / 2, logoW, logoH)
+    ctx.fillText(text, W - PAD, footerY)
+  } else {
+    ctx.fillText('ezvals.com', W - PAD, footerY)
+  }
+
   ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
 }
 
 export async function renderPngCanvas(data: PngExportData): Promise<HTMLCanvasElement> {
