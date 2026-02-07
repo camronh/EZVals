@@ -72,18 +72,21 @@ Changes are saved to the results file.
 
 ## Export
 
-Click the download icon in the header to open the export menu with three formats:
+Click the download icon in the header to open the export menu:
 
 | Format | Type | Description |
 |--------|------|-------------|
 | JSON | Raw | Full results file as-is |
 | CSV | Raw | All results in flat CSV format |
 | Markdown | Filtered | ASCII bar charts + table with current filters applied |
+| PNG | Visual | Chart image with stats bars, metrics, and branding |
 
 **Filtered exports** respect:
 - Active search and filters (only visible rows are exported)
 - Column visibility (hidden columns are excluded)
 - Computed stats from filtered results
+
+PNG export opens a preview modal where you can save or copy the image. In comparison mode, it renders grouped bars with color-coded run chips.
 
 Markdown uses ASCII progress bars with color indicators:
 
