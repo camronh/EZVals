@@ -53,13 +53,17 @@ results/
 PRD.md
 AGENTS.md
 
-# Agent skill directories (created by ezvals skills add)
+# Agent directories (symlinks + agent-specific, not checked in)
+.claude/skills/
 .codex/
 .cursor/
 .windsurf/
 .kiro/
 .roo/
-.agents/
+
+# Canonical skills checked in, rest of .agents ignored
+.agents/*
+!.agents/skills/
 
 
 ezvals.json

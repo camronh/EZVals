@@ -1,4 +1,7 @@
-Ship recent changes in the current branch to dev (and optionally to main).
+---
+name: ship
+description: Ship recent changes in the current branch to dev (and optionally to main).
+---
 
 **Arguments:** If the user says "to main" or "push to main", also merge dev to main after completing the dev ship.
 

@@ -367,7 +367,7 @@ The skill installs to `.claude/skills/evals/`, `.cursor/skills/evals/`, etc., wi
 ## Contributing
 
 ```bash
-uv sync
+make setup-skills # link agent skills for claude and codex
 uv run pytest -q
 uv run ruff check ezvals tests
 ```

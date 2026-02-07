@@ -1,4 +1,7 @@
-Prepare documentation updates before merging a feature branch.
+---
+name: prepare-merge
+description: Prepare documentation updates before merging a feature branch.
+---
 
 **Arguments:** Specify the target branch to compare against (default: `dev`)
 
