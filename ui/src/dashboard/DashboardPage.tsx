@@ -1073,6 +1073,7 @@ export default function DashboardPage() {
         isComparisonMode={isComparisonMode}
         normalizedComparisonRuns={normalizedComparisonRuns}
         comparisonData={comparisonData}
+        sessionName={data?.session_name || ''}
       />
 
       <FloatingMenu anchorRef={statsExpanded ? runDropdownExpandedRef : runDropdownCompactRef} open={runDropdownOpen} onClose={() => setRunDropdownOpen(false)}>

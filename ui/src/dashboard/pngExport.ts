@@ -248,36 +248,30 @@ async function drawComparisonMode(ctx: CanvasRenderingContext2D, data: PngExport
     ctx.fillText(label, groupX + groupW / 2, compBarBottom + 10)
   })
 
-  // Run key — below the graph
-  const keyY = compBarBottom + 38
+  // Run key — outline chips, bottom left
+  const keyY = H - PAD + 10
+  ctx.font = '500 13px system-ui, -apple-system, sans-serif'
   ctx.textBaseline = 'middle'
-  // Measure total width to center the key
-  ctx.font = '500 15px system-ui, -apple-system, sans-serif'
-  let totalKeyW = 0
-  runs.forEach((run) => {
-    const runData = data.comparisonData[run.runId]
-    const testCount = runData?.results?.length || 0
-    totalKeyW += 16 + 8 + ctx.measureText(`${run.runName} (${testCount})`).width + 24
-  })
-  totalKeyW -= 24 // remove trailing gap
+  const chipPadX = 12
+  const chipH = 26
+  const chipGap = 10
 
-  let chipX = (W - totalKeyW) / 2
+  let chipX = PAD
   runs.forEach((run) => {
-    const runData = data.comparisonData[run.runId]
-    const testCount = runData?.results?.length || 0
-    const label = `${run.runName} (${testCount})`
+    const textW = ctx.measureText(run.runName).width
+    const chipW = textW + chipPadX * 2
+
+    ctx.strokeStyle = run.color
+    ctx.lineWidth = 1.5
+    roundRect(ctx, chipX, keyY - chipH / 2, chipW, chipH, chipH / 2)
+    ctx.stroke()
 
     ctx.fillStyle = run.color
-    ctx.beginPath()
-    ctx.arc(chipX + 8, keyY, 6, 0, Math.PI * 2)
-    ctx.fill()
-
-    ctx.fillStyle = colors.text
-    ctx.font = '500 15px system-ui, -apple-system, sans-serif'
+    ctx.font = '500 13px system-ui, -apple-system, sans-serif'
     ctx.textAlign = 'left'
-    ctx.fillText(label, chipX + 22, keyY)
+    ctx.fillText(run.runName, chipX + chipPadX, keyY)
 
-    chipX += 22 + ctx.measureText(label).width + 24
+    chipX += chipW + chipGap
   })
 
   ctx.textAlign = 'left'
@@ -311,10 +305,12 @@ function drawFooter(ctx: CanvasRenderingContext2D, colors: ReturnType<typeof get
 }
 
 export async function renderPngCanvas(data: PngExportData): Promise<HTMLCanvasElement> {
+  const scale = 2
   const canvas = document.createElement('canvas')
-  canvas.width = W
-  canvas.height = H
+  canvas.width = W * scale
+  canvas.height = H * scale
   const ctx = canvas.getContext('2d')!
+  ctx.scale(scale, scale)
 
   const colors = getThemeColors()
 

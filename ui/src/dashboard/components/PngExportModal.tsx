@@ -12,6 +12,7 @@ type PngExportModalProps = {
   isComparisonMode: boolean
   normalizedComparisonRuns: NormalizedComparisonRun[]
   comparisonData: Record<string, RunSummary>
+  sessionName: string
 }
 
 export default function PngExportModal({
@@ -24,6 +25,7 @@ export default function PngExportModal({
   isComparisonMode,
   normalizedComparisonRuns,
   comparisonData,
+  sessionName,
 }: PngExportModalProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -66,7 +68,7 @@ export default function PngExportModal({
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = 'ezvals-export.png'
+      a.download = sessionName ? `ezvals-${sessionName}.png` : 'ezvals-export.png'
       a.click()
       URL.revokeObjectURL(url)
     }, 'image/png')
