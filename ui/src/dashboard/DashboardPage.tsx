@@ -272,6 +272,24 @@ export default function DashboardPage() {
     })
   }, [setComparisonRuns])
 
+  useEffect(() => {
+    if (!sessionRuns.length) return
+    setComparisonRuns((prev) => {
+      const normalized = normalizeComparisonRuns(prev)
+      let changed = false
+      const updated = normalized.map((r) => {
+        if (r.runName !== r.runId) return r
+        const match = sessionRuns.find((sr) => sr.run_id === r.runId)
+        if (match && match.run_name !== r.runId) {
+          changed = true
+          return { ...r, runName: match.run_name }
+        }
+        return r
+      })
+      return changed ? updated : prev
+    })
+  }, [sessionRuns, setComparisonRuns])
+
   const loadResults = useCallback(async (silent = false) => {
     if (!silent) {
       setLoading(true)
