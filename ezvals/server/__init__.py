@@ -265,7 +265,13 @@ def create_app(
     def _serve_ui_index() -> FileResponse:
         index_file = static_dir / "index.html"
         if not index_file.exists():
-            raise HTTPException(status_code=500, detail="UI assets not built")
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "UI assets are missing. If running from a git checkout, build the UI with: "
+                    "cd ui && npm ci && npm run build"
+                ),
+            )
         return FileResponse(index_file)
 
     @app.get("/")

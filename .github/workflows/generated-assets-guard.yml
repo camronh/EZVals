@@ -1,0 +1,36 @@
+name: Guard Generated UI Assets
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - dev
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fail if generated UI artifacts are tracked
+        run: |
+          set -euo pipefail
+
+          tracked=0
+          if git ls-files --error-unmatch ezvals/static/index.html >/dev/null 2>&1; then
+            echo "Tracked file detected: ezvals/static/index.html"
+            tracked=1
+          fi
+
+          if git ls-files ezvals/static/assets/* >/dev/null 2>&1; then
+            echo "Tracked files detected under ezvals/static/assets/"
+            git ls-files ezvals/static/assets/*
+            tracked=1
+          fi
+
+          if [ "$tracked" -ne 0 ]; then
+            echo "Generated UI assets must not be committed."
+            exit 1
+          fi
+
+          echo "Generated UI asset guard passed."

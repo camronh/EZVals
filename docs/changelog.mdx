@@ -7,9 +7,14 @@ description: "All notable changes to EZVals"
 
 - Added: PNG export option in the export dropdown. Opens a preview modal with Save and Copy buttons. Renders stats bars, metrics, and branding on a 1200x630 canvas at 2x resolution for crisp output.
 - Added: PNG export supports comparison mode with grouped bars, outline-styled run name chips, and per-run colors.
+- Added: CI guard workflow to prevent accidentally committing generated UI artifacts.
+- Added: Wheel verification step in publish workflow to ensure UI assets are bundled.
+- Changed: Frontend build artifacts (`ezvals/static/`) are no longer tracked in git. The publish workflow builds the UI and bundles assets into the wheel at release time.
+- Changed: Actionable error message when serving from a git checkout with missing UI assets.
 - Changed: Stats bars and comparison bars now render with gradient fills, color-matched glow shadows, and a glassy highlight effect.
 - Fixed: Comparison mode stats bars and comparison run counts now compute from the currently visible filtered rows instead of full-run aggregates.
 - Tests: Added E2E coverage for comparison mode to verify stats bar percentages update after applying filters.
+- Tests: Added test for missing-UI-assets error response.
 
 ## 0.1.4 - 2026-02-05
 
