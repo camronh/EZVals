@@ -22,9 +22,9 @@ jobs:
             tracked=1
           fi
 
-          if git ls-files ezvals/static/assets/* >/dev/null 2>&1; then
+          if [ -n "$(git ls-files 'ezvals/static/assets/')" ]; then
             echo "Tracked files detected under ezvals/static/assets/"
-            git ls-files ezvals/static/assets/*
+            git ls-files 'ezvals/static/assets/'
             tracked=1
           fi
 
