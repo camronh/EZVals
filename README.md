@@ -319,6 +319,19 @@ ezvals run path/to/evals.py::function_name
 --no-save               Output JSON to stdout instead of saving
 ```
 
+## Frontend Build Artifacts Policy
+
+Generated UI assets in `ezvals/static/` are intentionally not committed in normal development.
+Release packaging builds the UI and bundles these files into published artifacts so installed users can run `ezvals serve` without extra steps.
+
+If you run from a git checkout and UI assets are missing:
+
+```bash
+cd ui
+npm ci
+npm run build
+```
+
 **Serve flags:**
 ```
 --session TEXT          Session name to group runs
