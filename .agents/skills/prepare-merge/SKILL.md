@@ -41,7 +41,7 @@ Review if changes require updates to:
 When updating, write docs as if they're the current state - don't mention "updated" or "changed from".
 
 ## 4. Run Tests
-- Execute `uv run pytest`
+- Run tests and ensure all tests pass. (Use `-n auto` to run tests in parallel)
 - If tests fail, fix them and re-run until all tests pass
 
 ## 5. Summary

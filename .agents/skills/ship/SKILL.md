@@ -12,7 +12,7 @@ Follow these steps in order:
 
 ## 2. Run Tests
 
-- Execute `uv run pytest` to ensure all tests pass
+- Run tests and ensure all tests pass. (Use `-n auto` to run tests in parallel)
 - If tests fail, STOP and report the failures
 
 ## 3. Version Bump
