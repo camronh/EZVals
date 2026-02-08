@@ -164,16 +164,15 @@ ezvals serve evals/ --session my-experiment --run
 
 The `--run` flag automatically runs all evals when the server starts.
 
-## Sharing Focused Views by URL (For Agents)
+## Sharing Focused Views by URL
 
-If the user already has the UI running, construct and share a direct URL for exactly what you want them to review.
+If the user already has the UI running, or if you want to show the user a specific view, construct and share a direct URL for exactly what you want them to review.
 
 ### Base URL
 
 Use the user’s existing serve URL, e.g.:
 
 - `http://127.0.0.1:8000`
-- `http://127.0.0.1:8987`
 
 ### Query Parameters
 
