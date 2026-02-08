@@ -1,4 +1,7 @@
-Prepare documentation updates before merging a feature branch.
+---
+name: prepare-merge
+description: Prepare documentation updates before merging a feature branch.
+---
 
 **Arguments:** Specify the target branch to compare against (default: `dev`)
 
@@ -37,7 +40,11 @@ Review if changes require updates to:
 
 When updating, write docs as if they're the current state - don't mention "updated" or "changed from".
 
-## 4. Check Skill Version (If Merging to Main)
+## 4. Run Tests
+- Run tests and ensure all tests pass. (Use `-n auto` to run tests in parallel)
+- If tests fail, fix them and re-run until all tests pass
+
+## 4b. Check Skill Version (If Merging to Main)
 If preparing for a release to main:
 - Check the version in `ezvals/skills/evals/SKILL.md` (the `<!-- Version: X.X.X -->` line)
 - Flag if it doesn't match the upcoming release version
@@ -48,3 +55,4 @@ Report:
 - What features/changes were found
 - What documentation was updated
 - What was skipped and why
+- The final merge skill command: `/merge <branch>`

@@ -1,9 +1,18 @@
 import socket
+import subprocess
 import threading
 import time
 from contextlib import contextmanager
+from pathlib import Path
 
 import uvicorn
+
+# Auto-build UI assets if missing (e.g. after fresh clone)
+_static_dir = Path(__file__).resolve().parents[2] / "ezvals" / "static"
+_ui_dir = Path(__file__).resolve().parents[2] / "ui"
+if not (_static_dir / "index.html").exists() and (_ui_dir / "package.json").exists():
+    subprocess.run(["npm", "ci"], cwd=_ui_dir, check=True)
+    subprocess.run(["npm", "run", "build"], cwd=_ui_dir, check=True)
 
 
 @contextmanager

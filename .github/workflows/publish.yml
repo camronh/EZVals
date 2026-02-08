@@ -13,6 +13,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: "20"
+        cache: "npm"
+        cache-dependency-path: ui/package-lock.json
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
@@ -21,8 +27,38 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install build
+    - name: Build UI assets
+      working-directory: ui
+      run: |
+        npm ci
+        npm run build
     - name: Build package
       run: python -m build
+    - name: Verify wheel contains UI assets
+      run: |
+        python - <<'PY'
+        import glob
+        import zipfile
+
+        wheel_files = glob.glob("dist/*.whl")
+        if not wheel_files:
+            raise SystemExit("No wheel file found in dist/")
+        wheel_path = wheel_files[0]
+
+        with zipfile.ZipFile(wheel_path) as whl:
+            names = whl.namelist()
+            has_index = any(name.endswith("ezvals/static/index.html") for name in names)
+            has_js = any(name.endswith(".js") and "ezvals/static/assets/" in name for name in names)
+            has_css = any(name.endswith(".css") and "ezvals/static/assets/" in name for name in names)
+
+        if not has_index:
+            raise SystemExit("Wheel missing ezvals/static/index.html")
+        if not has_js:
+            raise SystemExit("Wheel missing JS assets under ezvals/static/assets/")
+        if not has_css:
+            raise SystemExit("Wheel missing CSS assets under ezvals/static/assets/")
+        print("Wheel UI assets verified")
+        PY
     - name: Publish package
       uses: pypa/gh-action-pypi-publish@release/v1
       with:

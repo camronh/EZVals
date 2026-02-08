@@ -452,6 +452,10 @@ export default function DashboardHeader({
                 <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><use href="#icon-download"></use></svg>
                 Markdown
               </button>
+              <button id="export-png-btn" className="w-full flex items-center gap-2 py-1.5 px-2 rounded text-zinc-300 hover:bg-zinc-800" onClick={() => handleExport('png')}>
+                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><use href="#icon-download"></use></svg>
+                PNG
+              </button>
             </div>
           </div>
           <button id="settings-toggle" className="flex h-7 w-7 items-center justify-center rounded border border-theme-btn-border bg-theme-btn-bg text-theme-text-secondary hover:bg-theme-btn-bg-hover hover:text-theme-text" onClick={handleSettingsOpen}>

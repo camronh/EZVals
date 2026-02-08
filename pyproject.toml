@@ -1,6 +1,6 @@
 [project]
 name = "ezvals"
-version = "0.1.4"
+version = "0.1.5"
 description = "A lightweight, code-first evaluation framework for testing AI agents and LLM applications"
 authors = [{ name = "EZVals Team" }]
 readme = "README.md"
@@ -49,6 +49,14 @@ Documentation = "https://github.com/camronh/EZVals#readme"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build]
+artifacts = [
+  "ezvals/static/index.html",
+  "ezvals/static/assets/**",
+  "ezvals/static/logo.png",
+  "ezvals/static/theme-init.js",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["ezvals"]

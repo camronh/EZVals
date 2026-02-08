@@ -8,8 +8,9 @@ import webbrowser
 import json
 import urllib.request
 import urllib.error
+import urllib.parse
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from threading import Thread
 
 from rich.console import Console
@@ -42,6 +43,74 @@ def _find_available_port(start_port: int, max_attempts: int = 10) -> int:
         if _is_port_available(port):
             return port
     raise click.ClickException(f"No available ports found in range {start_port}-{start_port + max_attempts - 1}")
+
+
+def _build_serve_query_params(
+    active_run_id: Optional[str],
+    comparison_run_ids: List[str],
+    search: Optional[str],
+    has_error: Optional[bool],
+    has_url: Optional[bool],
+    has_messages: Optional[bool],
+    annotation: str,
+) -> List[tuple[str, str]]:
+    params: List[tuple[str, str]] = []
+    if active_run_id:
+        params.append(("run_id", active_run_id))
+    for run_id in comparison_run_ids:
+        params.append(("compare_run_id", run_id))
+    if search:
+        params.append(("search", search))
+    if has_error is not None:
+        params.append(("has_error", "1" if has_error else "0"))
+    if has_url is not None:
+        params.append(("has_url", "1" if has_url else "0"))
+    if has_messages is not None:
+        params.append(("has_messages", "1" if has_messages else "0"))
+    if annotation != "any":
+        params.append(("annotation", annotation))
+    return params
+
+
+def _resolve_run_name_in_session(
+    store: Any,
+    session_name: str,
+    run_name: str,
+    required: bool,
+) -> Optional[Dict[str, Any]]:
+    matches = []
+    for run_id in store.list_runs_for_session(session_name):
+        try:
+            data = store.load_run(run_id, session_name)
+        except Exception:
+            continue
+        if data.get("run_name") == run_name:
+            matches.append((run_id, data))
+
+    if len(matches) > 1:
+        match_ids = ", ".join(run_id for run_id, _ in matches)
+        raise click.ClickException(
+            f"Run name '{run_name}' is ambiguous in session '{session_name}'. Matching run_ids: {match_ids}"
+        )
+
+    if not matches:
+        if required:
+            raise click.ClickException(f"Run name '{run_name}' not found in session '{session_name}'.")
+        return None
+
+    run_id, data = matches[0]
+    return {"run_id": run_id, "run_data": data}
+
+
+def _parse_compare_run_names(compare_runs: str) -> List[str]:
+    names = [n.strip() for n in compare_runs.split(",") if n.strip()]
+    if len(names) < 2:
+        raise click.ClickException("--compare-runs requires at least 2 run names.")
+    if len(names) > 4:
+        raise click.ClickException("--compare-runs supports at most 4 run names.")
+    if len(set(names)) != len(names):
+        raise click.ClickException("--compare-runs cannot include duplicate run names.")
+    return names
 
 
 class ProgressReporter:
@@ -162,6 +231,13 @@ def cli():
 @click.option('--results-dir', default=None, help='Directory for JSON results storage')
 @click.option('--port', default=None, type=int, help='Port for the web server')
 @click.option('--session', default=None, help='Name for this evaluation session')
+@click.option('--run-name', default=None, help='Name of an existing run to open, or pending name for next run')
+@click.option('--compare-runs', default=None, help='Comma-separated run names to open in comparison mode (2-4)')
+@click.option('--search', default=None, help='Initial search text')
+@click.option('--has-error/--no-has-error', default=None, help='Initial error filter')
+@click.option('--has-url/--no-has-url', default=None, help='Initial trace URL filter')
+@click.option('--has-messages/--no-has-messages', default=None, help='Initial trace messages filter')
+@click.option('--annotation', type=click.Choice(['any', 'yes', 'no']), default='any', help='Initial annotation filter')
 @click.option('--run', 'auto_run', is_flag=True, help='Automatically run all evals on startup')
 def serve_cmd(
     path: str,
@@ -170,12 +246,19 @@ def serve_cmd(
     results_dir: Optional[str],
     port: Optional[int],
     session: Optional[str],
+    run_name: Optional[str],
+    compare_runs: Optional[str],
+    search: Optional[str],
+    has_error: Optional[bool],
+    has_url: Optional[bool],
+    has_messages: Optional[bool],
+    annotation: str,
     auto_run: bool,
 ):
     """Start the web UI to browse and run evaluations."""
     from pathlib import Path as PathLib
 
-    from ezvals.storage import _generate_friendly_name
+    from ezvals.storage import ResultsStore, _generate_friendly_name
 
     # Load config and merge with CLI args
     config = load_config()
@@ -199,19 +282,90 @@ def serve_cmd(
 
     # Detect if path is a run JSON file
     if path_obj.suffix == ".json" and path_obj.is_file():
-        _serve_from_json(json_path=path, results_dir=results_dir, port=port)
+        if run_name or compare_runs:
+            raise click.ClickException("--run-name and --compare-runs are only supported when PATH is an eval path.")
+        query_params = _build_serve_query_params(
+            active_run_id=None,
+            comparison_run_ids=[],
+            search=search,
+            has_error=has_error,
+            has_url=has_url,
+            has_messages=has_messages,
+            annotation=annotation,
+        )
+        _serve_from_json(json_path=path, results_dir=results_dir, port=port, query_params=query_params)
         return
 
     labels = list(label) if label else None
+    store = ResultsStore(results_dir)
+
+    active_run: Optional[Dict[str, Any]] = None
+    if run_name:
+        active_run = _resolve_run_name_in_session(store, session, run_name, required=False)
+
+    resolved_compare_runs: List[Dict[str, Any]] = []
+    if compare_runs:
+        for compare_name in _parse_compare_run_names(compare_runs):
+            resolved = _resolve_run_name_in_session(store, session, compare_name, required=True)
+            resolved_compare_runs.append({
+                "runId": resolved["run_id"],
+                "runName": resolved["run_data"].get("run_name") or compare_name,
+                "run_data": resolved["run_data"],
+            })
+
+    active_run_id = active_run["run_id"] if active_run else None
+    active_run_data = active_run["run_data"] if active_run else None
+
+    if resolved_compare_runs:
+        compare_ids = [r["runId"] for r in resolved_compare_runs]
+        if active_run_id is None or active_run_id not in compare_ids:
+            active_run_id = resolved_compare_runs[0]["runId"]
+            active_run_data = resolved_compare_runs[0]["run_data"]
+
+    serve_path: Optional[str] = path
+    serve_dataset = dataset
+    serve_labels = labels
+    serve_function_name = function_name
+    serve_run_name = run_name
+    serve_session_name = session
+
+    if active_run_data:
+        run_path = active_run_data.get("path")
+        if run_path and Path(run_path).exists():
+            serve_path = run_path
+        else:
+            serve_path = None
+            console.print(
+                f"[yellow]Warning: Source eval path '{run_path}' not found for run '{active_run_data.get('run_name')}'. "
+                "View-only mode (rerun disabled).[/yellow]"
+            )
+        serve_dataset = active_run_data.get("dataset")
+        serve_labels = active_run_data.get("labels")
+        serve_function_name = active_run_data.get("function_name")
+        serve_run_name = active_run_data.get("run_name")
+        serve_session_name = active_run_data.get("session_name") or session
+
+    query_params = _build_serve_query_params(
+        active_run_id=active_run_id,
+        comparison_run_ids=[r["runId"] for r in resolved_compare_runs],
+        search=search,
+        has_error=has_error,
+        has_url=has_url,
+        has_messages=has_messages,
+        annotation=annotation,
+    )
 
     _serve(
-        path=path,
-        dataset=dataset,
-        labels=labels,
-        function_name=function_name,
+        path=serve_path,
+        dataset=serve_dataset,
+        labels=serve_labels,
+        function_name=serve_function_name,
         results_dir=results_dir,
         port=port,
-        session_name=session,
+        session_name=serve_session_name,
+        run_name=serve_run_name,
+        active_run_id=active_run_id,
+        query_params=query_params,
         auto_run=auto_run,
     )
 
@@ -399,13 +553,16 @@ def export_cmd(run_path: str, fmt: str, output: Optional[str]):
 
 
 def _serve(
-    path: str,
+    path: Optional[str],
     dataset: Optional[str],
     labels: Optional[List[str]],
     function_name: Optional[str],
     results_dir: str,
     port: int,
     session_name: Optional[str] = None,
+    run_name: Optional[str] = None,
+    active_run_id: Optional[str] = None,
+    query_params: Optional[List[tuple[str, str]]] = None,
     auto_run: bool = False,
 ):
     """Serve a web UI to browse and run evaluations."""
@@ -419,15 +576,17 @@ def _serve(
     from ezvals.storage import ResultsStore, _generate_friendly_name
 
     # Discover functions (for display, not running)
-    discovery = EvalDiscovery()
-    functions = discovery.discover(path=path, dataset=dataset, labels=labels, function_name=function_name)
+    functions = []
+    if path and Path(path).exists():
+        discovery = EvalDiscovery()
+        functions = discovery.discover(path=path, dataset=dataset, labels=labels, function_name=function_name)
 
     # Create store and generate run_id for when user triggers run
     store = ResultsStore(results_dir)
-    run_id = store.generate_run_id()
+    run_id = active_run_id or store.generate_run_id()
 
     # Generate initial run_name for first run
-    run_name = _generate_friendly_name()
+    run_name = run_name or _generate_friendly_name()
 
     # Create app - does NOT auto-run, just displays discovered evals
     app = create_app(
@@ -442,7 +601,9 @@ def _serve(
         run_name=run_name,
     )
 
-    if not functions:
+    if not path:
+        console.print("[yellow]No eval path loaded. UI is in view-only mode until a valid eval path is available.[/yellow]")
+    elif not functions:
         console.print("[yellow]No evaluations found matching the criteria.[/yellow]")
 
     requested_port = port
@@ -451,6 +612,8 @@ def _serve(
         console.print(f"[yellow]Port {requested_port} in use → using {port}[/yellow]")
 
     url = f"http://127.0.0.1:{port}"
+    if query_params:
+        url = f"{url}?{urllib.parse.urlencode(query_params, doseq=True)}"
     console.print(f"\n[bold green]EZVals UI[/bold green] serving at: [bold blue]{url}[/bold blue]")
     if auto_run:
         console.print(f"[cyan]Auto-running {len(functions)} evaluation(s)...[/cyan]")
@@ -532,6 +695,7 @@ def _serve_from_json(
     json_path: str,
     results_dir: str,
     port: int,
+    query_params: Optional[List[tuple[str, str]]] = None,
 ):
     """Serve web UI loading an existing run JSON file."""
     try:
@@ -594,6 +758,8 @@ def _serve_from_json(
         console.print(f"[yellow]Port {requested_port} in use → using {port}[/yellow]")
 
     url = f"http://127.0.0.1:{port}"
+    if query_params:
+        url = f"{url}?{urllib.parse.urlencode(query_params, doseq=True)}"
     console.print(f"\n[bold green]EZVals UI[/bold green] serving at: [bold blue]{url}[/bold blue]")
     console.print(f"[cyan]Loaded run: {run_name} ({len(run_data.get('results', []))} results)[/cyan]")
     console.print("Press Esc to stop (or Ctrl+C)\n")

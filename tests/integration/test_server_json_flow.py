@@ -243,6 +243,25 @@ def test_export_endpoints(tmp_path: Path):
     assert "function,dataset,labels,input,output,reference,scores,error,latency,metadata,trace_data,annotations" in text.splitlines()[0]
 
 
+def test_index_returns_actionable_error_when_ui_assets_missing(tmp_path: Path, monkeypatch):
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id="run-1")
+    client = TestClient(app)
+
+    original_exists = Path.exists
+
+    def fake_exists(self):
+        if self.name == "index.html" and self.parent.name == "static":
+            return False
+        return original_exists(self)
+
+    monkeypatch.setattr(Path, "exists", fake_exists)
+
+    response = client.get("/")
+    assert response.status_code == 500
+    assert "UI assets are missing" in response.json()["detail"]
+    assert "cd ui && npm ci && npm run build" in response.json()["detail"]
+
+
 def test_rerun_endpoint(tmp_path: Path, monkeypatch):
     # Change to tmp_path so load_config() reads from there (not project root)
     monkeypatch.chdir(tmp_path)

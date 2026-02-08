@@ -138,3 +138,24 @@ def test_advanced_filters_ui(tmp_path):
             page.select_option("#key-select", value="accuracy")
             expect(page.locator("#passed-section")).to_be_visible()
             browser.close()
+
+
+def test_filters_from_launch_query(tmp_path):
+    """Readable query params should apply search + filters before first render."""
+    store = ResultsStore(tmp_path / "runs")
+    run_id = store.save_run(make_summary_with_scores(), "2024-01-01T00-00-00Z")
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+    query = "search=f3&annotation=yes"
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(f"{url}?{query}")
+            page.wait_for_selector("#results-table")
+
+            rows = page.locator("tbody tr[data-row='main']")
+            expect(rows).to_have_count(1)
+            expect(rows.first).to_contain_text("f3")
+            browser.close()

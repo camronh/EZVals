@@ -133,6 +133,16 @@ ezvals run sentiment_evals.py::test_sentiment_batch --session sentiment-failed-r
 The agent could review the json results before presenting a solution to you. It could even implement that solution and rerun the evals to compare
 before and after!
 
+### Skills Setup
+
+Install the EZVals skill so your coding agent has eval-specific guidance:
+
+```bash
+ezvals skills add
+```
+
+For everything else (verification, updates, global install, and marketplace install), see the [Agent Skill guide](/guides/agent-skill).
+
 ## Existing eval frameworks are frustrating:
 
 <CardGroup cols={3}>

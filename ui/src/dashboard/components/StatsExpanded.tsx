@@ -1,5 +1,5 @@
 import type { ReactNode, RefObject } from 'react'
-import type { NormalizedComparisonRun, RunSummary, ScoreChip, SessionRun, StatsSummary } from '../../types'
+import type { FilteredStats, NormalizedComparisonRun, RunSummary, ScoreChip, SessionRun, StatsSummary } from '../../types'
 import CopyableText from './CopyableText'
 import { chipStats, getBarColor } from '../utils'
 
@@ -14,6 +14,7 @@ type StatsExpandedProps = {
   isComparisonMode: boolean
   normalizedComparisonRuns: NormalizedComparisonRun[]
   comparisonData: Record<string, RunSummary>
+  comparisonDisplayStats: Record<string, FilteredStats>
   sessionRuns: SessionRun[]
   currentRunLabel: string
   editingRunName: boolean
@@ -42,6 +43,7 @@ export default function StatsExpanded({
   isComparisonMode,
   normalizedComparisonRuns,
   comparisonData,
+  comparisonDisplayStats,
   sessionRuns,
   currentRunLabel,
   editingRunName,
@@ -79,7 +81,7 @@ export default function StatsExpanded({
           <div className="comparison-chips flex flex-wrap gap-2 items-center">
             {normalizedComparisonRuns.map((run, idx) => {
               const runData = comparisonData[run.runId]
-              const testCount = runData?.results?.length || 0
+              const testCount = comparisonDisplayStats[run.runId]?.filtered ?? runData?.results?.length ?? 0
               return (
                 <span
                   key={run.runId}
@@ -231,28 +233,28 @@ export default function StatsExpanded({
 
   if (inComparison) {
     const allKeys = new Set<string>()
-    Object.values(comparisonData).forEach((runData) => {
-      ;(runData?.score_chips || []).forEach((chip) => allKeys.add(chip.key))
+    Object.values(comparisonDisplayStats).forEach((runStats) => {
+      ;(runStats?.chips || []).forEach((chip) => allKeys.add(chip.key))
     })
     allKeys.add('_latency')
     const keys = Array.from(allKeys)
     let maxLatency = 0
-    Object.values(comparisonData).forEach((runData) => {
-      const lat = runData?.average_latency || 0
+    Object.values(comparisonDisplayStats).forEach((runStats) => {
+      const lat = runStats?.avgLatency || 0
       if (lat > maxLatency) maxLatency = lat
     })
 
     keys.forEach((key, keyIdx) => {
       const groupBars = normalizedComparisonRuns.map((run) => {
-        const runData = comparisonData[run.runId]
+        const runStats = comparisonDisplayStats[run.runId]
         let pct = 0
         let displayVal = '--'
         if (key === '_latency') {
-          const lat = runData?.average_latency || 0
+          const lat = runStats?.avgLatency || 0
           pct = maxLatency > 0 ? (lat / maxLatency) * 100 : 0
           displayVal = lat > 0 ? `${lat.toFixed(2)}s` : '--'
         } else {
-          const chip = (runData?.score_chips || []).find((c) => c.key === key)
+          const chip = (runStats?.chips || []).find((c) => c.key === key)
           if (chip) {
             const statsChip = chipStats(chip, 2)
             pct = statsChip.pct

@@ -242,7 +242,7 @@ Scenario: Edit scores
 
 ## Export
 
-The export dropdown menu in the header provides 4 export formats.
+The export dropdown menu in the header provides 4 export formats (JSON, CSV, Markdown, PNG).
 
 ### Raw Exports (All Data)
 
@@ -275,6 +275,28 @@ Scenario: Export as Markdown
     - ASCII bar chart for scores (e.g., "████████░░ 80%")
     - Stats summary
     - Markdown table with only visible rows and visible columns
+
+Scenario: Export as PNG
+  Given evaluation results exist
+  When the user clicks Export > PNG
+  Then a modal opens with a preview of a 1200x630 PNG image showing:
+    - EZVals logo and title
+    - Test count (filtered/total if filters active)
+    - Average latency
+    - Vertical bar chart for each score metric with percentages
+    - "ezvals.com" branding
+  And the image matches the current theme (dark or light)
+  And the user can click Save to download the PNG
+  And the user can click Copy to copy the image to clipboard
+
+Scenario: Export as PNG in comparison mode
+  Given comparison mode is active with 2+ runs
+  When the user clicks Export > PNG
+  Then the PNG preview shows:
+    - Run chips with colors and test counts
+    - Grouped bars per metric (one bar per run, colored by run)
+    - Percentage labels above each bar
+    - Latency as an additional metric
 ```
 
 ---
