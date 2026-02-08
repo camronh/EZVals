@@ -55,7 +55,7 @@ ezvals serve evals/ --dataset customer_service
 ezvals serve evals/ --label production -l critical
 ```
 
-<ParamField path="--results-dir" type="string" default=".ezvals/runs">
+<ParamField path="--results-dir" type="string" default=".ezvals/sessions">
   Directory for JSON results storage.
 </ParamField>
 
@@ -77,6 +77,50 @@ ezvals serve evals/ --port 3000
 
 ```bash
 ezvals serve evals/ --session model-comparison
+```
+
+<ParamField path="--run-name" type="string">
+  Open an existing run in the current session by run name. If not found, this becomes the pending run name for the next run.
+</ParamField>
+
+```bash
+ezvals serve evals/ --session model-comparison --run-name baseline
+```
+
+<ParamField path="--compare-runs" type="string">
+  Comma-separated run names (2-4) to pre-load comparison mode at startup. These are resolved to `compare_run_id` query params in the opened URL.
+</ParamField>
+
+```bash
+ezvals serve evals/ --session model-comparison --compare-runs baseline,improved
+```
+
+<ParamField path="--search" type="string">
+  Initial search text applied at startup.
+</ParamField>
+
+```bash
+ezvals serve evals/ --search auth
+```
+
+<ParamField path="--has-error/--no-has-error" type="boolean">
+  Initial error filter for startup state.
+</ParamField>
+
+<ParamField path="--has-url/--no-has-url" type="boolean">
+  Initial trace URL filter for startup state.
+</ParamField>
+
+<ParamField path="--has-messages/--no-has-messages" type="boolean">
+  Initial trace messages filter for startup state.
+</ParamField>
+
+<ParamField path="--annotation" type="choice" default="any">
+  Initial annotation filter (`any`, `yes`, or `no`).
+</ParamField>
+
+```bash
+ezvals serve evals/ --annotation yes --has-error
 ```
 
 <ParamField path="--run" type="flag">

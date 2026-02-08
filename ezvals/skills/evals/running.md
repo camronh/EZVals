@@ -164,6 +164,49 @@ ezvals serve evals/ --session my-experiment --run
 
 The `--run` flag automatically runs all evals when the server starts.
 
+## Sharing Focused Views by URL
+
+If the user already has the UI running, or if you want to show the user a specific view, construct and share a direct URL for exactly what you want them to review.
+
+### Base URL
+
+Use the user’s existing serve URL, e.g.:
+
+- `http://127.0.0.1:8000`
+
+### Query Parameters
+
+- `run_id=<id>` active run to open
+- `compare_run_id=<id>` repeat to compare multiple runs
+- `search=<text>` search query
+- `annotation=any|yes|no`
+- `has_error=1|0`
+- `has_url=1|0`
+- `has_messages=1|0`
+- `dataset_in=<value>` (repeatable)
+- `dataset_out=<value>` (repeatable)
+- `label_in=<value>` (repeatable)
+- `label_out=<value>` (repeatable)
+- `score_value=<key,op,value>` (repeatable, `op=gt|gte|lt|lte|eq|neq`)
+- `score_passed=<key,true|false>` (repeatable)
+
+### Practical Agent Examples
+
+```text
+You can see the two final runs side-by-side here:
+http://127.0.0.1:8000/?run_id=1826bc4c&compare_run_id=1826bc4c&compare_run_id=58741756
+```
+
+```text
+You can see only results with errors in the active run here:
+http://127.0.0.1:8000/?run_id=1826bc4c&has_error=1
+```
+
+```text
+You can see passing correctness-only results for QA labels here:
+http://127.0.0.1:8000/?run_id=1826bc4c&score_passed=correctness,true&label_in=qa
+```
+
 ### Loading Previous Results
 
 ```bash

@@ -94,6 +94,35 @@ type ComparisonRow = {
 type ResizeState = { colKey: string; startX: number; startWidth: number }
 type SettingsFormState = { concurrency: string; results_dir: string; timeout: string }
 
+function parseScoreValueRule(raw: string) {
+  const parts = raw.split(',')
+  if (parts.length !== 3) return null
+  const key = (parts[0] || '').trim()
+  const opRaw = (parts[1] || '').trim()
+  const valueRaw = (parts[2] || '').trim()
+  const opMap: Record<string, '>' | '>=' | '<' | '<=' | '==' | '!='> = {
+    gt: '>',
+    gte: '>=',
+    lt: '<',
+    lte: '<=',
+    eq: '==',
+    neq: '!=',
+  }
+  const op = opMap[opRaw]
+  const value = Number(valueRaw)
+  if (!key || !op || Number.isNaN(value)) return null
+  return { key, op, value }
+}
+
+function parseScorePassedRule(raw: string) {
+  const parts = raw.split(',')
+  if (parts.length !== 2) return null
+  const key = (parts[0] || '').trim()
+  const valueRaw = (parts[1] || '').trim().toLowerCase()
+  if (!key || (valueRaw !== 'true' && valueRaw !== 'false')) return null
+  return { key, value: valueRaw === 'true' }
+}
+
 function hasRunningResults(data: RunSummary | null) {
   return (data?.results || []).some((r) => ['pending', 'running'].includes(r.result?.status))
 }
@@ -203,6 +232,7 @@ export default function DashboardPage() {
   const [hasRunBefore, setHasRunBefore] = useState(false)
   const [animateStats, setAnimateStats] = useState(false)
   const [settingsForm, setSettingsForm] = useState<SettingsFormState>({ concurrency: '', results_dir: '', timeout: '' })
+  const [queryActiveRunId, setQueryActiveRunId] = useState<string | null>(null)
 
   const filtersToggleRef = useRef<HTMLButtonElement | null>(null)
   const filtersMenuRef = useRef<HTMLDivElement | null>(null)
@@ -319,15 +349,95 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const savedY = sessionStorage.getItem('ezvals:scrollY')
+    const params = new URLSearchParams(window.location.search)
+    const searchParam = params.get('search')
+    if (searchParam != null) setSearch(searchParam)
+
+    const annotationParam = params.get('annotation')
+    const annotation = (annotationParam === 'yes' || annotationParam === 'no' || annotationParam === 'any')
+      ? annotationParam
+      : 'any'
+    const hasErrorRaw = params.get('has_error')
+    const hasUrlRaw = params.get('has_url')
+    const hasMessagesRaw = params.get('has_messages')
+
+    const hasError = hasErrorRaw === '1' ? true : hasErrorRaw === '0' ? false : null
+    const hasUrl = hasUrlRaw === '1' ? true : hasUrlRaw === '0' ? false : null
+    const hasMessages = hasMessagesRaw === '1' ? true : hasMessagesRaw === '0' ? false : null
+
+    const valueRules = params.getAll('score_value')
+      .map(parseScoreValueRule)
+      .filter((v): v is NonNullable<typeof v> => !!v)
+    const passedRules = params.getAll('score_passed')
+      .map(parseScorePassedRule)
+      .filter((v): v is NonNullable<typeof v> => !!v)
+
+    const datasetIn = params.getAll('dataset_in').map((x) => x.trim()).filter(Boolean)
+    const datasetOut = params.getAll('dataset_out').map((x) => x.trim()).filter(Boolean)
+    const labelIn = params.getAll('label_in').map((x) => x.trim()).filter(Boolean)
+    const labelOut = params.getAll('label_out').map((x) => x.trim()).filter(Boolean)
+
+    if (
+      params.has('annotation') ||
+      params.has('has_error') ||
+      params.has('has_url') ||
+      params.has('has_messages') ||
+      params.has('score_value') ||
+      params.has('score_passed') ||
+      params.has('dataset_in') ||
+      params.has('dataset_out') ||
+      params.has('label_in') ||
+      params.has('label_out')
+    ) {
+      setFilters({
+        valueRules,
+        passedRules,
+        annotation,
+        selectedDatasets: { include: datasetIn, exclude: datasetOut },
+        selectedLabels: { include: labelIn, exclude: labelOut },
+        hasUrl,
+        hasMessages,
+        hasError,
+      })
+    }
+
+    const compareRunIds = params.getAll('compare_run_id').map((x) => x.trim()).filter(Boolean)
+    if (compareRunIds.length) {
+      setComparisonRuns(compareRunIds.map((runId) => ({ runId, runName: runId } as ComparisonRun)))
+    }
+    const runId = params.get('run_id')
+    if (runId) {
+      setQueryActiveRunId(runId)
+    }
     if (savedY != null) {
       window.scrollTo(0, parseInt(savedY, 10))
       sessionStorage.removeItem('ezvals:scrollY')
     }
-    const params = new URLSearchParams(window.location.search)
     if (params.has('scroll')) {
       history.replaceState(null, '', window.location.pathname)
     }
-  }, [])
+  }, [setComparisonRuns, setFilters, setSearch])
+
+  useEffect(() => {
+    if (!queryActiveRunId || !data) return
+    if (data.run_id === queryActiveRunId) {
+      setQueryActiveRunId(null)
+      return
+    }
+    let active = true
+    async function activateQueryRun() {
+      try {
+        const resp = await fetch(`/api/runs/${encodeURIComponent(queryActiveRunId)}/activate`, { method: 'POST' })
+        if (resp.ok && active) await loadResults(true)
+      } catch {
+        // ignore activation failures
+      } finally {
+        if (active) setQueryActiveRunId(null)
+      }
+    }
+    activateQueryRun()
+    return () => { active = false }
+  }, [data, loadResults, queryActiveRunId])
 
   useEffect(() => {
     if (!filtersOpen && !columnsOpen && !exportOpen && !runMenuOpen) return

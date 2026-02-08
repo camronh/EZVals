@@ -4,7 +4,10 @@ import tempfile
 import json
 from pathlib import Path
 
-from ezvals.cli import cli
+import click
+
+from ezvals.cli import cli, _resolve_run_name_in_session, _parse_compare_run_names, _build_serve_query_params
+from ezvals.storage import ResultsStore
 
 
 class TestCLI:
@@ -405,6 +408,157 @@ def test_failing():
         assert result.exit_code == 0
         assert 'PATH' in result.output
         assert '--port' in result.output
+        assert '--run-name' in result.output
+        assert '--compare-runs' in result.output
+        assert '--search' in result.output
+        assert '--has-error' in result.output
+        assert '--has-url' in result.output
+        assert '--has-messages' in result.output
+        assert '--annotation' in result.output
+
+    def test_parse_compare_run_names_validation(self):
+        """compare-runs parser validates count and duplicates"""
+        with pytest.raises(click.ClickException):
+            _parse_compare_run_names("single")
+        with pytest.raises(click.ClickException):
+            _parse_compare_run_names("a,a")
+        with pytest.raises(click.ClickException):
+            _parse_compare_run_names("a,b,c,d,e")
+        assert _parse_compare_run_names("a,b") == ["a", "b"]
+
+    def test_build_serve_query_params(self):
+        """serve query params are readable and explicit"""
+        params = _build_serve_query_params(
+            active_run_id="run123",
+            comparison_run_ids=["run123", "run456"],
+            search="slow",
+            has_error=True,
+            has_url=False,
+            has_messages=None,
+            annotation="yes",
+        )
+        assert ("run_id", "run123") in params
+        assert params.count(("compare_run_id", "run123")) == 1
+        assert params.count(("compare_run_id", "run456")) == 1
+        assert ("search", "slow") in params
+        assert ("has_error", "1") in params
+        assert ("has_url", "0") in params
+        assert ("annotation", "yes") in params
+
+    def test_resolve_run_name_in_session(self):
+        """run-name resolver finds exact run name within session"""
+        with self.runner.isolated_filesystem():
+            store = ResultsStore(".ezvals/sessions")
+            summary = {"results": [], "total_evaluations": 0}
+            run_id = store.save_run(summary, run_id="run001", session_name="s1", run_name="baseline")
+            resolved = _resolve_run_name_in_session(store, "s1", "baseline", required=True)
+            assert resolved["run_id"] == run_id
+            assert resolved["run_data"]["run_name"] == "baseline"
+
+    def test_resolve_run_name_in_session_missing_optional(self):
+        """optional run-name lookup returns None when not found"""
+        with self.runner.isolated_filesystem():
+            store = ResultsStore(".ezvals/sessions")
+            summary = {"results": [], "total_evaluations": 0}
+            store.save_run(summary, run_id="run001", session_name="s1", run_name="baseline")
+            resolved = _resolve_run_name_in_session(store, "s1", "missing", required=False)
+            assert resolved is None
+
+    def test_resolve_run_name_in_session_missing_required(self):
+        """required run-name lookup fails loudly when missing"""
+        with self.runner.isolated_filesystem():
+            store = ResultsStore(".ezvals/sessions")
+            summary = {"results": [], "total_evaluations": 0}
+            store.save_run(summary, run_id="run001", session_name="s1", run_name="baseline")
+            with pytest.raises(click.ClickException):
+                _resolve_run_name_in_session(store, "s1", "missing", required=True)
+
+    def test_resolve_run_name_in_session_ambiguous(self):
+        """run-name lookup fails on ambiguous names in same session"""
+        with self.runner.isolated_filesystem():
+            store = ResultsStore(".ezvals/sessions")
+            summary = {"results": [], "total_evaluations": 0}
+            store.save_run(summary, run_id="run001", session_name="s1", run_name="baseline", overwrite=False)
+            store.save_run(summary, run_id="run002", session_name="s1", run_name="baseline", overwrite=False)
+            with pytest.raises(click.ClickException):
+                _resolve_run_name_in_session(store, "s1", "baseline", required=True)
+
+    def test_serve_uses_existing_run_name(self, monkeypatch):
+        """serve --run-name opens existing run metadata when present"""
+        captured = {}
+
+        def fake_serve(**kwargs):
+            captured.update(kwargs)
+
+        monkeypatch.setattr('ezvals.cli._serve', fake_serve)
+
+        with self.runner.isolated_filesystem():
+            Path('evals.py').write_text('def x():\n    return 1\n')
+            store = ResultsStore(".ezvals/sessions")
+            summary = {
+                "results": [],
+                "total_evaluations": 0,
+                "path": "evals.py",
+                "dataset": "qa",
+                "labels": ["prod"],
+                "function_name": "target_eval",
+                "session_name": "my-session",
+                "run_name": "baseline",
+            }
+            run_id = store.save_run(summary, run_id="run001", session_name="my-session", run_name="baseline")
+
+            result = self.runner.invoke(
+                cli,
+                ['serve', 'evals.py', '--session', 'my-session', '--run-name', 'baseline'],
+            )
+            assert result.exit_code == 0
+            assert captured["active_run_id"] == run_id
+            assert captured["path"] == "evals.py"
+            assert captured["dataset"] == "qa"
+            assert captured["labels"] == ["prod"]
+            assert captured["function_name"] == "target_eval"
+            assert ("run_id", run_id) in captured["query_params"]
+
+    def test_serve_run_name_missing_sets_pending_name(self, monkeypatch):
+        """serve --run-name uses pending name when no saved run exists"""
+        captured = {}
+
+        def fake_serve(**kwargs):
+            captured.update(kwargs)
+
+        monkeypatch.setattr('ezvals.cli._serve', fake_serve)
+
+        with self.runner.isolated_filesystem():
+            Path('evals.py').write_text('def x():\n    return 1\n')
+            result = self.runner.invoke(
+                cli,
+                ['serve', 'evals.py', '--session', 'my-session', '--run-name', 'next-attempt'],
+            )
+            assert result.exit_code == 0
+            assert captured["active_run_id"] is None
+            assert captured["run_name"] == "next-attempt"
+            assert captured["query_params"] == []
+
+    def test_serve_compare_runs_requires_two_names(self):
+        """serve --compare-runs validates minimum names"""
+        with self.runner.isolated_filesystem():
+            Path('evals.py').write_text('def x():\n    return 1\n')
+            result = self.runner.invoke(cli, ['serve', 'evals.py', '--compare-runs', 'baseline'])
+            assert result.exit_code != 0
+            assert 'at least 2' in result.output
+
+    def test_serve_compare_runs_missing_name_fails(self):
+        """serve --compare-runs fails loudly when a run name is missing"""
+        with self.runner.isolated_filesystem():
+            Path('evals.py').write_text('def x():\n    return 1\n')
+            store = ResultsStore(".ezvals/sessions")
+            store.save_run({"results": [], "total_evaluations": 0}, run_id="run001", session_name="s1", run_name="baseline")
+            result = self.runner.invoke(
+                cli,
+                ['serve', 'evals.py', '--session', 's1', '--compare-runs', 'baseline,missing'],
+            )
+            assert result.exit_code != 0
+            assert "not found in session 's1'" in result.output
 
 
 class TestSkillsCommands:

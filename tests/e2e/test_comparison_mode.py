@@ -1,6 +1,7 @@
 """E2E tests for comparison mode functionality."""
 
 import json
+import urllib.parse
 
 from playwright.sync_api import sync_playwright, expect
 
@@ -253,6 +254,93 @@ def test_comparison_filters_or_logic(tmp_path):
             )
             assert filtered_correctness == ["100%", "100%"]
 
+            browser.close()
+
+
+def test_comparison_mode_from_query_params(tmp_path):
+    """Readable query params should initialize comparison mode on first load."""
+    store = ResultsStore(tmp_path / "runs")
+
+    run1_id = store.save_run(make_run_summary("baseline"), session_name="test-session", run_name="baseline")
+    run2_id = store.save_run(make_run_summary("final"), session_name="test-session", run_name="final")
+
+    app = create_app(
+        results_dir=str(tmp_path / "runs"),
+        active_run_id=run1_id,
+        session_name="test-session",
+        run_name="baseline",
+    )
+
+    query = f"run_id={run1_id}&compare_run_id={run1_id}&compare_run_id={run2_id}"
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(f"{url}?{query}")
+            page.wait_for_selector("#results-table")
+            page.wait_for_selector(".comparison-chips")
+            expect(page.locator(".comparison-chip")).to_have_count(2)
+            browser.close()
+
+
+def test_launch_query_active_run_activation(tmp_path):
+    """run_id query param should switch the UI to that run on startup."""
+    store = ResultsStore(tmp_path / "runs")
+
+    run1_id = store.save_run(make_run_summary("baseline"), session_name="test-session", run_name="baseline")
+    run2_id = store.save_run(make_run_summary("final"), session_name="test-session", run_name="final")
+
+    app = create_app(
+        results_dir=str(tmp_path / "runs"),
+        active_run_id=run1_id,
+        session_name="test-session",
+        run_name="baseline",
+    )
+
+    query = f"run_id={run2_id}"
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(f"{url}?{query}")
+            page.wait_for_selector("#results-table")
+            page.wait_for_function(
+                f"() => document.querySelector('#results-table')?.getAttribute('data-run-id') === '{run2_id}'"
+            )
+            browser.close()
+
+
+def test_legacy_preset_query_ignored(tmp_path):
+    """Legacy preset query param should no longer hydrate UI state."""
+    store = ResultsStore(tmp_path / "runs")
+
+    run1_id = store.save_run(make_run_summary("baseline"), session_name="test-session", run_name="baseline")
+    run2_id = store.save_run(make_run_summary("final"), session_name="test-session", run_name="final")
+
+    app = create_app(
+        results_dir=str(tmp_path / "runs"),
+        active_run_id=run1_id,
+        session_name="test-session",
+        run_name="baseline",
+    )
+
+    old_preset = json.dumps({
+        "activeRunId": run2_id,
+        "comparisonRuns": [{"runId": run1_id}, {"runId": run2_id}],
+        "search": "slow",
+    })
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(f"{url}?preset={urllib.parse.quote(old_preset)}")
+            page.wait_for_selector("#results-table")
+            expect(page.locator(".comparison-chip")).to_have_count(0)
+            search_val = page.input_value("#search-input")
+            assert search_val == ""
             browser.close()
 
 
