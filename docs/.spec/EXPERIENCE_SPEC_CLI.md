@@ -208,6 +208,38 @@ Scenario: Auto-run with filters
   Then only evaluations with dataset="testing" appear in UI
   And only those filtered evaluations auto-run
 
+Scenario: Open an existing run by run name
+  Given session "model-comparison" has a run named "baseline"
+  When the user runs `ezvals serve evals.py --session model-comparison --run-name baseline`
+  Then the UI opens with that existing run loaded as active
+  And rerun settings (path/dataset/labels/function filter) come from the saved run metadata
+
+Scenario: Pending run name when run does not exist
+  Given session "model-comparison" does not have a run named "next-attempt"
+  When the user runs `ezvals serve evals.py --session model-comparison --run-name next-attempt`
+  Then the UI starts normally from discovered evals
+  And the next run uses "next-attempt" as the pending run name
+
+Scenario: Start in comparison mode from CLI
+  Given session "model-comparison" has runs "baseline" and "improved"
+  When the user runs `ezvals serve evals.py --session model-comparison --compare-runs baseline,improved`
+  Then the UI starts in comparison mode with both runs preselected
+  And the active run is the first resolved compare run unless --run-name resolves to one of them
+
+Scenario: Start with search and filter presets
+  When the user runs `ezvals serve evals.py --search auth --annotation yes --has-error`
+  Then the UI opens with those filters and search already applied
+
+Scenario: compare-runs validation
+  When the user runs `ezvals serve evals.py --session my-session --compare-runs baseline`
+  Then CLI errors because at least two run names are required
+  And no server starts
+
+Scenario: compare-runs missing run name
+  When the user runs `ezvals serve evals.py --session my-session --compare-runs baseline,missing`
+  Then CLI errors because "missing" does not exist in that session
+  And no server starts
+
 Scenario: Load existing run JSON
   When the user runs `ezvals serve .ezvals/sessions/default/run_123.json`
   Then server starts and browser opens
@@ -345,5 +377,11 @@ Scenario: Concurrency set to zero
 | `--port` | int | 8000 | Server port |
 | `--session` | str | auto | Session name |
 | `--run-name` | str | auto | Run name |
+| `--compare-runs` | str | none | Comma-separated run names for startup comparison mode (2-4) |
+| `--search` | str | none | Initial search query |
+| `--has-error/--no-has-error` | bool | none | Initial error presence filter |
+| `--has-url/--no-has-url` | bool | none | Initial trace URL filter |
+| `--has-messages/--no-has-messages` | bool | none | Initial trace messages filter |
+| `--annotation` | any\|yes\|no | any | Initial annotation filter |
 | `--results-dir` | path | .ezvals/sessions | Results directory |
 | `--run` | flag | false | Auto-run all evals on startup |
