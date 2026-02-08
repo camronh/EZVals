@@ -6,9 +6,9 @@ import traceback
 import time
 import webbrowser
 import json
-import base64
 import urllib.request
 import urllib.error
+import urllib.parse
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from threading import Thread
@@ -45,9 +45,31 @@ def _find_available_port(start_port: int, max_attempts: int = 10) -> int:
     raise click.ClickException(f"No available ports found in range {start_port}-{start_port + max_attempts - 1}")
 
 
-def _encode_serve_preset(payload: Dict[str, Any]) -> str:
-    raw = json.dumps(payload, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
-    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+def _build_serve_query_params(
+    active_run_id: Optional[str],
+    comparison_run_ids: List[str],
+    search: Optional[str],
+    has_error: Optional[bool],
+    has_url: Optional[bool],
+    has_messages: Optional[bool],
+    annotation: str,
+) -> List[tuple[str, str]]:
+    params: List[tuple[str, str]] = []
+    if active_run_id:
+        params.append(("run_id", active_run_id))
+    for run_id in comparison_run_ids:
+        params.append(("compare_run_id", run_id))
+    if search:
+        params.append(("search", search))
+    if has_error is not None:
+        params.append(("has_error", "1" if has_error else "0"))
+    if has_url is not None:
+        params.append(("has_url", "1" if has_url else "0"))
+    if has_messages is not None:
+        params.append(("has_messages", "1" if has_messages else "0"))
+    if annotation != "any":
+        params.append(("annotation", annotation))
+    return params
 
 
 def _resolve_run_name_in_session(
@@ -262,21 +284,16 @@ def serve_cmd(
     if path_obj.suffix == ".json" and path_obj.is_file():
         if run_name or compare_runs:
             raise click.ClickException("--run-name and --compare-runs are only supported when PATH is an eval path.")
-        preset_payload: Dict[str, Any] = {}
-        if search:
-            preset_payload["search"] = search
-        if has_error is not None or has_url is not None or has_messages is not None or annotation != "any":
-            preset_payload["filters"] = {
-                "valueRules": [],
-                "passedRules": [],
-                "annotation": annotation,
-                "selectedDatasets": {"include": [], "exclude": []},
-                "selectedLabels": {"include": [], "exclude": []},
-                "hasUrl": has_url,
-                "hasMessages": has_messages,
-                "hasError": has_error,
-            }
-        _serve_from_json(json_path=path, results_dir=results_dir, port=port, preset_payload=preset_payload or None)
+        query_params = _build_serve_query_params(
+            active_run_id=None,
+            comparison_run_ids=[],
+            search=search,
+            has_error=has_error,
+            has_url=has_url,
+            has_messages=has_messages,
+            annotation=annotation,
+        )
+        _serve_from_json(json_path=path, results_dir=results_dir, port=port, query_params=query_params)
         return
 
     labels = list(label) if label else None
@@ -328,27 +345,15 @@ def serve_cmd(
         serve_run_name = active_run_data.get("run_name")
         serve_session_name = active_run_data.get("session_name") or session
 
-    preset_payload: Dict[str, Any] = {}
-    if search:
-        preset_payload["search"] = search
-    if has_error is not None or has_url is not None or has_messages is not None or annotation != "any":
-        preset_payload["filters"] = {
-            "valueRules": [],
-            "passedRules": [],
-            "annotation": annotation,
-            "selectedDatasets": {"include": [], "exclude": []},
-            "selectedLabels": {"include": [], "exclude": []},
-            "hasUrl": has_url,
-            "hasMessages": has_messages,
-            "hasError": has_error,
-        }
-    if resolved_compare_runs:
-        preset_payload["comparisonRuns"] = [
-            {"runId": r["runId"], "runName": r["runName"]}
-            for r in resolved_compare_runs
-        ]
-    if active_run_id:
-        preset_payload["activeRunId"] = active_run_id
+    query_params = _build_serve_query_params(
+        active_run_id=active_run_id,
+        comparison_run_ids=[r["runId"] for r in resolved_compare_runs],
+        search=search,
+        has_error=has_error,
+        has_url=has_url,
+        has_messages=has_messages,
+        annotation=annotation,
+    )
 
     _serve(
         path=serve_path,
@@ -360,7 +365,7 @@ def serve_cmd(
         session_name=serve_session_name,
         run_name=serve_run_name,
         active_run_id=active_run_id,
-        preset_payload=preset_payload or None,
+        query_params=query_params,
         auto_run=auto_run,
     )
 
@@ -557,7 +562,7 @@ def _serve(
     session_name: Optional[str] = None,
     run_name: Optional[str] = None,
     active_run_id: Optional[str] = None,
-    preset_payload: Optional[Dict[str, Any]] = None,
+    query_params: Optional[List[tuple[str, str]]] = None,
     auto_run: bool = False,
 ):
     """Serve a web UI to browse and run evaluations."""
@@ -607,8 +612,8 @@ def _serve(
         console.print(f"[yellow]Port {requested_port} in use → using {port}[/yellow]")
 
     url = f"http://127.0.0.1:{port}"
-    if preset_payload:
-        url = f"{url}?preset={_encode_serve_preset(preset_payload)}"
+    if query_params:
+        url = f"{url}?{urllib.parse.urlencode(query_params, doseq=True)}"
     console.print(f"\n[bold green]EZVals UI[/bold green] serving at: [bold blue]{url}[/bold blue]")
     if auto_run:
         console.print(f"[cyan]Auto-running {len(functions)} evaluation(s)...[/cyan]")
@@ -690,7 +695,7 @@ def _serve_from_json(
     json_path: str,
     results_dir: str,
     port: int,
-    preset_payload: Optional[Dict[str, Any]] = None,
+    query_params: Optional[List[tuple[str, str]]] = None,
 ):
     """Serve web UI loading an existing run JSON file."""
     try:
@@ -753,8 +758,8 @@ def _serve_from_json(
         console.print(f"[yellow]Port {requested_port} in use → using {port}[/yellow]")
 
     url = f"http://127.0.0.1:{port}"
-    if preset_payload:
-        url = f"{url}?preset={_encode_serve_preset(preset_payload)}"
+    if query_params:
+        url = f"{url}?{urllib.parse.urlencode(query_params, doseq=True)}"
     console.print(f"\n[bold green]EZVals UI[/bold green] serving at: [bold blue]{url}[/bold blue]")
     console.print(f"[cyan]Loaded run: {run_name} ({len(run_data.get('results', []))} results)[/cyan]")
     console.print("Press Esc to stop (or Ctrl+C)\n")

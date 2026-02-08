@@ -225,10 +225,12 @@ Scenario: Start in comparison mode from CLI
   When the user runs `ezvals serve evals.py --session model-comparison --compare-runs baseline,improved`
   Then the UI starts in comparison mode with both runs preselected
   And the active run is the first resolved compare run unless --run-name resolves to one of them
+  And the opened URL includes readable `compare_run_id` query params
 
 Scenario: Start with search and filter presets
   When the user runs `ezvals serve evals.py --search auth --annotation yes --has-error`
   Then the UI opens with those filters and search already applied
+  And the opened URL includes readable query params (`search`, `annotation`, `has_error`)
 
 Scenario: compare-runs validation
   When the user runs `ezvals serve evals.py --session my-session --compare-runs baseline`

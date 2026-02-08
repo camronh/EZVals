@@ -6,7 +6,7 @@ from pathlib import Path
 
 import click
 
-from ezvals.cli import cli, _resolve_run_name_in_session, _parse_compare_run_names
+from ezvals.cli import cli, _resolve_run_name_in_session, _parse_compare_run_names, _build_serve_query_params
 from ezvals.storage import ResultsStore
 
 
@@ -426,6 +426,25 @@ def test_failing():
             _parse_compare_run_names("a,b,c,d,e")
         assert _parse_compare_run_names("a,b") == ["a", "b"]
 
+    def test_build_serve_query_params(self):
+        """serve query params are readable and explicit"""
+        params = _build_serve_query_params(
+            active_run_id="run123",
+            comparison_run_ids=["run123", "run456"],
+            search="slow",
+            has_error=True,
+            has_url=False,
+            has_messages=None,
+            annotation="yes",
+        )
+        assert ("run_id", "run123") in params
+        assert params.count(("compare_run_id", "run123")) == 1
+        assert params.count(("compare_run_id", "run456")) == 1
+        assert ("search", "slow") in params
+        assert ("has_error", "1") in params
+        assert ("has_url", "0") in params
+        assert ("annotation", "yes") in params
+
     def test_resolve_run_name_in_session(self):
         """run-name resolver finds exact run name within session"""
         with self.runner.isolated_filesystem():
@@ -498,6 +517,7 @@ def test_failing():
             assert captured["dataset"] == "qa"
             assert captured["labels"] == ["prod"]
             assert captured["function_name"] == "target_eval"
+            assert ("run_id", run_id) in captured["query_params"]
 
     def test_serve_run_name_missing_sets_pending_name(self, monkeypatch):
         """serve --run-name uses pending name when no saved run exists"""
@@ -517,6 +537,7 @@ def test_failing():
             assert result.exit_code == 0
             assert captured["active_run_id"] is None
             assert captured["run_name"] == "next-attempt"
+            assert captured["query_params"] == []
 
     def test_serve_compare_runs_requires_two_names(self):
         """serve --compare-runs validates minimum names"""
