@@ -4,6 +4,7 @@ import json
 
 from playwright.sync_api import sync_playwright, expect
 
+from ezvals.cli import _encode_serve_preset
 from ezvals.server import create_app
 from ezvals.storage import ResultsStore
 
@@ -253,6 +254,67 @@ def test_comparison_filters_or_logic(tmp_path):
             )
             assert filtered_correctness == ["100%", "100%"]
 
+            browser.close()
+
+
+def test_comparison_mode_from_launch_preset(tmp_path):
+    """Preset query should initialize comparison mode on first load."""
+    store = ResultsStore(tmp_path / "runs")
+
+    run1_id = store.save_run(make_run_summary("baseline"), session_name="test-session", run_name="baseline")
+    run2_id = store.save_run(make_run_summary("final"), session_name="test-session", run_name="final")
+
+    app = create_app(
+        results_dir=str(tmp_path / "runs"),
+        active_run_id=run1_id,
+        session_name="test-session",
+        run_name="baseline",
+    )
+
+    token = _encode_serve_preset({
+        "activeRunId": run1_id,
+        "comparisonRuns": [
+            {"runId": run1_id, "runName": "baseline"},
+            {"runId": run2_id, "runName": "final"},
+        ],
+    })
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(f"{url}?preset={token}")
+            page.wait_for_selector("#results-table")
+            page.wait_for_selector(".comparison-chips")
+            expect(page.locator(".comparison-chip")).to_have_count(2)
+            browser.close()
+
+
+def test_launch_preset_active_run_activation(tmp_path):
+    """Preset active run should switch the UI to that run on startup."""
+    store = ResultsStore(tmp_path / "runs")
+
+    run1_id = store.save_run(make_run_summary("baseline"), session_name="test-session", run_name="baseline")
+    run2_id = store.save_run(make_run_summary("final"), session_name="test-session", run_name="final")
+
+    app = create_app(
+        results_dir=str(tmp_path / "runs"),
+        active_run_id=run1_id,
+        session_name="test-session",
+        run_name="baseline",
+    )
+
+    token = _encode_serve_preset({"activeRunId": run2_id})
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(f"{url}?preset={token}")
+            page.wait_for_selector("#results-table")
+            page.wait_for_function(
+                f"() => document.querySelector('#results-table')?.getAttribute('data-run-id') === '{run2_id}'"
+            )
             browser.close()
 
 

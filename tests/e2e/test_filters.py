@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 from playwright.sync_api import sync_playwright, expect
 
+from ezvals.cli import _encode_serve_preset
 from ezvals.server import create_app
 from ezvals.storage import ResultsStore
 
@@ -137,4 +138,37 @@ def test_advanced_filters_ui(tmp_path):
             # accuracy has both value and passed (in this fixture) -> passed visible at least
             page.select_option("#key-select", value="accuracy")
             expect(page.locator("#passed-section")).to_be_visible()
+            browser.close()
+
+
+def test_filters_from_launch_preset(tmp_path):
+    """Preset query should apply search + filters before first render."""
+    store = ResultsStore(tmp_path / "runs")
+    run_id = store.save_run(make_summary_with_scores(), "2024-01-01T00-00-00Z")
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+    token = _encode_serve_preset({
+        "search": "f3",
+        "filters": {
+            "valueRules": [],
+            "passedRules": [],
+            "annotation": "yes",
+            "selectedDatasets": {"include": [], "exclude": []},
+            "selectedLabels": {"include": [], "exclude": []},
+            "hasUrl": None,
+            "hasMessages": None,
+            "hasError": None,
+        },
+    })
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(f"{url}?preset={token}")
+            page.wait_for_selector("#results-table")
+
+            rows = page.locator("tbody tr[data-row='main']")
+            expect(rows).to_have_count(1)
+            expect(rows.first).to_contain_text("f3")
             browser.close()

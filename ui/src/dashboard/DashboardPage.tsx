@@ -93,6 +93,12 @@ type ComparisonRow = {
 
 type ResizeState = { colKey: string; startX: number; startWidth: number }
 type SettingsFormState = { concurrency: string; results_dir: string; timeout: string }
+type LaunchPreset = {
+  activeRunId?: string
+  search?: string
+  filters?: FilterState
+  comparisonRuns?: ComparisonRun[]
+}
 
 function hasRunningResults(data: RunSummary | null) {
   return (data?.results || []).some((r) => ['pending', 'running'].includes(r.result?.status))
@@ -203,6 +209,7 @@ export default function DashboardPage() {
   const [hasRunBefore, setHasRunBefore] = useState(false)
   const [animateStats, setAnimateStats] = useState(false)
   const [settingsForm, setSettingsForm] = useState<SettingsFormState>({ concurrency: '', results_dir: '', timeout: '' })
+  const [presetActiveRunId, setPresetActiveRunId] = useState<string | null>(null)
 
   const filtersToggleRef = useRef<HTMLButtonElement | null>(null)
   const filtersMenuRef = useRef<HTMLDivElement | null>(null)
@@ -319,15 +326,51 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const savedY = sessionStorage.getItem('ezvals:scrollY')
+    const params = new URLSearchParams(window.location.search)
+    const presetToken = params.get('preset')
+    if (presetToken) {
+      try {
+        const b64 = presetToken.replace(/-/g, '+').replace(/_/g, '/')
+        const pad = `${b64}${'='.repeat((4 - (b64.length % 4)) % 4)}`
+        const decoded = window.atob(pad)
+        const preset = JSON.parse(decoded) as LaunchPreset
+        if (typeof preset.search === 'string') setSearch(preset.search)
+        if (preset.filters) setFilters(preset.filters)
+        if (Array.isArray(preset.comparisonRuns)) setComparisonRuns(preset.comparisonRuns)
+        if (typeof preset.activeRunId === 'string' && preset.activeRunId) setPresetActiveRunId(preset.activeRunId)
+      } catch {
+        // ignore invalid preset payload
+      }
+    }
     if (savedY != null) {
       window.scrollTo(0, parseInt(savedY, 10))
       sessionStorage.removeItem('ezvals:scrollY')
     }
-    const params = new URLSearchParams(window.location.search)
-    if (params.has('scroll')) {
+    if (params.has('scroll') || params.has('preset')) {
       history.replaceState(null, '', window.location.pathname)
     }
-  }, [])
+  }, [setComparisonRuns, setFilters, setSearch])
+
+  useEffect(() => {
+    if (!presetActiveRunId || !data) return
+    if (data.run_id === presetActiveRunId) {
+      setPresetActiveRunId(null)
+      return
+    }
+    let active = true
+    async function activatePresetRun() {
+      try {
+        const resp = await fetch(`/api/runs/${encodeURIComponent(presetActiveRunId)}/activate`, { method: 'POST' })
+        if (resp.ok && active) await loadResults(true)
+      } catch {
+        // ignore activation failures
+      } finally {
+        if (active) setPresetActiveRunId(null)
+      }
+    }
+    activatePresetRun()
+    return () => { active = false }
+  }, [data, loadResults, presetActiveRunId])
 
   useEffect(() => {
     if (!filtersOpen && !columnsOpen && !exportOpen && !runMenuOpen) return
