@@ -5,6 +5,8 @@ description: "UAT a feature branch and merge it into dev. Use when: ready to mer
 
 **Arguments:** The feature branch name to UAT and merge into dev.
 
+Assumes tests already passed during `/prepare-merge`. No need to re-run pytest.
+
 Follow these steps in order:
 
 ## 1. Analyze Branch Changes
@@ -68,17 +70,35 @@ Summarize:
 - Any issues or spec deviations found
 - Screenshots if UI was tested
 
-## 6. Merge Into Dev (If UAT Passes)
+## 6. Check for Merge Conflicts
+
+Before merging, do a dry run to detect conflicts:
 
 ```bash
 git checkout dev
-git merge <branch>
+git merge --no-commit --no-ff <branch>
 ```
 
-Report the merge result.
+- If conflicts: run `git merge --abort`, report which files conflict, and STOP. The user needs to rebase the feature branch first, then re-run `/merge`.
+- If clean: run `git merge --abort` to reset, then proceed to the actual merge.
+
+## 7. Squash Merge Into Dev (If UAT Passes and No Conflicts)
+
+```bash
+git merge --squash <branch>
+git commit -m "<concise summary of the feature>"
+```
+
+Use a concise commit message in lowercase imperative mood (e.g. "add export feature", "fix context bug").
+
+Then delete the merged branch:
+
+```bash
+git branch -d <branch>
+```
 
 ## Error Handling
 
 - If UAT fails or something looks wrong: STOP, report findings, `git checkout dev`, do NOT merge
-- If merge conflicts occur: stop and ask for help
+- If merge conflicts detected: abort, report conflicting files, STOP
 - If worktree removal fails: stop and ask for help

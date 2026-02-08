@@ -40,7 +40,11 @@ Review if changes require updates to:
 
 When updating, write docs as if they're the current state - don't mention "updated" or "changed from".
 
-## 4. Summary
+## 4. Run Tests
+- Execute `uv run pytest`
+- If tests fail, fix them and re-run until all tests pass
+
+## 5. Summary
 Report:
 - What features/changes were found
 - What documentation was updated
