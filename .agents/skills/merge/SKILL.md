@@ -9,7 +9,27 @@ Assumes tests already passed during `/prepare-merge`. No need to re-run pytest.
 
 Follow these steps in order:
 
-## 1. Analyze Branch Changes
+## 1. Handle Worktree (If Applicable)
+
+Run `git worktree list` to check if the branch is checked out in a worktree.
+
+If it is (e.g. at `~/.claude-worktrees/<repo>/<branch>`):
+- Remove it: `git worktree remove <worktree-path>`
+- The branch is now free to check out normally
+
+## 2. Checkout and Rebase onto Dev
+
+The feature branch may be out of date. Rebase onto dev first so UAT runs against the current state and the diff only reflects the feature's actual changes.
+
+```bash
+git checkout <branch>
+git rebase dev
+uv sync
+```
+
+If the rebase has conflicts, abort (`git rebase --abort`), report the conflicts, and STOP. The user resolves manually then re-runs `/merge`.
+
+## 3. Analyze Branch Changes
 
 - Run `git diff dev..<branch> --stat` to see changed files
 - Run `git log dev..<branch> --oneline` to see commits
@@ -19,21 +39,6 @@ Follow these steps in order:
   - **UI**: `ezvals/server/`, `ezvals/templates/`, `ezvals/static/`, `frontend/`
   - **Python API**: `ezvals/decorators.py`, `ezvals/context.py`, `ezvals/storage.py`
   - **Docs/Tests only**: `docs/`, `tests/`, `README.md`
-
-## 2. Handle Worktree (If Applicable)
-
-Run `git worktree list` to check if the branch is checked out in a worktree.
-
-If it is (e.g. at `~/.claude-worktrees/<repo>/<branch>`):
-- Remove it: `git worktree remove <worktree-path>`
-- The branch is now free to check out normally
-
-## 3. Checkout the Branch
-
-```bash
-git checkout <branch>
-uv sync
-```
 
 ## 4. UAT Based on What Changed
 
@@ -70,19 +75,7 @@ Summarize:
 - Any issues or spec deviations found
 - Screenshots if UI was tested
 
-## 6. Check for Merge Conflicts
-
-Before merging, do a dry run to detect conflicts:
-
-```bash
-git checkout dev
-git merge --no-commit --no-ff <branch>
-```
-
-- If conflicts: run `git merge --abort`, report which files conflict, and STOP. The user needs to rebase the feature branch first, then re-run `/merge`.
-- If clean: run `git merge --abort` to reset, then proceed to the actual merge.
-
-## 7. Squash Merge Into Dev (If UAT Passes and No Conflicts)
+## 6. Squash Merge Into Dev (If UAT Passes)
 
 ```bash
 git merge --squash <branch>
@@ -100,5 +93,5 @@ git branch -d <branch>
 ## Error Handling
 
 - If UAT fails or something looks wrong: STOP, report findings, `git checkout dev`, do NOT merge
-- If merge conflicts detected: abort, report conflicting files, STOP
+- If rebase conflicts: abort rebase, report conflicting files, STOP
 - If worktree removal fails: stop and ask for help
