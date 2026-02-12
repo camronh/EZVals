@@ -15,6 +15,8 @@ description: "All notable changes to EZVals"
 - Fixed: Run dropdown now appears when a serve-started unsaved active run has another existing run in the same session, so headless `ezvals run` results are immediately switchable.
 - Fixed: Compare action now appears when there is at least one other run available in the current session, even if the active run is not yet saved.
 - Tests: Added E2E coverage for the unsaved-active + existing-session-run dropdown scenario to prevent regression.
+- Fixed: Expanded table rows no longer force all cells to top-align, preventing the visual jump when clicking rows with short content.
+- Tests: Added E2E coverage to verify row clicks keep cell vertical alignment stable for rows with non-overflowing content.
 
 ## 0.1.5 - 2026-02-07
 

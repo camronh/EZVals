@@ -23,8 +23,8 @@ def make_summary():
                 "dataset": "ds",
                 "labels": [],
                 "result": {
-                    "input": "i1",
-                    "output": "o1",
+                    "input": "long input " * 80,
+                    "output": "long output " * 80,
                     "reference": None,
                     "scores": None,
                     "error": None,
@@ -151,6 +151,53 @@ def test_detail_page_navigation(tmp_path):
             page.keyboard.press("Escape")
             page.wait_for_url("**/")
             page.wait_for_selector("#results-table")
+
+            browser.close()
+
+
+def test_row_click_no_expand_when_content_fits(tmp_path):
+    store = ResultsStore(tmp_path / "runs")
+    run_id = store.save_run(
+        {
+            "total_evaluations": 1,
+            "total_functions": 1,
+            "total_errors": 0,
+            "total_passed": 0,
+            "total_with_scores": 0,
+            "average_latency": 0.0,
+            "results": [
+                {
+                    "function": "short_row",
+                    "dataset": "ds",
+                    "labels": [],
+                    "result": {
+                        "input": "short",
+                        "output": "tiny",
+                        "reference": None,
+                        "scores": None,
+                        "error": None,
+                        "latency": 0.3,
+                        "metadata": None,
+                    },
+                }
+            ],
+        },
+        "2024-01-01T00-00-00Z",
+    )
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page(viewport={"width": 2400, "height": 900})
+            page.goto(url)
+            page.wait_for_selector("#results-table")
+
+            row = page.locator("tbody tr[data-row='main']").first
+            input_cell = row.locator("td[data-col='input']")
+            assert input_cell.evaluate("el => window.getComputedStyle(el).verticalAlign") == "middle"
+            row.click()
+            assert input_cell.evaluate("el => window.getComputedStyle(el).verticalAlign") == "middle"
 
             browser.close()
 
