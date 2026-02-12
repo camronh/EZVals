@@ -806,6 +806,21 @@ export default function DashboardPage() {
     })
   }, [setComparisonRuns])
 
+  const handleMoveComparison = useCallback((runId: string, direction: 'up' | 'down') => {
+    setComparisonRuns((prev) => {
+      const existing = normalizeComparisonRuns(prev)
+      const currentIndex = existing.findIndex((run) => run.runId === runId)
+      if (currentIndex === -1) return prev
+      const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
+      if (targetIndex < 0 || targetIndex >= existing.length) return prev
+      const next = [...existing]
+      const temp = next[currentIndex]
+      next[currentIndex] = next[targetIndex]
+      next[targetIndex] = temp
+      return next.map((run) => ({ runId: run.runId, runName: run.runName }))
+    })
+  }, [setComparisonRuns])
+
   useEffect(() => {
     if (normalizedComparisonRuns.length <= 1) {
       if (comparisonRuns.length) setComparisonRuns([])
@@ -1112,6 +1127,7 @@ export default function DashboardPage() {
           onAddCompareToggle={() => setCompareDropdownOpen((prev) => !prev)}
           onAddMoreCompareToggle={() => setAddCompareOpen((prev) => !prev)}
           onRemoveComparison={handleRemoveComparison}
+          onMoveComparison={handleMoveComparison}
           runDropdownExpandedRef={runDropdownExpandedRef}
           compareDropdownAnchorRef={compareDropdownAnchorRef}
           addCompareAnchorRef={addCompareAnchorRef}

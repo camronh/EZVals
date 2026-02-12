@@ -612,7 +612,16 @@ tr[data-row="main"] {
   transition: opacity 0.15s;
 }
 
+.comparison-chip .move-comparison {
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
 .comparison-chip:hover .remove-comparison {
+  opacity: 1;
+}
+
+.comparison-chip:hover .move-comparison {
   opacity: 1;
 }
 

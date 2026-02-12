@@ -26,6 +26,7 @@ type StatsExpandedProps = {
   onAddCompareToggle: () => void
   onAddMoreCompareToggle: () => void
   onRemoveComparison: (runId: string) => void
+  onMoveComparison: (runId: string, direction: 'up' | 'down') => void
   runDropdownExpandedRef: RefObject<HTMLButtonElement>
   compareDropdownAnchorRef: RefObject<HTMLButtonElement>
   addCompareAnchorRef: RefObject<HTMLButtonElement>
@@ -55,6 +56,7 @@ export default function StatsExpanded({
   onAddCompareToggle,
   onAddMoreCompareToggle,
   onRemoveComparison,
+  onMoveComparison,
   runDropdownExpandedRef,
   compareDropdownAnchorRef,
   addCompareAnchorRef,
@@ -89,8 +91,30 @@ export default function StatsExpanded({
                   style={{ background: `${run.color}20`, border: `1px solid ${run.color}`, color: run.color }}
                 >
                   <span className="w-2 h-2 rounded-full" style={{ background: run.color }}></span>
-                  <span className="truncate max-w-[120px]">{run.runName}</span>
+                  <span className="comparison-chip-name truncate max-w-[120px]">{run.runName}</span>
                   <span className="text-zinc-500">({testCount})</span>
+                  {idx > 0 ? (
+                    <button
+                      className="move-comparison ml-1 hover:text-white text-[12px] leading-none"
+                      data-run-id={run.runId}
+                      data-direction="up"
+                      onClick={() => onMoveComparison(run.runId, 'up')}
+                      title="Move up"
+                    >
+                      <span aria-hidden="true">&uarr;</span>
+                    </button>
+                  ) : null}
+                  {idx < normalizedComparisonRuns.length - 1 ? (
+                    <button
+                      className="move-comparison hover:text-white text-[12px] leading-none"
+                      data-run-id={run.runId}
+                      data-direction="down"
+                      onClick={() => onMoveComparison(run.runId, 'down')}
+                      title="Move down"
+                    >
+                      <span aria-hidden="true">&darr;</span>
+                    </button>
+                  ) : null}
                   {idx !== 0 ? (
                     <button
                       className="remove-comparison ml-1 hover:text-white text-[14px] leading-none"

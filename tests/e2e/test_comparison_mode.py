@@ -257,6 +257,55 @@ def test_comparison_filters_or_logic(tmp_path):
             browser.close()
 
 
+def test_reorder_comparison_runs_from_chip_controls(tmp_path):
+    """Chip up/down controls should reorder compare runs without leaving comparison mode."""
+    store = ResultsStore(tmp_path / "runs")
+
+    run1_id = store.save_run(make_run_summary("baseline"), session_name="test-session", run_name="baseline")
+    run2_id = store.save_run(make_run_summary("candidate"), session_name="test-session", run_name="candidate")
+    run3_id = store.save_run(make_run_summary("final"), session_name="test-session", run_name="final")
+
+    app = create_app(
+        results_dir=str(tmp_path / "runs"),
+        active_run_id=run1_id,
+        session_name="test-session",
+        run_name="baseline",
+    )
+
+    saved_runs = [
+        {"runId": run1_id, "runName": "baseline", "color": "#3b82f6"},
+        {"runId": run2_id, "runName": "candidate", "color": "#f97316"},
+        {"runId": run3_id, "runName": "final", "color": "#22c55e"},
+    ]
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.add_init_script(
+                f"sessionStorage.setItem('ezvals:comparisonRuns', JSON.stringify({json.dumps(saved_runs)}));"
+            )
+            page.goto(url)
+            page.wait_for_selector("#results-table")
+            page.wait_for_selector(".comparison-chips")
+
+            def chip_names():
+                return page.evaluate(
+                    """() => Array.from(document.querySelectorAll('.comparison-chip .comparison-chip-name'))
+                        .map((el) => el.textContent.trim())"""
+                )
+
+            assert chip_names() == ["baseline", "candidate", "final"]
+
+            page.click(f".move-comparison[data-run-id='{run3_id}'][data-direction='up']")
+            assert chip_names() == ["baseline", "final", "candidate"]
+
+            page.click(f".move-comparison[data-run-id='{run3_id}'][data-direction='up']")
+            assert chip_names() == ["final", "baseline", "candidate"]
+
+            browser.close()
+
+
 def test_comparison_mode_from_query_params(tmp_path):
     """Readable query params should initialize comparison mode on first load."""
     store = ResultsStore(tmp_path / "runs")

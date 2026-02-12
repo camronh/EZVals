@@ -630,6 +630,13 @@ Scenario: Left panel in comparison mode
   And average latency is NOT shown (moved to chart)
   And test count is NOT shown (embedded in chips)
 
+Scenario: Reorder compared runs
+  Given comparison mode is active with 2+ runs
+  When the user clicks up/down controls on a run chip
+  Then the chip order updates immediately without exiting comparison mode
+  And chart bars and comparison table columns follow the new run order
+  And the first chip remains the primary run (cannot be removed)
+
 Scenario: Chart in comparison mode
   Given comparison mode is active
   Then the chart shows:
