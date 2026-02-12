@@ -10,6 +10,8 @@ description: "All notable changes to EZVals"
 - Added: Up/down controls on comparison chips so runs can be reordered directly in compare mode without exiting.
 - Changed: Comparison chip order now immediately drives comparison chart bar order and comparison table column order.
 - Tests: Added E2E coverage for reordering comparison runs from chip controls.
+- Fixed: Detail view now uses viewport-aware defaults for input/output split, sidebar width, and reference panel height so first-time users do not start with broken proportions.
+- Tests: Added E2E coverage to verify fresh-session detail layout keeps sidebar width and reference panel height within sane viewport-relative bounds.
 
 ## 0.1.5 - 2026-02-07
 

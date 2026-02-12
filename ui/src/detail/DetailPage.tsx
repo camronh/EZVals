@@ -5,6 +5,7 @@ import { getResultKey, normalizeComparisonRuns } from '../dashboard/utils'
 
 const DETAIL_BODY_CLASS = 'min-h-screen bg-blue-50/40 font-sans text-zinc-800 dark:bg-neutral-950 dark:text-zinc-100'
 const COMPARISON_STORAGE_KEY = 'ezvals:comparisonRuns'
+const DETAIL_HEADER_HEIGHT = 120
 
 type ResultDetailPayload = {
   result: RunResultRow
@@ -421,9 +422,14 @@ export default function DetailPage() {
   const [annotationDraft, setAnnotationDraft] = useState('')
   const [annotationSaving, setAnnotationSaving] = useState(false)
   const [annotationError, setAnnotationError] = useState<string | null>(null)
-  const [inputWidth, setInputWidth] = useState(50)
-  const [refHeight, setRefHeight] = useState(150)
-  const [sidebarWidth, setSidebarWidth] = useState(320)
+  const [inputWidth, setInputWidth] = useState(() => (window.innerWidth < 1100 ? 55 : 50))
+  const [refHeight, setRefHeight] = useState(() => {
+    const availableHeight = Math.max(200, window.innerHeight - DETAIL_HEADER_HEIGHT)
+    return Math.max(100, Math.min(150, Math.floor(availableHeight * 0.3)))
+  })
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    return Math.max(220, Math.min(320, Math.floor(window.innerWidth * 0.28)))
+  })
   const resizingRef = useRef<ResizeState | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
 
@@ -459,6 +465,19 @@ export default function DetailPage() {
   useEffect(() => {
     fetchDetail()
   }, [fetchDetail])
+
+  useEffect(() => {
+    const handleViewportResize = () => {
+      const maxSidebar = Math.max(220, Math.min(600, Math.floor(window.innerWidth * 0.35)))
+      const availableHeight = Math.max(200, window.innerHeight - DETAIL_HEADER_HEIGHT)
+      const maxRefHeight = Math.max(100, Math.min(400, Math.floor(availableHeight * 0.35)))
+      setSidebarWidth((prev) => Math.min(prev, maxSidebar))
+      setRefHeight((prev) => Math.min(prev, maxRefHeight))
+    }
+    handleViewportResize()
+    window.addEventListener('resize', handleViewportResize)
+    return () => window.removeEventListener('resize', handleViewportResize)
+  }, [])
 
   useEffect(() => {
     if (!data || !isComparisonMode) {
@@ -544,7 +563,7 @@ export default function DetailPage() {
       const { type, startX, startY, startValue, container } = resizingRef.current
       if (type === 'input-width') {
         const dx = e.clientX - startX
-        const containerWidth = container.offsetWidth - sidebarWidth
+        const containerWidth = Math.max(1, container.offsetWidth - sidebarWidth)
         const newPct = Math.max(20, Math.min(80, startValue + (dx / containerWidth) * 100))
         setInputWidth(newPct)
       } else if (type === 'ref-height') {

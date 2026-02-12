@@ -404,6 +404,45 @@ class TestRerunButton:
                 browser.close()
 
 
+class TestDetailLayoutDefaults:
+    """Detail split defaults should stay usable in a fresh session."""
+
+    def test_fresh_session_uses_balanced_detail_split(self, tmp_path):
+        store = ResultsStore(tmp_path / "runs")
+        run_id = store.save_run(make_summary_with_messages(), "2024-01-01T00-00-00Z")
+        app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+        with run_server(app) as url:
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page(viewport={"width": 840, "height": 420})
+                page.add_init_script("localStorage.clear(); sessionStorage.clear();")
+                page.goto(f"{url}/runs/{run_id}/results/0")
+                page.wait_for_selector("#input-panel")
+                page.wait_for_selector("#ref-panel")
+
+                dims = page.evaluate(
+                    """
+                    () => {
+                      const sidebar = document.querySelector('#sidebar-panel')?.getBoundingClientRect();
+                      const ref = document.querySelector('#ref-panel')?.getBoundingClientRect();
+                      const main = document.querySelector('#main-panel')?.getBoundingClientRect();
+                      return {
+                        sidebarWidth: sidebar?.width || 0,
+                        refHeight: ref?.height || 0,
+                        mainHeight: main?.height || 0,
+                        viewportWidth: window.innerWidth,
+                      };
+                    }
+                    """
+                )
+
+                assert dims["sidebarWidth"] <= dims["viewportWidth"] * 0.35
+                assert dims["refHeight"] <= dims["mainHeight"] * 0.35
+
+                browser.close()
+
+
 class TestProgressBarLightMode:
     """Progress bar should use theme-aware CSS variables for light/dark modes."""
 
