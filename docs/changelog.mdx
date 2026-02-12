@@ -12,6 +12,9 @@ description: "All notable changes to EZVals"
 - Tests: Added E2E coverage for reordering comparison runs from chip controls.
 - Fixed: Detail view now uses viewport-aware defaults for input/output split, sidebar width, and reference panel height so first-time users do not start with broken proportions.
 - Tests: Added E2E coverage to verify fresh-session detail layout keeps sidebar width and reference panel height within sane viewport-relative bounds.
+- Fixed: Run dropdown now appears when a serve-started unsaved active run has another existing run in the same session, so headless `ezvals run` results are immediately switchable.
+- Fixed: Compare action now appears when there is at least one other run available in the current session, even if the active run is not yet saved.
+- Tests: Added E2E coverage for the unsaved-active + existing-session-run dropdown scenario to prevent regression.
 
 ## 0.1.5 - 2026-02-07
 

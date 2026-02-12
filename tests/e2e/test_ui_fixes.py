@@ -5,6 +5,7 @@ import time
 
 from playwright.sync_api import sync_playwright, expect
 
+from ezvals.discovery import EvalDiscovery
 from ezvals.server import create_app
 from ezvals.storage import ResultsStore
 
@@ -636,6 +637,47 @@ class TestRunDropdown:
                 # With only one run, dropdown should not appear
                 dropdown = page.locator(".stats-run-dropdown, .stats-run-dropdown-compact")
                 assert dropdown.count() == 0, "Run dropdown should not appear with single run"
+
+                browser.close()
+
+    def test_run_dropdown_shows_with_unsaved_active_and_one_existing_run(self, tmp_path):
+        store = ResultsStore(tmp_path / "runs")
+        summary = make_summary_with_error()
+        summary["session_name"] = "test-session"
+        summary["run_name"] = "headless-run"
+        store.save_run(summary, run_id="headless01", session_name="test-session", run_name="headless-run")
+
+        eval_path = tmp_path / "evals.py"
+        eval_path.write_text(
+            "from ezvals import eval, EvalContext\n\n"
+            "@eval\n"
+            "def test_discovered(ctx: EvalContext):\n"
+            "    ctx.output = 'ok'\n"
+        )
+        discovered = EvalDiscovery().discover(path=str(eval_path))
+
+        app = create_app(
+            results_dir=str(tmp_path / "runs"),
+            active_run_id="servefresh",
+            path=str(eval_path),
+            discovered_functions=discovered,
+            session_name="test-session",
+            run_name="fresh-serve-run",
+        )
+
+        with run_server(app) as url:
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page()
+                page.goto(url)
+                page.wait_for_selector("#results-table")
+                time.sleep(1)
+                page.reload()
+                page.wait_for_selector("#results-table")
+                time.sleep(0.5)
+
+                dropdown = page.locator(".stats-run-dropdown, .stats-run-dropdown-compact")
+                assert dropdown.count() > 0, "Run dropdown should appear when one existing session run can be switched to"
 
                 browser.close()
 

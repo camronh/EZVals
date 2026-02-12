@@ -64,6 +64,9 @@ export default function StatsExpanded({
 }: StatsExpandedProps) {
   const inComparison = isComparisonMode
   const chips = inComparison ? [] : displayChips
+  const currentInSessionRuns = sessionRuns.some((run) => run.run_id === stats.runId)
+  const canSwitchRuns = sessionRuns.length > 0 && (sessionRuns.length + (currentInSessionRuns ? 0 : 1)) > 1
+  const hasOtherSessionRuns = sessionRuns.some((run) => run.run_id !== stats.runId)
 
   let bars: ReactNode[] = []
   let labels: ReactNode[] = []
@@ -164,7 +167,7 @@ export default function StatsExpanded({
                   onBlur={() => setEditingRunName(false)}
                   autoFocus
                 />
-              ) : sessionRuns.length > 1 ? (
+              ) : canSwitchRuns ? (
                 <button
                   ref={runDropdownExpandedRef}
                   id="run-dropdown-expanded"
@@ -197,7 +200,7 @@ export default function StatsExpanded({
               </button>
             </div>
           ) : null}
-          {sessionRuns.length > 1 && stats.runName ? (
+          {hasOtherSessionRuns && stats.runName ? (
             <div className="stats-info-row">
               <span className="stats-info-label"></span>
               <button
