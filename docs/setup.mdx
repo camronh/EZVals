@@ -1,0 +1,135 @@
+---
+title: Setup
+description: Install EZVals and configure your project
+---
+
+## Install the Skill
+
+The fastest way to get started—install the EZVals skill for your coding agent:
+
+```bash
+npx skills add camronh/evals-skill
+```
+
+This teaches your agent how to write evals, choose grading strategies, and analyze results. See the [Agent Skill guide](/guides/agent-skill) for global install, version management, and other options.
+
+<Accordion title="Alternative: install from the ezvals CLI">
+  If you already have EZVals installed, you can install the skill directly:
+
+  ```bash
+  ezvals skills add
+  ```
+
+  This installs the version-matched skill from your local package.
+</Accordion>
+
+## Install the Library
+
+If you want to install EZVals directly (or your agent hasn't done it yet):
+
+<CodeGroup>
+
+```bash uv
+uv add ezvals --dev
+```
+
+```bash pip
+pip install ezvals
+```
+
+```bash poetry
+poetry add ezvals --group dev
+```
+
+</CodeGroup>
+
+## How It Works
+
+<Steps>
+  <Step title="Decorate">
+    Use [`@eval`](/core-concepts/decorators) to define test cases with inputs, references, and datasets.
+
+    ```python
+    from ezvals import eval, EvalContext
+
+    @eval(input="What is 2+2?", reference="4")
+    async def test_math(ctx: EvalContext):
+        ctx.output = await my_llm(ctx.input)
+        assert ctx.output == ctx.reference
+    ```
+  </Step>
+  <Step title="Execute">
+    Your [target function](/core-concepts/eval-context) runs and populates an `EvalContext` with inputs, outputs, and metadata.
+  </Step>
+  <Step title="Score">
+    [Assertions and evaluators](/core-concepts/scoring) produce scores. Passing assertions score as `pass`, failures capture the assertion message.
+  </Step>
+  <Step title="Store">
+    Results save as JSON in your repo under `.ezvals/sessions/`. Every run is versioned and grouped by [session](/guides/sessions).
+  </Step>
+  <Step title="Analyze">
+    View, compare, annotate, and export from the [web dashboard](/guides/web-ui)—or let your agent parse the JSON directly.
+  </Step>
+</Steps>
+
+## Run Evals
+
+### Web UI
+
+```bash
+ezvals serve evals.py
+```
+
+Opens a local dashboard at `http://127.0.0.1:8000` where you can run, filter, compare, annotate, and export results.
+
+### CLI
+
+```bash
+ezvals run evals.py
+```
+
+Compact output for agents. Results save to `.ezvals/` and can be analyzed programmatically.
+
+See the [CLI Reference](/api-reference/cli) for filtering, sessions, concurrency, and other options.
+
+## Project Structure
+
+After running evals, your project looks like:
+
+```
+your-project/
+├── evals.py                # Your eval functions
+├── ezvals.json             # Optional config
+└── .ezvals/
+    └── sessions/
+        └── default/
+            └── cool-cloud_a1b2c3d4.json
+```
+
+## Configuration
+
+Create `ezvals.json` in your project root to set defaults:
+
+```json
+{
+  "concurrency": 4,
+  "results_dir": ".ezvals/runs"
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Decorators" icon="at" href="/core-concepts/decorators">
+    `@eval` parameters and patterns
+  </Card>
+  <Card title="Scoring" icon="chart-simple" href="/core-concepts/scoring">
+    Assertions, custom scores, and evaluators
+  </Card>
+  <Card title="Patterns" icon="diagram-project" href="/guides/patterns">
+    Common evaluation patterns
+  </Card>
+  <Card title="RAG Agent Example" icon="code" href="/examples/rag-agent">
+    Full RAG agent evaluation walkthrough
+  </Card>
+</CardGroup>
