@@ -175,7 +175,13 @@ Errors: 1
 Scenario: Start web UI
   When the user runs `ezvals serve evals/`
   Then server starts at http://127.0.0.1:8000
-  And browser opens automatically
+  And browser opens automatically by default
+  And evaluations are discovered but NOT auto-run
+
+Scenario: Start web UI without opening browser
+  When the user runs `ezvals serve evals/ --no-open`
+  Then server starts at http://127.0.0.1:8000
+  And browser does not open automatically
   And evaluations are discovered but NOT auto-run
 
 Scenario: Session auto-generation (serve command)
@@ -199,7 +205,7 @@ Scenario: Filter in UI
 
 Scenario: Auto-run evaluations on startup
   When the user runs `ezvals serve evals/ --run`
-  Then server starts and browser opens
+  Then server starts and browser opens by default
   And evaluations automatically start running (same as clicking Run)
   And results stream in real-time
 
@@ -244,7 +250,7 @@ Scenario: compare-runs missing run name
 
 Scenario: Load existing run JSON
   When the user runs `ezvals serve .ezvals/sessions/default/run_123.json`
-  Then server starts and browser opens
+  Then server starts and browser opens by default
   And the UI displays results from that run
   And if source eval path exists, rerun is enabled
   And if source eval path is missing, UI shows "view-only mode" warning
@@ -387,3 +393,4 @@ Scenario: Concurrency set to zero
 | `--annotation` | any\|yes\|no | any | Initial annotation filter |
 | `--results-dir` | path | .ezvals/sessions | Results directory |
 | `--run` | flag | false | Auto-run all evals on startup |
+| `--open/--no-open` | bool | open | Open browser automatically on startup |

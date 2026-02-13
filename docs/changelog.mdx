@@ -3,6 +3,66 @@ title: "Changelog"
 description: "All notable changes to EZVals"
 ---
 
+## 0.1.6 - 2026-02-13
+
+- Fixed: Dataset and label chips now truncate long text with ellipsis and expose the full value via hover tooltip in results rows, comparison rows, and filter pills.
+- Fixed: Detail sidebar dataset/label chips now truncate long values so long names do not stretch metadata layout.
+- Changed: Example eval labels now include intentionally long three-word values so chip truncation behavior is easier to verify in the UI.
+- Tests: Added E2E coverage for long dataset/label chip truncation and tooltip behavior.
+- Fixed: Dashboard table column resizing now keeps the dragged edge aligned with cursor movement by stabilizing visible header widths at drag start.
+- Fixed: Resizing a column no longer unintentionally toggles table sorting on mouse release.
+- Tests: Added E2E coverage for column-resize drag behavior (edge tracking, width change, and no-sort-on-drag regression guard).
+- Added: Dashboard now includes a slim overflow menu action to reload the EZVals server from the UI when state gets stuck or eval files change.
+- Changed: In-app reload now performs a full `ezvals serve` process restart with the same serve arguments and preserves the active bound port.
+- Tests: Added unit and E2E coverage for restart re-exec flow, restart API signaling, and overflow-menu restart interaction.
+- Added: Detail view now auto-detects chat-style message arrays in `input`, `output`, and `reference`, rendering them in a chat-like "Pretty" mode with a "Raw" JSON toggle.
+- Changed: Message normalization/rendering now lives in a reusable UI component (`DataViewer`) used across detail panels and the trace messages drawer.
+- Changed: `examples/demo_trace_data.py::test_direct_trace_data` now includes message-array examples for `input`, `output`, and `reference`.
+- Tests: Added E2E coverage to verify pretty/raw message rendering and toggling across input/output/reference and the messages pane.
+- Changed: Default score-key naming now uses `pass`/`Pass` in runtime fallbacks, examples, tests, and docs where the previous default used `correctness`/`Correctness`.
+- Tests: Updated integration, unit, and E2E expectations to assert the `pass` default score key label.
+- Changed: PNG export now uses a compact options button with a cleaner, more ergonomic configuration panel.
+- Added: PNG export supports editable title, score color tuning, comparison run rename/reorder controls, and footer toggles for test count and average latency.
+- Fixed: PNG preview updates no longer flicker while typing configuration inputs.
+- Fixed: Comparison-mode PNG exports no longer overlap footer metrics with the run key legend.
+- Tests: Added E2E coverage for configurable PNG export options, comparison run reordering in export, and preview regeneration behavior.
+- Changed: Detail view metadata now renders as a readable key-value list instead of raw JSON, with human-friendly key labels.
+- Fixed: URL metadata values in detail view are now clickable links.
+- Tests: Added E2E coverage for metadata label formatting and clickable metadata URLs in detail view.
+- Added: Detail sidebar now shows a subtle "Tools" row with unique tool names detected from `trace_data.messages` tool calls.
+- Changed: Detail message parsing now supports common message-array tool-call schemas (`tool_calls`, `tool_use`, `tool_call`, and `function_call`) so tool usage is extracted more reliably.
+- Tests: Added E2E coverage for mixed message-array tool-call schemas to verify tool name extraction and deduplication in the detail sidebar.
+- Added: Run controls now include Pause/Resume in addition to Stop. Pause lets in-flight evaluations finish while holding queued work; Resume continues pending evaluations from the same run.
+- Added: `ezvals serve` now auto-builds frontend assets when `ui/src` is newer than `ezvals/static`, reducing stale-UI surprises during local development.
+- Changed: Running-state controls are now an icon-only connected cluster (pause/play + stop) with theme-matched styling.
+- Fixed: Quick pause/resume interactions no longer spawn overlapping runner loops; resume now unpauses the active run thread instead of starting a duplicate execution path.
+- Fixed: Stopped runs now remain immediate-cancel behavior, while paused runs continue polling until in-flight rows finish so statuses update without manual refresh.
+- Tests: Added integration coverage for pause/resume API behavior and E2E coverage for pause/resume UI and run control state transitions.
+- Added: `ezvals serve` now supports `--open/--no-open` to control whether the browser opens automatically on startup.
+- Changed: CLI and web UI docs now describe browser auto-open as default behavior and document `--no-open` for terminal-only startup flows.
+- Tests: Added CLI unit coverage to verify `--no-open` is exposed in help and propagated for both eval-path and JSON-path serve flows.
+- Changed: Run metadata on `EvalContext` (`ctx.run_id`, `ctx.session_name`, `ctx.run_name`, `ctx.eval_path`) is now read-only after context initialization.
+- Tests: Added unit coverage to verify run metadata fields on `EvalContext` cannot be reassigned.
+- Added: Dashboard now keeps shareable URL query state in sync for search, filters, compare selection, and table sort (`sort=<col>,<dir>,<type>`).
+- Changed: Canonical comparison links now use repeated `compare_run_id` params without `run_id` in compare mode.
+- Changed: Evals skill URL-sharing guidance now shows compare-mode links using `compare_run_id`-only format.
+- Fixed: Launch URLs shaped like `run_id=<id>&compare_run_id=<id>` now reliably hydrate two-run comparison mode.
+- Tests: Added E2E coverage for single-compare query hydration, live filter/search URL sync, and sort query hydration/sync.
+- Added: Evals skill `running.md` now documents the per-result `EvalResult` output schema (`results[*].result`) with concrete JSON examples.
+- Added: Evals skill includes parsing recipes for common agent tasks like finding failing evals, filtering by error text, and extracting/aggregating score values.
+- Added: Up/down controls on comparison chips so runs can be reordered directly in compare mode without exiting.
+- Changed: Comparison chip order now immediately drives comparison chart bar order and comparison table column order.
+- Tests: Added E2E coverage for reordering comparison runs from chip controls.
+- Fixed: Detail view now uses viewport-aware defaults for input/output split, sidebar width, and reference panel height so first-time users do not start with broken proportions.
+- Tests: Added E2E coverage to verify fresh-session detail layout keeps sidebar width and reference panel height within sane viewport-relative bounds.
+- Fixed: Run dropdown now appears when a serve-started unsaved active run has another existing run in the same session, so headless `ezvals run` results are immediately switchable.
+- Fixed: Compare action now appears when there is at least one other run available in the current session, even if the active run is not yet saved.
+- Tests: Added E2E coverage for the unsaved-active + existing-session-run dropdown scenario to prevent regression.
+- Fixed: Expanded table rows no longer force all cells to top-align, preventing the visual jump when clicking rows with short content.
+- Tests: Added E2E coverage to verify row clicks keep cell vertical alignment stable for rows with non-overflowing content.
+- Fixed: `ezvals serve` now reuses the requested port more reliably on rapid stop/start cycles by probing availability with socket reuse enabled.
+- Tests: Added unit coverage to prevent regressions in serve port probing during quick restarts.
+
 ## 0.1.5 - 2026-02-07
 
 - Added: PNG export option in the export dropdown. Opens a preview modal with Save and Copy buttons. Renders stats bars, metrics, and branding on a 1200x630 canvas at 2x resolution for crisp output.
@@ -220,7 +280,7 @@ description: "All notable changes to EZVals"
 - Added: Deep merge for metadata - when both file defaults and decorator specify metadata, they are merged with decorator values taking precedence on conflicts.
 - Added: Deep copy of mutable values (lists, dicts) in file defaults to prevent shared mutation between tests.
 - Added: Validation and warnings for unknown keys in `ezvals_defaults` dictionary.
-- Changed: `default_score_key` parameter default changed from "correctness" to None to enable file-level defaults, with "correctness" still applied as final fallback via EvalContext.
+- Changed: `default_score_key` parameter default changed from "pass" to None to enable file-level defaults, with "pass" still applied as final fallback via EvalContext.
 - Tests: Added 17 comprehensive tests for file defaults including inheritance, overrides, deep merge, mutable value copying, and default_score_key priority chain.
 
 ## 0.0.2a6 - 2025-11-23
@@ -281,10 +341,10 @@ description: "All notable changes to EZVals"
 - Added: `set_params()` helper for parametrized tests to set both input and metadata from params.
 - Added: Filters in the web UI for dataset, labels, and status with multi-select support and persistence.
 - Added: Reference column in results table to display expected/ground truth outputs.
-- Changed: Tests that complete without calling `add_score()` now automatically pass with a default "correctness" score, similar to pytest behavior.
-- Changed: `EvalContext` defaults to "correctness" as the default score key (previously required explicit key).
+- Changed: Tests that complete without calling `add_score()` now automatically pass with a default "pass" score, similar to pytest behavior.
+- Changed: `EvalContext` defaults to "pass" as the default score key (previously required explicit key).
 - Changed: Migrated from Poetry to uv for faster dependency management and installation.
-- Changed: `EvalContext.build()` auto-adds `{"key": "correctness", "passed": True}` when no scores are provided and no error occurred.
+- Changed: `EvalContext.build()` auto-adds `{"key": "pass", "passed": True}` when no scores are provided and no error occurred.
 - Changed: `EvalRunner` ensures all results without scores and without errors receive a default passing score.
 - Tests: Added comprehensive unit tests for EvalContext methods, context manager pattern, and decorator integration.
 - Tests: Added integration tests for context usage patterns, parametrize auto-mapping, and assertion preservation.

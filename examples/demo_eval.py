@@ -26,7 +26,7 @@ async def run_agent(prompt):
 # Includes reference
 # Includes a single score for multiple test cases
 # Track latency in target function
-@eval(dataset="customer_service", labels=["production"])
+@eval(dataset="customer_service", labels=["production observability hardening"])
 async def test_refund_requests():
     print("Testing refund request handling...")
     test_cases = [
@@ -44,7 +44,7 @@ async def test_refund_requests():
             **result, # Populate input, output, and latency
             reference=expected_keyword,
             scores={
-                "key": "correctness",
+                "key": "pass",
                 "passed": expected_keyword in result["output"].lower(),
                 "notes": f"Expected keyword '{expected_keyword}' not found in output" if expected_keyword not in result["output"].lower() else None
             },
@@ -67,7 +67,7 @@ async def test_refund_requests():
 # Includes metadata
 # includes a list of scores for multiple test cases
 # No reference
-@eval(labels=["test"])
+@eval(labels=["comprehensive regression validation"])
 def test_greeting_responses():
     print("Testing greeting responses...")
     greetings = ["Hello", "Hi there", "Good morning"]
@@ -83,7 +83,7 @@ def test_greeting_responses():
             output=response,
             scores=[
                 {"key": "quality", "value": 0.95},
-                {"key": "correctness", "passed": True}
+                {"key": "pass", "passed": True}
             ],
             metadata={"model": "gpt-4", "temperature": 0.7},
             latency=0.05,  # Override latency for testing
@@ -108,7 +108,7 @@ def test_single_case(ctx: EvalContext):
 
 
 # Test assertion handling - with failure
-@eval(labels=["assert"])
+@eval(labels=["assertion consistency verification"])
 def test_assertion_failure(ctx: EvalContext):
     ctx.input = "Hi there"
     ctx.output = "Hello! How can I help you today?"
@@ -120,7 +120,7 @@ def test_assertion_failure(ctx: EvalContext):
 
 
 # Test that passes with just assertions (no explicit add_score needed)
-@eval(labels=["assert"])
+@eval(labels=["assertion consistency verification"])
 def test_assertion_pass(ctx: EvalContext):
     ctx.input = "Hi there"
     ctx.output = "Hello! How can I help you today?"

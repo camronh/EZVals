@@ -15,7 +15,7 @@ from ezvals import eval, EvalContext
 # =============================================================================
 
 
-@eval(default_score_key="correctness")
+@eval(default_score_key="pass")
 async def test_conversation_tracking(ctx: EvalContext):
     """Track full conversation in trace_data"""
     ctx.input = "What's the weather like?"
@@ -38,7 +38,7 @@ async def test_conversation_tracking(ctx: EvalContext):
 # =============================================================================
 
 
-@eval(default_score_key="correctness")
+@eval(default_score_key="pass")
 async def test_messages_with_tools(ctx: EvalContext):
     """Store messages with tool calls (OpenAI format)"""
     ctx.input = "What's the weather in NYC?"
@@ -84,7 +84,7 @@ async def test_messages_with_tools(ctx: EvalContext):
 # =============================================================================
 
 
-@eval(default_score_key="correctness")
+@eval(default_score_key="pass")
 async def test_trace_url_linking(ctx: EvalContext):
     """Link to LangSmith, Langfuse, or other trace viewers"""
     ctx.input = "Analyze this document"
@@ -108,7 +108,7 @@ async def test_trace_url_linking(ctx: EvalContext):
 # =============================================================================
 
 
-@eval(default_score_key="correctness")
+@eval(default_score_key="pass")
 async def test_rag_with_trace_data(ctx: EvalContext):
     """Combine messages, trace_url, and custom trace properties"""
     ctx.input = "What is the company's refund policy?"
@@ -191,7 +191,7 @@ def test_universal_message_format(ctx: EvalContext):
 # =============================================================================
 
 
-@eval(default_score_key="correctness")
+@eval(default_score_key="pass")
 async def test_spread_agent_result(ctx: EvalContext):
     """Spread agent result dict into store()"""
     ctx.input = "Process this request"
@@ -225,13 +225,25 @@ async def test_spread_agent_result(ctx: EvalContext):
 
 @eval
 def test_direct_trace_data(ctx: EvalContext):
-    """Set trace_data fields via store()"""
+    """Set message-array input/output/reference and trace_data via store()"""
+    input_messages = [
+        {"role": "system", "content": "You are a concise support assistant."},
+        {"role": "user", "content": "What is your refund window?"},
+    ]
+    output_messages = [
+        {"role": "assistant", "content": "You can request a refund within 30 days."},
+    ]
+    reference_messages = [
+        {"role": "assistant", "content": "Refunds are accepted within 30 days of purchase."},
+    ]
+
     ctx.store(
-        input="Direct input",
-        output="Direct output",
+        input=input_messages,
+        output=output_messages,
+        reference=reference_messages,
         messages=[
-            {"role": "user", "content": "Direct input"},
-            {"role": "assistant", "content": "Direct output"},
+            {"role": "user", "content": input_messages[-1]["content"]},
+            {"role": "assistant", "content": output_messages[-1]["content"]},
         ],
         trace_url="https://trace.example.com/abc",
         trace_data={"custom_field": "any value"},
@@ -244,7 +256,7 @@ def test_direct_trace_data(ctx: EvalContext):
 # =============================================================================
 
 
-@eval(default_score_key="correctness")
+@eval(default_score_key="pass")
 async def test_anthropic_tool_use(ctx: EvalContext):
     """Track Anthropic-style tool_use and tool_result blocks"""
     ctx.input = "Search for recent news about AI"
@@ -296,7 +308,7 @@ async def test_anthropic_tool_use(ctx: EvalContext):
 # =============================================================================
 
 
-@eval(default_score_key="correctness")
+@eval(default_score_key="pass")
 async def test_multi_tool_agent(ctx: EvalContext):
     """Agent making multiple parallel tool calls"""
     ctx.input = "Compare weather in NYC and LA, then book the warmer one"

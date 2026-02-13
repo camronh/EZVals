@@ -23,13 +23,17 @@ def make_summary():
                 "dataset": "ds",
                 "labels": [],
                 "result": {
-                    "input": "i1",
-                    "output": "o1",
+                    "input": "long input " * 80,
+                    "output": "long output " * 80,
                     "reference": None,
                     "scores": None,
                     "error": None,
                     "latency": 1.2,
-                    "metadata": None,
+                    "metadata": {
+                        "model_name": "gpt-5-mini",
+                        "run_url": "https://example.com/runs/123",
+                        "token_count": 42,
+                    },
                 },
             },
             {
@@ -57,6 +61,57 @@ def make_summary():
                     "scores": None,
                     "error": None,
                     "latency": 0.1,
+                    "metadata": None,
+                },
+            },
+        ],
+    }
+
+
+def make_scored_summary():
+    return {
+        "total_evaluations": 2,
+        "total_functions": 2,
+        "total_errors": 0,
+        "total_passed": 2,
+        "total_with_scores": 2,
+        "average_latency": 0.42,
+        "score_chips": [
+            {"key": "accuracy", "type": "ratio", "passed": 2, "total": 2},
+            {"key": "coherence", "type": "avg", "avg": 0.78, "count": 2},
+        ],
+        "results": [
+            {
+                "function": "eval_a",
+                "dataset": "ds",
+                "labels": ["prod"],
+                "result": {
+                    "input": "q1",
+                    "output": "a1",
+                    "reference": None,
+                    "scores": [
+                        {"key": "accuracy", "value": True, "passed": True},
+                        {"key": "coherence", "value": 0.8, "passed": True},
+                    ],
+                    "error": None,
+                    "latency": 0.4,
+                    "metadata": None,
+                },
+            },
+            {
+                "function": "eval_b",
+                "dataset": "ds",
+                "labels": ["prod"],
+                "result": {
+                    "input": "q2",
+                    "output": "a2",
+                    "reference": None,
+                    "scores": [
+                        {"key": "accuracy", "value": True, "passed": True},
+                        {"key": "coherence", "value": 0.76, "passed": True},
+                    ],
+                    "error": None,
+                    "latency": 0.44,
                     "metadata": None,
                 },
             },
@@ -119,6 +174,50 @@ def test_row_expand_sort_and_toggle_columns(tmp_path):
             browser.close()
 
 
+def test_column_resize_changes_header_width(tmp_path):
+    store = ResultsStore(tmp_path / "runs")
+    run_id = store.save_run(make_summary(), "2024-01-01T00-00-00Z")
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page(viewport={"width": 1600, "height": 900})
+            page.goto(url)
+            page.wait_for_selector("#results-table")
+
+            input_header = page.locator("thead th[data-col='input']").first
+            start_box = input_header.bounding_box()
+            assert start_box is not None
+
+            resize_handle = input_header.locator(".col-resizer")
+            handle_box = resize_handle.bounding_box()
+            assert handle_box is not None
+
+            drag_x = handle_box["x"] + (handle_box["width"] / 2)
+            drag_y = handle_box["y"] + (handle_box["height"] / 2)
+            start_edge = start_box["x"] + start_box["width"]
+            page.mouse.move(drag_x, drag_y)
+            page.mouse.down()
+            page.mouse.move(drag_x + 5, drag_y)
+            page.wait_for_timeout(20)
+            mid_box = input_header.bounding_box()
+            assert mid_box is not None
+            mid_edge = mid_box["x"] + mid_box["width"]
+            assert abs((mid_edge - start_edge) - 5) < 25
+            page.mouse.move(drag_x + 120, drag_y)
+            page.mouse.up()
+
+            page.wait_for_timeout(50)
+            end_box = input_header.bounding_box()
+            assert end_box is not None
+            assert end_box["width"] > start_box["width"] + 20
+            assert page.evaluate("new URLSearchParams(window.location.search).getAll('sort').length") == 0
+            expect(input_header).to_have_attribute("aria-sort", "none")
+
+            browser.close()
+
+
 def test_detail_page_navigation(tmp_path):
     """Test navigating to detail page and keyboard navigation."""
     store = ResultsStore(tmp_path / "runs")
@@ -155,5 +254,196 @@ def test_detail_page_navigation(tmp_path):
             browser.close()
 
 
+def test_row_click_no_expand_when_content_fits(tmp_path):
+    store = ResultsStore(tmp_path / "runs")
+    run_id = store.save_run(
+        {
+            "total_evaluations": 1,
+            "total_functions": 1,
+            "total_errors": 0,
+            "total_passed": 0,
+            "total_with_scores": 0,
+            "average_latency": 0.0,
+            "results": [
+                {
+                    "function": "short_row",
+                    "dataset": "ds",
+                    "labels": [],
+                    "result": {
+                        "input": "short",
+                        "output": "tiny",
+                        "reference": None,
+                        "scores": None,
+                        "error": None,
+                        "latency": 0.3,
+                        "metadata": None,
+                    },
+                }
+            ],
+        },
+        "2024-01-01T00-00-00Z",
+    )
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page(viewport={"width": 2400, "height": 900})
+            page.goto(url)
+            page.wait_for_selector("#results-table")
+
+            row = page.locator("tbody tr[data-row='main']").first
+            input_cell = row.locator("td[data-col='input']")
+            assert input_cell.evaluate("el => window.getComputedStyle(el).verticalAlign") == "middle"
+            row.click()
+            assert input_cell.evaluate("el => window.getComputedStyle(el).verticalAlign") == "middle"
+
+            browser.close()
+
+
 # Sticky headers are intentionally disabled per product decision; related test removed.
 # Inline editing tests removed - editing now happens on detail page.
+
+
+def test_metadata_renders_as_key_values_with_links(tmp_path):
+    store = ResultsStore(tmp_path / "runs")
+    run_id = store.save_run(make_summary(), "2024-01-01T00-00-00Z")
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+
+            page.goto(f"{url}/runs/{run_id}/results/0")
+            metadata_header = page.locator("button:has-text('Metadata')")
+            expect(metadata_header).to_be_visible()
+            expect(page.locator("dt:has-text('Model Name')")).to_be_visible()
+            expect(page.locator("dt:has-text('Run Url')")).to_be_visible()
+            expect(page.locator("dt:has-text('Token Count')")).to_be_visible()
+
+            link = page.locator("a[href='https://example.com/runs/123']")
+            expect(link).to_be_visible()
+            expect(link).to_have_text("https://example.com/runs/123")
+
+            browser.close()
+
+
+def test_restart_endpoint_sets_restart_requested_flag(tmp_path):
+    store = ResultsStore(tmp_path / "runs")
+    run_id = store.save_run(make_summary(), "2024-01-01T00-00-00Z")
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+    assert app.state.restart_requested is False
+
+    with run_server(app) as url:
+        resp = requests.post(f"{url}/api/server/restart", timeout=5)
+        assert resp.status_code == 200
+        assert resp.json()["ok"] is True
+
+    assert app.state.restart_requested is True
+
+
+def test_reload_server_button_posts_restart_endpoint(tmp_path):
+    store = ResultsStore(tmp_path / "runs")
+    run_id = store.save_run(make_summary(), "2024-01-01T00-00-00Z")
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(url)
+            page.wait_for_selector("#results-table")
+
+            with page.expect_request("**/api/server/restart") as req:
+                page.locator("#more-menu-toggle").click()
+                page.wait_for_selector("#more-menu")
+                page.locator("#restart-server-btn").click()
+
+            assert req.value.method == "POST"
+            expect(page.locator("#restart-server-btn")).to_be_disabled()
+            assert app.state.restart_requested is True
+
+            browser.close()
+
+
+def test_png_export_modal_allows_configurable_preview(tmp_path):
+    store = ResultsStore(tmp_path / "runs")
+    run_a = store.save_run(
+        make_scored_summary(),
+        run_id="runaaaaa",
+        session_name="pngmodal",
+        run_name="alpha",
+    )
+    run_b = store.save_run(
+        make_scored_summary(),
+        run_id="runbbbbb",
+        session_name="pngmodal",
+        run_name="beta",
+    )
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_a)
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(f"{url}?compare_run_id={run_a}&compare_run_id={run_b}")
+            page.wait_for_selector("#results-table")
+
+            page.locator("#export-toggle").click()
+            page.locator("#export-png-btn").click()
+            page.wait_for_selector("#png-export-modal")
+            assert page.locator("#png-export-title-input").count() == 0, "config should be collapsed by default"
+            page.locator("#png-export-config-toggle").click()
+            page.wait_for_selector("#png-export-title-input")
+            expect(page.locator("#png-export-title-input")).to_have_value("pngmodal")
+            assert page.locator("#png-export-size-select").count() == 0, "size selector should not be shown"
+
+            page.wait_for_function(
+                """
+                () => {
+                    const modal = document.querySelector('#png-export-modal')
+                    if (!modal) return false
+                    return !!modal.querySelector("img[alt='Export preview']")
+                        || (modal.textContent || '').includes('Failed to generate preview')
+                }
+                """
+            )
+            assert page.locator("#png-export-modal", has_text="Failed to generate preview").count() == 0, "PNG preview should not fail"
+
+            preview = page.locator("#png-export-modal img[alt='Export preview']")
+            expect(preview).to_be_visible()
+            initial_src = preview.get_attribute("src")
+            assert initial_src and initial_src.startswith("data:image/png"), "PNG preview should render"
+            page.evaluate(
+                """
+                (value) => {
+                    window.__pngPreviewBefore = value
+                }
+                """,
+                initial_src,
+            )
+
+            page.locator("#png-export-title-input").fill("Executive scorecard")
+            page.locator("#png-export-score-good-color").fill("#2563eb")
+            page.locator(f"input[data-png-run-name='{run_a}']").fill("Control")
+            page.locator(f"input[data-png-run-color='{run_a}']").fill("#0ea5e9")
+            page.locator("#png-export-show-latency").uncheck()
+            page.locator(f"button[data-png-run-move-down='{run_a}']").click()
+            expect(page.locator("input[data-png-run-name]").first).to_have_value("beta")
+
+            page.wait_for_function(
+                """
+                () => {
+                    const img = document.querySelector('#png-export-modal img[alt="Export preview"]')
+                    return !!img
+                        && !!img.getAttribute('src')
+                        && img.getAttribute('src') !== window.__pngPreviewBefore
+                }
+                """
+            )
+
+            expect(page.locator("#png-export-modal")).not_to_contain_text("1600 x 840px")
+            expect(page.locator(f"input[data-png-run-name='{run_a}']")).to_have_value("Control")
+            browser.close()

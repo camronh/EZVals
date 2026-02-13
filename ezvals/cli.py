@@ -6,6 +6,7 @@ import traceback
 import time
 import webbrowser
 import json
+import subprocess
 import urllib.request
 import urllib.error
 import urllib.parse
@@ -30,6 +31,7 @@ def _is_port_available(port: int) -> bool:
     import socket
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         try:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             s.bind(("127.0.0.1", port))
             return True
         except OSError:
@@ -43,6 +45,70 @@ def _find_available_port(start_port: int, max_attempts: int = 10) -> int:
         if _is_port_available(port):
             return port
     raise click.ClickException(f"No available ports found in range {start_port}-{start_port + max_attempts - 1}")
+
+
+def _latest_mtime(path: Path) -> float:
+    """Return latest file mtime under path (or 0 if missing)."""
+    if not path.exists():
+        return 0.0
+    if path.is_file():
+        return path.stat().st_mtime
+    latest = path.stat().st_mtime
+    for child in path.rglob("*"):
+        if child.is_file():
+            child_mtime = child.stat().st_mtime
+            if child_mtime > latest:
+                latest = child_mtime
+    return latest
+
+
+def _ensure_ui_assets_fresh():
+    """Build UI assets when ui/src is newer than ezvals/static."""
+    repo_root = Path(__file__).resolve().parent.parent
+    ui_dir = repo_root / "ui"
+    if not (ui_dir / "package.json").exists():
+        return  # Installed package environment; no local UI source to build
+
+    static_dir = repo_root / "ezvals" / "static"
+    static_index = static_dir / "index.html"
+
+    source_latest = max(
+        _latest_mtime(ui_dir / "src"),
+        _latest_mtime(ui_dir / "index.html"),
+        _latest_mtime(ui_dir / "package.json"),
+    )
+    static_latest = _latest_mtime(static_dir)
+
+    if static_index.exists() and source_latest <= static_latest:
+        return
+
+    console.print("[cyan]Detected stale UI assets. Building frontend...[/cyan]")
+    try:
+        subprocess.run(["npm", "run", "build"], cwd=ui_dir, check=True)
+    except FileNotFoundError:
+        raise click.ClickException(
+            "npm is required to build UI assets but was not found. Install npm, then run: npm --prefix ui run build"
+        )
+    except subprocess.CalledProcessError as exc:
+        raise click.ClickException(
+            f"UI build failed (exit {exc.returncode}). Run `npm --prefix ui run build` and fix errors."
+        )
+
+
+def _restart_current_process(port: Optional[int] = None) -> None:
+    """Re-exec the current command, preserving args."""
+    argv = list(sys.argv)
+    if port is not None:
+        if "--port" in argv:
+            idx = argv.index("--port")
+            if idx + 1 < len(argv):
+                argv[idx + 1] = str(port)
+            else:
+                argv.append(str(port))
+        else:
+            argv.extend(["--port", str(port)])
+    console.print("[cyan]Restarting EZVals server...[/cyan]")
+    os.execvp(argv[0], argv)
 
 
 def _build_serve_query_params(
@@ -176,8 +242,6 @@ class ProgressReporter:
         if not self.failures:
             return
 
-        # console.print("\n")  # No extra newline needed as we added one above
-
         for i, failure in enumerate(self.failures, 1):
             func = failure["func"]
             result_dict = failure["result_dict"]
@@ -239,6 +303,7 @@ def cli():
 @click.option('--has-messages/--no-has-messages', default=None, help='Initial trace messages filter')
 @click.option('--annotation', type=click.Choice(['any', 'yes', 'no']), default='any', help='Initial annotation filter')
 @click.option('--run', 'auto_run', is_flag=True, help='Automatically run all evals on startup')
+@click.option('--open/--no-open', 'open_browser', default=True, help='Open the UI in your browser on startup')
 def serve_cmd(
     path: str,
     dataset: Optional[str],
@@ -254,6 +319,7 @@ def serve_cmd(
     has_messages: Optional[bool],
     annotation: str,
     auto_run: bool,
+    open_browser: bool = True,
 ):
     """Start the web UI to browse and run evaluations."""
     from pathlib import Path as PathLib
@@ -293,7 +359,15 @@ def serve_cmd(
             has_messages=has_messages,
             annotation=annotation,
         )
-        _serve_from_json(json_path=path, results_dir=results_dir, port=port, query_params=query_params)
+        restart_port = _serve_from_json(
+            json_path=path,
+            results_dir=results_dir,
+            port=port,
+            query_params=query_params,
+            open_browser=open_browser,
+        )
+        if restart_port is not None:
+            _restart_current_process(port=restart_port)
         return
 
     labels = list(label) if label else None
@@ -355,7 +429,7 @@ def serve_cmd(
         annotation=annotation,
     )
 
-    _serve(
+    restart_port = _serve(
         path=serve_path,
         dataset=serve_dataset,
         labels=serve_labels,
@@ -367,7 +441,10 @@ def serve_cmd(
         active_run_id=active_run_id,
         query_params=query_params,
         auto_run=auto_run,
+        open_browser=open_browser,
     )
+    if restart_port is not None:
+        _restart_current_process(port=restart_port)
 
 
 @cli.command('run')
@@ -552,6 +629,66 @@ def export_cmd(run_path: str, fmt: str, output: Optional[str]):
         console.print(f"Exported to {output}")
 
 
+def _wait_for_stop_signal(app, server_thread):
+    """Wait for Esc or Ctrl+C while preserving log output formatting."""
+    try:
+        if not sys.stdin.isatty():
+            while server_thread.is_alive():
+                if app.state.restart_requested:
+                    return "restart"
+                time.sleep(0.2)
+            return None
+
+        import termios
+        import select
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            mode = termios.tcgetattr(fd)
+            mode[3] = mode[3] & ~(termios.ICANON | termios.ECHO)
+            termios.tcsetattr(fd, termios.TCSADRAIN, mode)
+
+            while server_thread.is_alive():
+                if app.state.restart_requested:
+                    return "restart"
+                if select.select([sys.stdin], [], [], 0.5)[0]:
+                    ch = sys.stdin.read(1)
+                    if not ch:
+                        return None
+                    if ch == '\x1b' or ch == '\x03':
+                        return "stop"
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    except (ImportError, AttributeError, OSError):
+        try:
+            while server_thread.is_alive():
+                if app.state.restart_requested:
+                    return "restart"
+                ch = click.getchar()
+                if ch == '\x1b' or ch == '\x03':
+                    return "stop"
+        except (EOFError, KeyboardInterrupt):
+            return "stop"
+    return None
+
+
+def _run_server_until_stop(app, server, server_thread) -> bool:
+    """Run the server and wait for stop signal. Returns True if restart was requested."""
+    server_thread.start()
+    try:
+        signal = _wait_for_stop_signal(app, server_thread)
+        if signal in ("stop", "restart"):
+            console.print("\nStopping server...")
+            server.should_exit = True
+        restart_requested = signal == "restart"
+    except (KeyboardInterrupt, SystemExit):
+        console.print("\nStopping server...")
+        server.should_exit = True
+        restart_requested = False
+    server_thread.join()
+    return restart_requested
+
+
 def _serve(
     path: Optional[str],
     dataset: Optional[str],
@@ -564,7 +701,8 @@ def _serve(
     active_run_id: Optional[str] = None,
     query_params: Optional[List[tuple[str, str]]] = None,
     auto_run: bool = False,
-):
+    open_browser: bool = True,
+) -> Optional[int]:
     """Serve a web UI to browse and run evaluations."""
     try:
         from ezvals.server import create_app
@@ -574,6 +712,7 @@ def _serve(
         raise
 
     from ezvals.storage import ResultsStore, _generate_friendly_name
+    _ensure_ui_assets_fresh()
 
     # Discover functions (for display, not running)
     functions = []
@@ -621,13 +760,12 @@ def _serve(
         console.print(f"[cyan]Found {len(functions)} evaluation(s). Click Run to start.[/cyan]")
     console.print("Press Esc to stop (or Ctrl+C)\n")
 
-    Thread(target=lambda: (time.sleep(0.5), webbrowser.open(url)), daemon=True).start()
+    if open_browser:
+        Thread(target=lambda: (time.sleep(0.5), webbrowser.open(url)), daemon=True).start()
 
     config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning", access_log=False)
     server = uvicorn.Server(config)
-
     server_thread = Thread(target=server.run)
-    server_thread.start()
 
     # Auto-run evals if --run flag was passed
     if auto_run:
@@ -645,50 +783,8 @@ def _serve(
                 pass  # Server not ready, user can click Run manually
         Thread(target=do_auto_run, daemon=True).start()
 
-    def wait_for_stop_signal():
-        """Wait for Esc or Ctrl+C while preserving log output formatting."""
-        try:
-            if not sys.stdin.isatty():
-                server_thread.join()
-                return False
-
-            import termios
-            import select
-            fd = sys.stdin.fileno()
-            old_settings = termios.tcgetattr(fd)
-            try:
-                mode = termios.tcgetattr(fd)
-                mode[3] = mode[3] & ~(termios.ICANON | termios.ECHO)
-                termios.tcsetattr(fd, termios.TCSADRAIN, mode)
-
-                while server_thread.is_alive():
-                    if select.select([sys.stdin], [], [], 0.5)[0]:
-                        ch = sys.stdin.read(1)
-                        if not ch:
-                            return False
-                        if ch == '\x1b' or ch == '\x03':
-                            return True
-            finally:
-                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-        except (ImportError, AttributeError, OSError):
-            try:
-                while server_thread.is_alive():
-                    ch = click.getchar()
-                    if ch == '\x1b' or ch == '\x03':
-                        return True
-            except (EOFError, KeyboardInterrupt):
-                return True
-        return False
-
-    try:
-        if wait_for_stop_signal():
-            console.print("\nStopping server...")
-            server.should_exit = True
-    except (KeyboardInterrupt, SystemExit):
-        console.print("\nStopping server...")
-        server.should_exit = True
-
-    server_thread.join()
+    restart_requested = _run_server_until_stop(app, server, server_thread)
+    return port if restart_requested else None
 
 
 def _serve_from_json(
@@ -696,7 +792,8 @@ def _serve_from_json(
     results_dir: str,
     port: int,
     query_params: Optional[List[tuple[str, str]]] = None,
-):
+    open_browser: bool = True,
+) -> Optional[int]:
     """Serve web UI loading an existing run JSON file."""
     try:
         from ezvals.server import create_app
@@ -706,6 +803,7 @@ def _serve_from_json(
         raise
 
     from ezvals.storage import ResultsStore
+    _ensure_ui_assets_fresh()
 
     # Load the run JSON
     with open(json_path, "r") as f:
@@ -727,7 +825,6 @@ def _serve_from_json(
     try:
         store.load_run(run_id)
     except FileNotFoundError:
-        # Run not in store - save it there
         store.save_run(run_data, run_id=run_id, session_name=session_name, run_name=run_name)
 
     # Discover functions if source exists (for rerun capability)
@@ -764,58 +861,15 @@ def _serve_from_json(
     console.print(f"[cyan]Loaded run: {run_name} ({len(run_data.get('results', []))} results)[/cyan]")
     console.print("Press Esc to stop (or Ctrl+C)\n")
 
-    Thread(target=lambda: (time.sleep(0.5), webbrowser.open(url)), daemon=True).start()
+    if open_browser:
+        Thread(target=lambda: (time.sleep(0.5), webbrowser.open(url)), daemon=True).start()
 
     config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning", access_log=False)
     server = uvicorn.Server(config)
-
     server_thread = Thread(target=server.run)
-    server_thread.start()
 
-    def wait_for_stop_signal():
-        """Wait for Esc or Ctrl+C while preserving log output formatting."""
-        try:
-            if not sys.stdin.isatty():
-                server_thread.join()
-                return False
-
-            import termios
-            import select
-            fd = sys.stdin.fileno()
-            old_settings = termios.tcgetattr(fd)
-            try:
-                mode = termios.tcgetattr(fd)
-                mode[3] = mode[3] & ~(termios.ICANON | termios.ECHO)
-                termios.tcsetattr(fd, termios.TCSADRAIN, mode)
-
-                while server_thread.is_alive():
-                    if select.select([sys.stdin], [], [], 0.5)[0]:
-                        ch = sys.stdin.read(1)
-                        if not ch:
-                            return False
-                        if ch == '\x1b' or ch == '\x03':
-                            return True
-            finally:
-                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-        except (ImportError, AttributeError, OSError):
-            try:
-                while server_thread.is_alive():
-                    ch = click.getchar()
-                    if ch == '\x1b' or ch == '\x03':
-                        return True
-            except (EOFError, KeyboardInterrupt):
-                return True
-        return False
-
-    try:
-        if wait_for_stop_signal():
-            console.print("\nStopping server...")
-            server.should_exit = True
-    except (KeyboardInterrupt, SystemExit):
-        console.print("\nStopping server...")
-        server.should_exit = True
-
-    server_thread.join()
+    restart_requested = _run_server_until_stop(app, server, server_thread)
+    return port if restart_requested else None
 
 
 # ============================================================================

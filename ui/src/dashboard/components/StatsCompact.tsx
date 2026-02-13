@@ -40,6 +40,8 @@ export default function StatsCompact({
 }: StatsCompactProps) {
   const { total, avgLatency, pctDone, progressPending, notStarted, progressCompleted, progressTotal } = stats
   const showFiltered = hasFilters && displayFilteredCount != null
+  const currentInSessionRuns = sessionRuns.some((run) => run.run_id === stats.runId)
+  const canSwitchRuns = sessionRuns.length > 0 && (sessionRuns.length + (currentInSessionRuns ? 0 : 1)) > 1
 
   let progressHtml
   if (notStarted === total) {
@@ -84,7 +86,7 @@ export default function StatsCompact({
               <>
                 {stats.sessionName ? <span className="text-zinc-600">.</span> : null}
                 <span className="text-[11px] font-medium uppercase tracking-wider text-theme-text-secondary">Run</span>
-                {sessionRuns.length > 1 ? (
+                {canSwitchRuns ? (
                   <div className="group flex items-center gap-1">
                     <button
                       ref={runDropdownCompactRef}

@@ -11,17 +11,43 @@ export type PngExportData = {
   comparisonData: Record<string, RunSummary>
 }
 
-const W = 1200
-const H = 630
+export type PngRunOverride = {
+  runId: string
+  runName: string
+  color: string
+}
+
+export type PngScoreColors = {
+  good: string
+  mid: string
+  bad: string
+}
+
+export const DEFAULT_SCORE_COLORS: PngScoreColors = {
+  good: '#10b981',
+  mid: '#f59e0b',
+  bad: '#ef4444',
+}
+
+export type PngExportOptions = {
+  title?: string
+  scoreColors?: Partial<PngScoreColors>
+  runOverrides?: PngRunOverride[]
+  showTests?: boolean
+  showLatency?: boolean
+}
+
+const BASE_W = 1200
+const BASE_H = 630
+const EXPORT_W = 1600
+const EXPORT_H = 840
 const PAD = 48
-const BAR_AREA_TOP = 160
+const BAR_AREA_TOP = 190
 const BAR_AREA_BOTTOM = 520
 const BAR_MAX_H = BAR_AREA_BOTTOM - BAR_AREA_TOP
 
-const BAR_HEX = { green: '#10b981', amber: '#f59e0b', red: '#ef4444' } as const
-
-function barColor(pct: number): string {
-  return pct >= 80 ? BAR_HEX.green : pct >= 50 ? BAR_HEX.amber : BAR_HEX.red
+function barColor(pct: number, scoreColors: PngScoreColors): string {
+  return pct >= 80 ? scoreColors.good : pct >= 50 ? scoreColors.mid : scoreColors.bad
 }
 
 function getThemeColors(): { bg: string; text: string; muted: string; border: string } {
@@ -34,6 +60,48 @@ function getThemeColors(): { bg: string; text: string; muted: string; border: st
   }
 }
 
+function resolveRuns(data: PngExportData, options: PngExportOptions) {
+  const baseRuns = data.normalizedComparisonRuns
+  const overrides = options.runOverrides || []
+  const baseById = new Map(baseRuns.map((run) => [run.runId, run] as const))
+
+  if (!overrides.length) return baseRuns
+
+  return overrides
+    .map((override, idx) => {
+      const base = baseById.get(override.runId)
+      if (!base) return null
+      return {
+        runId: base.runId,
+        runName: override.runName || base.runName,
+        color: override.color || base.color || COMPARISON_COLORS[idx % COMPARISON_COLORS.length],
+      }
+    })
+    .filter((run): run is NonNullable<typeof run> => !!run)
+}
+
+function buildFooterLines(data: PngExportData, options: PngExportOptions) {
+  const lines: string[] = []
+  if (options.showTests !== false) {
+    lines.push(
+      data.displayFilteredCount != null
+        ? `${data.displayFilteredCount} / ${data.totalTests} tests`
+        : `${data.totalTests} tests`,
+    )
+  }
+  if (options.showLatency !== false && data.displayLatency > 0) {
+    lines.push(`${data.displayLatency.toFixed(2)}s avg latency`)
+  }
+  return lines
+}
+
+function truncateText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number) {
+  if (ctx.measureText(text).width <= maxWidth) return text
+  let out = text
+  while (out.length > 0 && ctx.measureText(`${out}...`).width > maxWidth) out = out.slice(0, -1)
+  return out ? `${out}...` : ''
+}
+
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image()
@@ -41,6 +109,24 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     img.onerror = reject
     img.src = src
   })
+}
+
+function drawTitle(
+  ctx: CanvasRenderingContext2D,
+  title: string,
+  colors: ReturnType<typeof getThemeColors>,
+) {
+  const titleY = PAD + 30
+
+  const trimmed = title.trim()
+  if (!trimmed) return
+
+  ctx.fillStyle = colors.text
+  ctx.font = '700 26px system-ui, -apple-system, sans-serif'
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  const maxWidth = BASE_W - PAD * 2
+  ctx.fillText(truncateText(ctx, trimmed, maxWidth), PAD, titleY)
 }
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
@@ -70,7 +156,9 @@ function topRoundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: nu
 }
 
 function hexToRgb(hex: string): [number, number, number] {
-  const n = parseInt(hex.replace('#', ''), 16)
+  const normalized = hex.replace('#', '').trim()
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return [59, 130, 246]
+  const n = parseInt(normalized, 16)
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
 }
 
@@ -101,36 +189,27 @@ function drawBar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number,
   ctx.fillStyle = grad
   ctx.fill()
 
-  // Highlight — thin lighter stripe near top
+  // Highlight - thin lighter stripe near top
   const hlGrad = ctx.createLinearGradient(x, y, x, y + Math.min(h * 0.35, 40))
-  hlGrad.addColorStop(0, `rgba(255, 255, 255, 0.18)`)
-  hlGrad.addColorStop(1, `rgba(255, 255, 255, 0)`)
+  hlGrad.addColorStop(0, 'rgba(255, 255, 255, 0.18)')
+  hlGrad.addColorStop(1, 'rgba(255, 255, 255, 0)')
   topRoundRect(ctx, x, y, w, Math.min(h * 0.35, 40), r)
   ctx.fillStyle = hlGrad
   ctx.fill()
 }
 
-async function drawNormalMode(ctx: CanvasRenderingContext2D, data: PngExportData, colors: ReturnType<typeof getThemeColors>, logo: HTMLImageElement | null) {
+async function drawNormalMode(
+  ctx: CanvasRenderingContext2D,
+  data: PngExportData,
+  colors: ReturnType<typeof getThemeColors>,
+  logo: HTMLImageElement | null,
+  options: PngExportOptions,
+  scoreColors: PngScoreColors,
+) {
   // Background
   ctx.fillStyle = colors.bg
-  ctx.fillRect(0, 0, W, H)
-
-  // Metrics line
-  const metricsY = PAD + 24
-  ctx.font = '600 22px system-ui, -apple-system, sans-serif'
-  ctx.fillStyle = colors.text
-  ctx.textBaseline = 'middle'
-  const testLabel = data.displayFilteredCount != null
-    ? `${data.displayFilteredCount} / ${data.totalTests} tests`
-    : `${data.totalTests} tests`
-  ctx.fillText(testLabel, PAD, metricsY)
-
-  if (data.displayLatency > 0) {
-    const testWidth = ctx.measureText(testLabel).width
-    ctx.fillStyle = colors.muted
-    ctx.font = '400 20px system-ui, -apple-system, sans-serif'
-    ctx.fillText(`${data.displayLatency.toFixed(2)}s avg latency`, PAD + testWidth + 32, metricsY)
-  }
+  ctx.fillRect(0, 0, BASE_W, BASE_H)
+  drawTitle(ctx, options.title || '', colors)
 
   // Grid lines
   ctx.strokeStyle = colors.border
@@ -139,7 +218,7 @@ async function drawNormalMode(ctx: CanvasRenderingContext2D, data: PngExportData
     const y = BAR_AREA_TOP + (BAR_MAX_H * i) / 4
     ctx.beginPath()
     ctx.moveTo(PAD, y)
-    ctx.lineTo(W - PAD, y)
+    ctx.lineTo(BASE_W - PAD, y)
     ctx.stroke()
   }
 
@@ -161,12 +240,13 @@ async function drawNormalMode(ctx: CanvasRenderingContext2D, data: PngExportData
     ctx.fillStyle = colors.muted
     ctx.font = '400 18px system-ui, -apple-system, sans-serif'
     ctx.textAlign = 'center'
-    ctx.fillText('No score data', W / 2, BAR_AREA_TOP + BAR_MAX_H / 2)
+    ctx.fillText('No score data', BASE_W / 2, BAR_AREA_TOP + BAR_MAX_H / 2)
     ctx.textAlign = 'left'
+    drawFooter(ctx, data, colors, logo, options)
     return
   }
 
-  const barAreaW = W - PAD * 2
+  const barAreaW = BASE_W - PAD * 2
   const barGap = Math.min(40, barAreaW / chips.length * 0.3)
   const barW = Math.min(140, (barAreaW - barGap * (chips.length - 1)) / chips.length)
   const totalBarsW = barW * chips.length + barGap * (chips.length - 1)
@@ -179,7 +259,7 @@ async function drawNormalMode(ctx: CanvasRenderingContext2D, data: PngExportData
     const y = BAR_AREA_BOTTOM - h
 
     // Bar
-    drawBar(ctx, x, y, barW, h, barColor(pct), 6)
+    drawBar(ctx, x, y, barW, h, barColor(pct, scoreColors), 6)
 
     // Percentage above bar
     ctx.fillStyle = colors.text
@@ -192,7 +272,7 @@ async function drawNormalMode(ctx: CanvasRenderingContext2D, data: PngExportData
     ctx.fillStyle = colors.muted
     ctx.font = '400 14px system-ui, -apple-system, sans-serif'
     ctx.textBaseline = 'top'
-    const label = chip.key.length > 12 ? chip.key.slice(0, 11) + '...' : chip.key
+    const label = chip.key.length > 12 ? `${chip.key.slice(0, 11)}...` : chip.key
     ctx.fillText(label, x + barW / 2, BAR_AREA_BOTTOM + 10)
 
     // Value below label
@@ -204,15 +284,22 @@ async function drawNormalMode(ctx: CanvasRenderingContext2D, data: PngExportData
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
 
-  drawFooter(ctx, colors, logo)
+  drawFooter(ctx, data, colors, logo, options)
 }
 
-async function drawComparisonMode(ctx: CanvasRenderingContext2D, data: PngExportData, colors: ReturnType<typeof getThemeColors>, logo: HTMLImageElement | null) {
+async function drawComparisonMode(
+  ctx: CanvasRenderingContext2D,
+  data: PngExportData,
+  colors: ReturnType<typeof getThemeColors>,
+  logo: HTMLImageElement | null,
+  options: PngExportOptions,
+) {
   // Background
   ctx.fillStyle = colors.bg
-  ctx.fillRect(0, 0, W, H)
+  ctx.fillRect(0, 0, BASE_W, BASE_H)
+  drawTitle(ctx, options.title || '', colors)
 
-  const runs = data.normalizedComparisonRuns
+  const runs = resolveRuns(data, options)
 
   // Collect all metric keys
   const allKeys = new Set<string>()
@@ -230,7 +317,7 @@ async function drawComparisonMode(ctx: CanvasRenderingContext2D, data: PngExport
   })
 
   // Layout
-  const compBarTop = PAD + 10
+  const compBarTop = PAD + 80
   const compBarBottom = 460
   const compBarMaxH = compBarBottom - compBarTop
 
@@ -241,17 +328,18 @@ async function drawComparisonMode(ctx: CanvasRenderingContext2D, data: PngExport
     const y = compBarTop + (compBarMaxH * i) / 4
     ctx.beginPath()
     ctx.moveTo(PAD, y)
-    ctx.lineTo(W - PAD, y)
+    ctx.lineTo(BASE_W - PAD, y)
     ctx.stroke()
   }
 
-  // Draw grouped bars — fill available width
-  const barAreaW = W - PAD * 2
+  // Draw grouped bars - fill available width
+  const barAreaW = BASE_W - PAD * 2
+  const runCount = Math.max(runs.length, 1)
   const groupGap = Math.min(60, barAreaW / keys.length * 0.3)
   const availPerGroup = (barAreaW - groupGap * (keys.length - 1)) / keys.length
   const barGapInGroup = 6
-  const singleBarW = Math.min(60, (availPerGroup - barGapInGroup * (runs.length - 1)) / runs.length)
-  const groupW = singleBarW * runs.length + barGapInGroup * (runs.length - 1)
+  const singleBarW = Math.min(60, (availPerGroup - barGapInGroup * (runCount - 1)) / runCount)
+  const groupW = singleBarW * runCount + barGapInGroup * (runCount - 1)
   const totalGroupsW = groupW * keys.length + groupGap * (keys.length - 1)
   const startX = PAD + (barAreaW - totalGroupsW) / 2
 
@@ -282,7 +370,7 @@ async function drawComparisonMode(ctx: CanvasRenderingContext2D, data: PngExport
         ctx.textAlign = 'center'
         ctx.textBaseline = 'bottom'
         const label = key === '_latency'
-          ? `${((runData?.average_latency || 0)).toFixed(1)}s`
+          ? `${(runData?.average_latency || 0).toFixed(1)}s`
           : `${Math.round(pct)}%`
         ctx.fillText(label, x + singleBarW / 2, y - 4)
       }
@@ -293,12 +381,13 @@ async function drawComparisonMode(ctx: CanvasRenderingContext2D, data: PngExport
     ctx.font = '400 13px system-ui, -apple-system, sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
-    const label = key === '_latency' ? 'Latency' : (key.length > 12 ? key.slice(0, 11) + '...' : key)
+    const label = key === '_latency' ? 'Latency' : (key.length > 12 ? `${key.slice(0, 11)}...` : key)
     ctx.fillText(label, groupX + groupW / 2, compBarBottom + 10)
   })
 
-  // Run key — outline chips, bottom left
-  const keyY = H - PAD + 10
+  // Run key - outline chips, bottom left
+  const footerLines = buildFooterLines(data, options)
+  const keyY = BASE_H - PAD - 24 - footerLines.length * 16
   ctx.font = '500 13px system-ui, -apple-system, sans-serif'
   ctx.textBaseline = 'middle'
   const chipPadX = 12
@@ -326,54 +415,80 @@ async function drawComparisonMode(ctx: CanvasRenderingContext2D, data: PngExport
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
 
-  drawFooter(ctx, colors, logo)
+  drawFooter(ctx, data, colors, logo, options)
 }
 
-function drawFooter(ctx: CanvasRenderingContext2D, colors: ReturnType<typeof getThemeColors>, logo: HTMLImageElement | null) {
-  const footerY = H - PAD + 10
+function drawFooter(
+  ctx: CanvasRenderingContext2D,
+  data: PngExportData,
+  colors: ReturnType<typeof getThemeColors>,
+  logo: HTMLImageElement | null,
+  options: PngExportOptions,
+) {
+  const footerY = BASE_H - PAD + 10
   ctx.fillStyle = colors.muted
   ctx.font = '400 13px system-ui, -apple-system, sans-serif'
   ctx.textAlign = 'right'
   ctx.textBaseline = 'middle'
 
   if (logo) {
-    const logoH = 26
+    const logoH = 22
     const logoW = (logo.width / logo.height) * logoH
     const text = 'ezvals.com'
     const textW = ctx.measureText(text).width
     const totalW = logoW + 6 + textW
-    const startX = W - PAD - totalW
+    const startX = BASE_W - PAD - totalW
     ctx.drawImage(logo, startX, footerY - logoH / 2, logoW, logoH)
-    ctx.fillText(text, W - PAD, footerY)
+    ctx.fillText(text, BASE_W - PAD, footerY)
   } else {
-    ctx.fillText('ezvals.com', W - PAD, footerY)
+    ctx.fillText('ezvals.com', BASE_W - PAD, footerY)
+  }
+
+  const footerLines = buildFooterLines(data, options)
+
+  if (footerLines.length > 0) {
+    ctx.textAlign = 'left'
+    footerLines.forEach((line, idx) => {
+      const y = footerY - (footerLines.length - 1 - idx) * 16
+      ctx.fillText(line, PAD, y)
+    })
   }
 
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
 }
 
-export async function renderPngCanvas(data: PngExportData): Promise<HTMLCanvasElement> {
+export async function renderPngCanvas(
+  data: PngExportData,
+  options: PngExportOptions = {},
+): Promise<HTMLCanvasElement> {
+  const scaleX = EXPORT_W / BASE_W
+  const scaleY = EXPORT_H / BASE_H
   const scale = 2
+
   const canvas = document.createElement('canvas')
-  canvas.width = W * scale
-  canvas.height = H * scale
+  canvas.width = EXPORT_W * scale
+  canvas.height = EXPORT_H * scale
   const ctx = canvas.getContext('2d')!
-  ctx.scale(scale, scale)
+  ctx.scale(scale * scaleX, scale * scaleY)
 
   const colors = getThemeColors()
+  const scoreColors: PngScoreColors = {
+    ...DEFAULT_SCORE_COLORS,
+    ...(options.scoreColors || {}),
+  }
 
   let logo: HTMLImageElement | null = null
   try {
     logo = await loadImage('/logo.png')
   } catch {
-    // logo optional
+    // logo is optional
   }
 
   if (data.isComparisonMode && data.normalizedComparisonRuns.length > 1) {
-    await drawComparisonMode(ctx, data, colors, logo)
+    await drawComparisonMode(ctx, data, colors, logo, options)
   } else {
-    await drawNormalMode(ctx, data, colors, logo)
+    await drawNormalMode(ctx, data, colors, logo, options, scoreColors)
   }
 
   return canvas

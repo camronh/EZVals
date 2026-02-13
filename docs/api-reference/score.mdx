@@ -179,12 +179,12 @@ The CLI and Web UI aggregate scores:
 Set via decorator to name auto-created scores:
 
 ```python
-@eval(default_score_key="correctness")
+@eval(default_score_key="pass")
 async def my_eval(ctx: EvalContext):
     ctx.input = "test"
     ctx.output = "result"
     ctx.store(scores={"passed": True, "notes": "All checks passed"})
-    # Score will have key="correctness"
+    # Score will have key="pass"
 ```
 
 ## Auto-Scoring

@@ -1,6 +1,6 @@
 import asyncio
 from pathlib import Path
-from threading import Lock, Thread, Event
+from threading import Lock, Thread, Event, current_thread
 from typing import Optional, List, Dict, Any
 
 from fastapi import FastAPI, HTTPException
@@ -125,8 +125,12 @@ def create_app(
     app.state.discovered_functions = discovered_functions or []
     # Cancellation event for stopping running evals
     app.state.cancel_event = Event()
+    # Pause event for graceful hold/resume
+    app.state.pause_event = Event()
     app.state.cancel_lock = Lock()
+    app.state.run_thread = None
     app.state.selected_total = None  # Track count for selective reruns
+    app.state.restart_requested = False
 
     def start_run(
         functions: List[EvalFunction],
@@ -254,13 +258,20 @@ def create_app(
                     on_start=_on_start,
                     on_complete=_on_complete,
                     cancel_event=cancel_event,
+                    pause_event=app.state.pause_event,
                 ))
                 if not cancel_event.is_set():
                     _persist()
             finally:
+                with app.state.cancel_lock:
+                    if app.state.run_thread is current_thread():
+                        app.state.run_thread = None
                 run_metadata_var.reset(token)
 
-        Thread(target=_run_evals, daemon=True).start()
+        run_thread = Thread(target=_run_evals, daemon=True)
+        with app.state.cancel_lock:
+            app.state.run_thread = run_thread
+        run_thread.start()
 
     def _serve_ui_index() -> FileResponse:
         index_file = static_dir / "index.html"
@@ -361,6 +372,7 @@ def create_app(
             "session_name": summary.get("session_name") or app.state.session_name,
             "run_name": summary.get("run_name") or app.state.run_name,
             "run_id": app.state.active_run_id,
+            "is_paused": app.state.pause_event.is_set(),
             "total_evaluations": summary.get("total_evaluations", 0),
             "selected_total": app.state.selected_total,  # For selective rerun progress
             "total_errors": summary.get("total_errors", 0),
@@ -384,10 +396,71 @@ def create_app(
             raise HTTPException(status_code=404, detail="Run not found")
         return {"ok": True, "result": updated}
 
+    @app.post("/api/runs/pause")
+    def pause_run():
+        """Pause after currently running evals complete; do not start new evals."""
+        with app.state.cancel_lock:
+            if not app.state.cancel_event.is_set():
+                app.state.pause_event.set()
+        return {"ok": True, "paused": True}
+
+    @app.post("/api/runs/resume")
+    def resume_run():
+        """Resume a paused run from pending evals."""
+        with app.state.cancel_lock:
+            if app.state.cancel_event.is_set():
+                raise HTTPException(status_code=409, detail="Run was stopped and cannot be resumed")
+            app.state.pause_event.clear()
+            run_thread = app.state.run_thread
+            if run_thread and run_thread.is_alive():
+                return {"ok": True, "resumed": True, "run_id": app.state.active_run_id}
+
+        if not app.state.path:
+            raise HTTPException(status_code=400, detail="Resume unavailable: missing eval path")
+
+        path_obj = Path(app.state.path)
+        if not path_obj.exists():
+            raise HTTPException(status_code=400, detail=f"Eval path not found: {path_obj}")
+
+        try:
+            current_run = store.load_run(app.state.active_run_id)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Active run not found")
+
+        current_results = current_run.get("results", [])
+        pending_indices = [
+            idx for idx, row in enumerate(current_results)
+            if row.get("result", {}).get("status") == "pending"
+        ]
+        if not pending_indices:
+            return {"ok": True, "resumed": False, "run_id": app.state.active_run_id}
+
+        discovery = EvalDiscovery()
+        all_functions = discovery.discover(
+            path=str(path_obj),
+            dataset=app.state.dataset,
+            labels=app.state.labels,
+            function_name=app.state.function_name,
+        )
+
+        selected_keys = {
+            (current_results[i]["function"], current_results[i].get("dataset")): i
+            for i in pending_indices
+        }
+        functions = [f for f in all_functions if (f.func.__name__, f.dataset) in selected_keys]
+        if not functions:
+            raise HTTPException(status_code=400, detail="No pending evals found to resume")
+
+        indices_map = {id(f): selected_keys[(f.func.__name__, f.dataset)] for f in functions}
+        app.state.selected_total = len(functions)
+        start_run(functions, app.state.active_run_id, existing_results=current_results, indices_map=indices_map)
+        return {"ok": True, "resumed": True, "run_id": app.state.active_run_id}
+
     @app.post("/api/runs/stop")
     def stop_run():
         """Stop all running/pending evals by marking them as cancelled."""
         with app.state.cancel_lock:
+            app.state.pause_event.clear()
             app.state.cancel_event.set()
             try:
                 data = store.load_run(app.state.active_run_id)
@@ -405,9 +478,16 @@ def create_app(
                 pass
         return {"ok": True}
 
+    @app.post("/api/server/restart")
+    def restart_server():
+        """Request a full serve-process restart."""
+        app.state.restart_requested = True
+        return {"ok": True}
+
     @app.post("/api/runs/rerun")
     def rerun(request: RerunRequest = RerunRequest()):
         app.state.cancel_event.clear()
+        app.state.pause_event.clear()
 
         if not app.state.path:
             raise HTTPException(status_code=400, detail="Rerun unavailable: missing eval path")
@@ -482,13 +562,9 @@ def create_app(
             return {"ok": True, "run_id": run_id}
 
         # Full rerun: create new run
-        app.state.selected_total = None  # Clear selective count
+        app.state.selected_total = None
         run_id = store.generate_run_id()
         app.state.active_run_id = run_id
-        # Ensure run_name is set (belt and suspenders - should already be set in _serve)
-        if not app.state.run_name:
-            from ezvals.storage import _generate_friendly_name
-            app.state.run_name = _generate_friendly_name()
         start_run(all_functions, run_id)
         return {"ok": True, "run_id": run_id}
 
@@ -749,6 +825,7 @@ def create_app(
     def new_run(request: NewRunRequest = NewRunRequest()):
         """Create a new run (never overwrites existing)."""
         app.state.cancel_event.clear()
+        app.state.pause_event.clear()
 
         if not app.state.path:
             raise HTTPException(status_code=400, detail="New run unavailable: missing eval path")

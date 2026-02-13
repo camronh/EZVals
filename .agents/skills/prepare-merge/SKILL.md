@@ -7,6 +7,9 @@ description: Prepare documentation updates before merging a feature branch.
 
 Follow these steps:
 
+## 0. Ensure You're on a Branch
+If you're in a worktree on a detached HEAD, create a branch for your changes and commit before proceeding.
+
 ## 1. Analyze Branch Changes
 - Run `git log <target>..HEAD --oneline` to see commits
 - Run `git diff <target>..HEAD --stat` to see changed files

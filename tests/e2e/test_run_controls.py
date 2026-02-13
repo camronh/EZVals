@@ -520,3 +520,63 @@ class TestPlayStopToggle:
                 expect(menu).to_be_hidden()
 
                 browser.close()
+
+    def test_pause_then_resume_flow(self, tmp_path, monkeypatch):
+        """Pause should hold pending evals and resume should continue them."""
+        monkeypatch.chdir(tmp_path)
+
+        eval_file = tmp_path / "slow_evals.py"
+        create_slow_eval_file(eval_file)
+
+        discovery = EvalDiscovery()
+        functions = discovery.discover(path=str(eval_file))
+
+        results_dir = tmp_path / ".ezvals" / "runs"
+        store = ResultsStore(results_dir)
+        run_id = store.generate_run_id()
+
+        app = create_app(
+            results_dir=str(results_dir),
+            active_run_id=run_id,
+            path=str(eval_file),
+            discovered_functions=functions,
+        )
+
+        with run_server(app) as url:
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page()
+                page.goto(url)
+                page.wait_for_selector("#results-table")
+
+                page.locator("#play-btn").click()
+                page.wait_for_selector('[data-status="running"], [data-status="pending"]', timeout=15000)
+
+                pause_btn = page.locator("#pause-btn")
+                expect(pause_btn).to_be_visible()
+                expect(pause_btn).to_have_attribute("aria-label", "Pause")
+
+                pause_btn.click()
+                page.wait_for_timeout(2500)
+                page.reload()
+                page.wait_for_selector("#results-table")
+
+                expect(pause_btn).to_have_attribute("aria-label", "Resume")
+                assert page.locator('[data-status="completed"]').count() >= 1
+                assert page.locator('[data-status="pending"]').count() >= 1
+
+                page.locator("#pause-btn").click()
+
+                deadline = time.time() + 10
+                while time.time() < deadline:
+                    page.reload()
+                    page.wait_for_selector("#results-table")
+                    if page.locator('[data-status="running"], [data-status="pending"]').count() == 0:
+                        break
+                    time.sleep(0.4)
+                else:
+                    raise AssertionError("resume did not finish pending evaluations")
+
+                assert page.locator('[data-status="completed"]').count() == 3
+
+                browser.close()

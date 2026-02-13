@@ -147,7 +147,7 @@ After running evals, serve them for the user to review in the browser.
 ezvals serve evals/ --session my-experiment
 ```
 
-This opens `http://localhost:8000` where the user can:
+This opens `http://localhost:8000` by default (use `--no-open` to skip auto-opening a browser) where the user can:
 - View all eval results in a table
 - Click into individual results for details
 - Filter by dataset, label, or status
@@ -164,6 +164,11 @@ ezvals serve evals/ --session my-experiment --run
 
 The `--run` flag automatically runs all evals when the server starts.
 
+```bash
+# Start server without opening browser
+ezvals serve evals/ --session my-experiment --no-open
+```
+
 ## Sharing Focused Views by URL
 
 If the user already has the UI running, or if you want to show the user a specific view, construct and share a direct URL for exactly what you want them to review.
@@ -176,8 +181,8 @@ Use the user’s existing serve URL, e.g.:
 
 ### Query Parameters
 
-- `run_id=<id>` active run to open
-- `compare_run_id=<id>` repeat to compare multiple runs
+- `run_id=<id>` active run to open for single-run views
+- `compare_run_id=<id>` repeat to compare multiple runs (preferred for compare mode links)
 - `search=<text>` search query
 - `annotation=any|yes|no`
 - `has_error=1|0`
@@ -194,7 +199,7 @@ Use the user’s existing serve URL, e.g.:
 
 ```text
 You can see the two final runs side-by-side here:
-http://127.0.0.1:8000/?run_id=1826bc4c&compare_run_id=1826bc4c&compare_run_id=58741756
+http://127.0.0.1:8000/?compare_run_id=1826bc4c&compare_run_id=58741756
 ```
 
 ```text
@@ -203,8 +208,8 @@ http://127.0.0.1:8000/?run_id=1826bc4c&has_error=1
 ```
 
 ```text
-You can see passing correctness-only results for QA labels here:
-http://127.0.0.1:8000/?run_id=1826bc4c&score_passed=correctness,true&label_in=qa
+You can see passing pass-only results for QA labels here:
+http://127.0.0.1:8000/?run_id=1826bc4c&score_passed=pass,true&label_in=qa
 ```
 
 ### Loading Previous Results
@@ -247,6 +252,113 @@ Results are saved to `.ezvals/runs/` with the pattern `{run_name}_{timestamp}.js
   "total_errors": 2,
   "results": [...]
 }
+```
+
+### `results[*]` / `EvalResult` Output Schema
+
+Each item in `results` has run metadata plus a `result` object that matches `EvalResult`:
+
+```json
+{
+  "function": "test_answer_quality",
+  "dataset": "customer-service",
+  "labels": ["prod", "regression"],
+  "result": {
+    "input": "User asks for refund policy",
+    "output": "You can request a refund within 30 days.",
+    "reference": "Refunds are allowed within 30 days",
+    "scores": [
+      {"key": "pass", "passed": true, "value": 1.0, "notes": null},
+      {"key": "tone", "passed": true, "value": 0.9, "notes": "Professional"}
+    ],
+    "error": null,
+    "latency": 0.42,
+    "metadata": {"model": "gpt-4o-mini"},
+    "trace_data": {"trace_url": "https://trace.example/run/123"}
+  }
+}
+```
+
+`result` field reference:
+
+- `input` (`Any`) input used for evaluation
+- `output` (`Any`) target/agent output
+- `reference` (`Any | null`) expected output (if provided)
+- `scores` (`Score[] | null`) list of score objects
+- `error` (`string | null`) execution error, if one occurred
+- `latency` (`number | null`) seconds for this eval
+- `metadata` (`object | null`) user-defined structured metadata
+- `trace_data` (`object | null`) trace payload (often `messages`, `trace_url`, and extras)
+
+`Score` shape:
+
+- `key` (`string`) score name
+- `value` (`number | null`) numeric score (optional)
+- `passed` (`bool | null`) pass/fail flag (optional)
+- `notes` (`string | null`) extra context
+
+At least one of `value` or `passed` is always present on each score.
+
+### Parsing Recipes (Python)
+
+```python
+import json
+
+with open(".ezvals/runs/latest.json") as f:
+    run = json.load(f)
+
+results = run["results"]
+```
+
+Find failing evals (has any `passed == False`):
+
+```python
+failing = [
+    row for row in results
+    if any(score.get("passed") is False for score in (row["result"].get("scores") or []))
+]
+```
+
+Find execution errors (`result.error` present):
+
+```python
+errors = [row for row in results if row["result"].get("error")]
+```
+
+Filter by error text:
+
+```python
+timeout_errors = [
+    row for row in results
+    if "timeout" in (row["result"].get("error") or "").lower()
+]
+```
+
+Extract one score key across results:
+
+```python
+def score_for(row, key):
+    for score in (row["result"].get("scores") or []):
+        if score["key"] == key:
+            return score
+    return None
+
+pass_values = [
+    (row["function"], score_for(row, "pass"))
+    for row in results
+]
+```
+
+Average numeric score for a key:
+
+```python
+vals = []
+for row in results:
+    score = score_for(row, "pass")
+    if score and score.get("value") is not None:
+        vals.append(score["value"])
+
+avg_pass = (sum(vals) / len(vals)) if vals else None
 ```
 
 ## Workflow: Agent Runs, User Reviews

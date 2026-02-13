@@ -1,6 +1,6 @@
 # Experience Specification: EZVals
 
-**Version:** 0.0.2a15 (Unreleased)
+**Version:** 0.1.5
 **Generated:** 2025-12-05
 
 This is the canonical source of truth for what EZVals enables users to do and how they do it. If someone deleted all the code but kept these documents, another developer should be able to rebuild the library with identical user-facing behavior.
@@ -121,7 +121,7 @@ EZVals is a **pytest-inspired, code-first evaluation framework** for LLM applica
 ### Scoring
 
 1. Every score must have at least `value` or `passed`
-2. Default score key is "correctness" unless overridden
+2. Default score key is "pass" unless overridden
 3. Failed assertions become **scores** (passed=False), not errors
 4. No explicit scoring = auto-pass score added
 
@@ -152,12 +152,18 @@ EZVals is a **pytest-inspired, code-first evaluation framework** for LLM applica
 
 | Feature | Risk Level |
 |---------|------------|
-| `--no-save` flag | High |
-| `--limit` flag | High |
-| `--session` flag | Medium |
-| `--run-name` flag | Medium |
-| Auto-generated friendly names | Medium |
 | Global `--timeout` CLI flag | Medium |
+
+### Spec vs Code Gaps
+
+| Spec Feature | Status |
+|-------------|--------|
+| Keyboard shortcut 'e' (export) | **Not implemented** in React UI (lost during JSX-to-React migration) |
+| Keyboard shortcut 'f' (filter) | **Not implemented** in React UI (lost during JSX-to-React migration) |
+| Keyboard shortcut 'r' (refresh) | **Not implemented** in React UI (lost during JSX-to-React migration; E2E test only checks key press doesn't crash) |
+| Score editing in detail view | Backend PATCH endpoint exists; **UI not implemented** in React (no edit controls for scores) |
+| Compact/expanded stats bar toggle | **Implemented** (both `#stats-compact` and `#stats-expanded` exist with collapse/expand button) |
+| Copy session/run name | **Implemented** via `CopyableText` component with clipboard + "Copied!" tooltip |
 
 ---
 
@@ -190,28 +196,14 @@ These are mistakes new users commonly make.
 
 ## Test Coverage Recommendations
 
-### High Priority
-
-```gherkin
-# Add CLI tests
-Scenario: --no-save outputs JSON to stdout
-  When `ezvals run evals/ --no-save`
-  Then JSON printed to stdout, no file created
-
-Scenario: --limit restricts evaluation count
-  Given 10 @eval functions
-  When `ezvals run evals/ --limit 3`
-  Then only 3 run
-```
-
 ### Medium Priority
 
 ```gherkin
-Scenario: --session and --run-name in output JSON
-Scenario: Auto-generated friendly run names
 Scenario: Global --timeout overrides decorator timeout
 Scenario: Three-state filtering (include/exclude/any)
 Scenario: Filter persistence across navigation
+Scenario: Keyboard shortcuts r/e/f in table view (currently not implemented in React UI)
+Scenario: Score editing in detail view (backend exists, no UI controls)
 ```
 
 ---

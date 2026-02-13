@@ -503,6 +503,105 @@ def third():
     assert all(status == "cancelled" for status in statuses2)
 
 
+def test_pause_and_resume_endpoints(tmp_path: Path, monkeypatch):
+    """Pause should hold pending work; resume should continue pending evals."""
+    monkeypatch.chdir(tmp_path)
+
+    log_file = tmp_path / "log.json"
+    log_file.write_text("[]")
+
+    eval_dir = tmp_path / "evals"
+    eval_dir.mkdir()
+    f = eval_dir / "pause_eval.py"
+    f.write_text(
+        f"""
+from ezvals import eval, EvalResult
+import time, json, pathlib
+
+log_file = pathlib.Path(r"{log_file}")
+
+def log(msg):
+    data = json.loads(log_file.read_text())
+    data.append(msg)
+    log_file.write_text(json.dumps(data))
+
+@eval(dataset="pause_ds")
+def first():
+    log("start1")
+    time.sleep(0.8)
+    log("end1")
+    return EvalResult(input="a", output="one")
+
+@eval(dataset="pause_ds")
+def second():
+    log("start2")
+    time.sleep(0.1)
+    log("end2")
+    return EvalResult(input="b", output="two")
+
+@eval(dataset="pause_ds")
+def third():
+    log("start3")
+    time.sleep(0.1)
+    log("end3")
+    return EvalResult(input="c", output="three")
+"""
+    )
+
+    results_dir = tmp_path / ".ezvals" / "runs"
+    store = ResultsStore(results_dir)
+    run_id = store.save_run({"total_evaluations": 0, "results": []}, "2024-01-01T00-00-00Z")
+
+    app = create_app(
+        results_dir=str(results_dir),
+        active_run_id=run_id,
+        path=str(f),
+        concurrency=1,
+    )
+    client = TestClient(app)
+
+    rr = client.post("/api/runs/rerun")
+    assert rr.status_code == 200
+    new_run_id = rr.json()["run_id"]
+
+    time.sleep(0.15)
+    pr = client.post("/api/runs/pause")
+    assert pr.status_code == 200
+
+    time.sleep(1.0)
+    entries = json.loads(log_file.read_text())
+    assert "start1" in entries and "end1" in entries
+    assert "start2" not in entries and "start3" not in entries
+
+    paused_data = client.get("/results").json()
+    assert paused_data["is_paused"] is True
+
+    run_data = store.load_run(new_run_id)
+    statuses = [r["result"].get("status") for r in run_data["results"]]
+    assert statuses.count("completed") == 1
+    assert statuses.count("pending") == 2
+
+    rs = client.post("/api/runs/resume")
+    assert rs.status_code == 200
+    assert rs.json()["resumed"] is True
+
+    deadline = time.time() + 3
+    while time.time() < deadline:
+        time.sleep(0.1)
+        final_data = store.load_run(new_run_id)
+        final_statuses = [r["result"].get("status") for r in final_data["results"]]
+        if all(status == "completed" for status in final_statuses):
+            break
+    else:
+        pytest.fail("resume did not complete pending evals in time")
+
+    entries = json.loads(log_file.read_text())
+    assert "start2" in entries and "start3" in entries
+
+    resumed_data = client.get("/results").json()
+    assert resumed_data["is_paused"] is False
+
+
 def test_list_sessions_endpoint(tmp_path: Path):
     """GET /api/sessions returns unique session names"""
     store = ResultsStore(tmp_path / "runs")

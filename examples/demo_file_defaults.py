@@ -28,7 +28,7 @@ def analyze_sentiment(ctx: EvalContext):
 ezvals_defaults = {
     "dataset": "sentiment_analysis",
     "labels": ["production", "nlp"],
-    "default_score_key": "correctness",
+    "default_score_key": "pass",
     "target": analyze_sentiment,  # All evals use this target by default
     "metadata": {
         "model": "gpt-4",
@@ -43,7 +43,7 @@ def test_positive_sentiment(ctx: EvalContext):
     This test inherits all defaults from ezvals_defaults:
     - dataset: sentiment_analysis
     - labels: ["production", "nlp"]
-    - default_score_key: correctness
+    - default_score_key: pass
     - metadata: {"model": "gpt-4", "version": "v1.0"}
     """
     ctx.store(
@@ -67,13 +67,13 @@ def test_negative_sentiment(ctx: EvalContext):
     )
 
 
-@eval(labels=["experimental"])  # Override just the labels
+@eval(labels=["experimental reliability validation"])  # Override just the labels
 def test_mixed_sentiment(ctx: EvalContext):
     """
     This test overrides the labels but inherits everything else:
     - dataset: sentiment_analysis (from file)
-    - labels: ["experimental"] (overridden)
-    - default_score_key: correctness (from file)
+    - labels: ["experimental reliability validation"] (overridden)
+    - default_score_key: pass (from file)
     - metadata: {"model": "gpt-4", "version": "v1.0"} (from file)
     """
     ctx.store(
@@ -84,13 +84,13 @@ def test_mixed_sentiment(ctx: EvalContext):
     )
 
 
-@eval(dataset="edge_cases", labels=["testing"])  # Override multiple fields
+@eval(dataset="edge_cases", labels=["comprehensive boundary verification"])  # Override multiple fields
 def test_empty_input(ctx: EvalContext):
     """
     This test overrides both dataset and labels:
     - dataset: edge_cases (overridden)
-    - labels: ["testing"] (overridden)
-    - default_score_key: correctness (from file)
+    - labels: ["comprehensive boundary verification"] (overridden)
+    - default_score_key: pass (from file)
     - metadata: {"model": "gpt-4", "version": "v1.0"} (from file)
     """
     ctx.store(
@@ -112,7 +112,7 @@ def test_sentiment_cases(ctx: EvalContext):
     All three generated test cases will have:
     - dataset: sentiment_analysis
     - labels: ["production", "nlp"]
-    - default_score_key: correctness
+    - default_score_key: pass
     - metadata: {"model": "gpt-4", "version": "v1.0"}
     """
     # Simulate sentiment analysis

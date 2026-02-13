@@ -6,7 +6,13 @@ from pathlib import Path
 
 import click
 
-from ezvals.cli import cli, _resolve_run_name_in_session, _parse_compare_run_names, _build_serve_query_params
+from ezvals.cli import (
+    cli,
+    _resolve_run_name_in_session,
+    _parse_compare_run_names,
+    _build_serve_query_params,
+    _is_port_available,
+)
 from ezvals.storage import ResultsStore
 
 
@@ -415,6 +421,7 @@ def test_failing():
         assert '--has-url' in result.output
         assert '--has-messages' in result.output
         assert '--annotation' in result.output
+        assert '--no-open' in result.output
 
     def test_parse_compare_run_names_validation(self):
         """compare-runs parser validates count and duplicates"""
@@ -444,6 +451,35 @@ def test_failing():
         assert ("has_error", "1") in params
         assert ("has_url", "0") in params
         assert ("annotation", "yes") in params
+
+    def test_is_port_available_uses_reuseaddr(self, monkeypatch):
+        """port probe should treat quick-restart sockets as reusable."""
+        class FakeSocket:
+            def __init__(self, *args, **kwargs):
+                self.reuse_set = False
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def setsockopt(self, level, optname, value):
+                import socket as _socket
+                if (
+                    level == _socket.SOL_SOCKET
+                    and optname == _socket.SO_REUSEADDR
+                    and value == 1
+                ):
+                    self.reuse_set = True
+
+            def bind(self, addr):
+                if not self.reuse_set:
+                    raise OSError("address in use")
+
+        import socket
+        monkeypatch.setattr(socket, "socket", lambda *args, **kwargs: FakeSocket())
+        assert _is_port_available(8000) is True
 
     def test_resolve_run_name_in_session(self):
         """run-name resolver finds exact run name within session"""
@@ -538,6 +574,80 @@ def test_failing():
             assert captured["active_run_id"] is None
             assert captured["run_name"] == "next-attempt"
             assert captured["query_params"] == []
+
+    def test_serve_no_open_passes_false_to_serve(self, monkeypatch):
+        """serve --no-open disables browser launch for eval paths"""
+        captured = {}
+
+        def fake_serve(**kwargs):
+            captured.update(kwargs)
+
+        monkeypatch.setattr('ezvals.cli._serve', fake_serve)
+
+        with self.runner.isolated_filesystem():
+            Path('evals.py').write_text('def x():\n    return 1\n')
+            result = self.runner.invoke(cli, ['serve', 'evals.py', '--no-open'])
+            assert result.exit_code == 0
+            assert captured["open_browser"] is False
+
+    def test_serve_json_no_open_passes_false_to_json_serve(self, monkeypatch):
+        """serve --no-open disables browser launch for JSON run paths"""
+        captured = {}
+
+        def fake_serve_from_json(**kwargs):
+            captured.update(kwargs)
+
+        monkeypatch.setattr('ezvals.cli._serve_from_json', fake_serve_from_json)
+
+        with self.runner.isolated_filesystem():
+            run_file = Path('run.json')
+            run_file.write_text('{"run_id":"r1","results":[]}')
+            result = self.runner.invoke(cli, ['serve', str(run_file), '--no-open'])
+            assert result.exit_code == 0
+            assert captured["open_browser"] is False
+
+    def test_serve_restart_reexecs_process_for_eval_path(self, monkeypatch):
+        """serve should re-exec the command when in-app restart is requested"""
+        calls = {"serve": 0, "restart_port": None}
+
+        def fake_serve(**kwargs):
+            calls["serve"] += 1
+            return 8123
+
+        def fake_restart(port=None):
+            calls["restart_port"] = port
+
+        monkeypatch.setattr('ezvals.cli._serve', fake_serve)
+        monkeypatch.setattr('ezvals.cli._restart_current_process', fake_restart)
+
+        with self.runner.isolated_filesystem():
+            Path('evals.py').write_text('def x():\n    return 1\n')
+            result = self.runner.invoke(cli, ['serve', 'evals.py', '--no-open'])
+            assert result.exit_code == 0
+            assert calls["serve"] == 1
+            assert calls["restart_port"] == 8123
+
+    def test_serve_restart_reexecs_process_for_json_path(self, monkeypatch):
+        """serve should re-exec the command when JSON-mode app restart is requested"""
+        calls = {"serve_json": 0, "restart_port": None}
+
+        def fake_serve_from_json(**kwargs):
+            calls["serve_json"] += 1
+            return 9333
+
+        def fake_restart(port=None):
+            calls["restart_port"] = port
+
+        monkeypatch.setattr('ezvals.cli._serve_from_json', fake_serve_from_json)
+        monkeypatch.setattr('ezvals.cli._restart_current_process', fake_restart)
+
+        with self.runner.isolated_filesystem():
+            run_file = Path('run.json')
+            run_file.write_text('{"run_id":"r1","results":[]}')
+            result = self.runner.invoke(cli, ['serve', str(run_file), '--no-open'])
+            assert result.exit_code == 0
+            assert calls["serve_json"] == 1
+            assert calls["restart_port"] == 9333
 
     def test_serve_compare_runs_requires_two_names(self):
         """serve --compare-runs validates minimum names"""

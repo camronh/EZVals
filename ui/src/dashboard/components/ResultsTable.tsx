@@ -76,7 +76,7 @@ export default function ResultsTable({
               data-type={col.type}
               ref={(el) => { if (headerRefs?.current) headerRefs.current[col.key] = el }}
               style={{ width: colWidths[col.key] ? `${colWidths[col.key]}px` : col.width, textAlign: col.align }}
-              className={`bg-theme-bg px-3 py-2 text-[10px] font-medium uppercase tracking-wider text-theme-text-muted ${hiddenSet.has(col.key) ? 'hidden' : ''}`}
+              className={`relative bg-theme-bg px-3 py-2 text-[10px] font-medium uppercase tracking-wider text-theme-text-muted ${hiddenSet.has(col.key) ? 'hidden' : ''}`}
               aria-sort={(() => {
                 const s = sortState.find((item) => item.col === col.key)
                 if (!s) return 'none'
@@ -193,14 +193,25 @@ export default function ResultsTable({
               <td data-col="function" className={`px-3 py-3 align-middle ${hiddenSet.has('function') ? 'hidden' : ''}`}>
                 <div className="flex flex-col gap-0.5">
                   <div className="flex items-center gap-2">{functionCell}</div>
-                  <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
+                  <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-zinc-500">
                     {statusPill}
-                    <span>{row.dataset || ''}</span>
+                    <span
+                      className="dataset-chip max-w-[160px] truncate"
+                      title={row.dataset || undefined}
+                    >
+                      {row.dataset || ''}
+                    </span>
                     {row.labels?.length ? (
                       <>
                         <span className="text-zinc-700">.</span>
                         {row.labels.map((la) => (
-                          <span key={la} className="rounded bg-theme-bg-elevated px-1 py-0.5 text-[9px] text-theme-text-muted">{la}</span>
+                          <span
+                            key={la}
+                            className="label-chip max-w-[140px] truncate rounded bg-theme-bg-elevated px-1 py-0.5 text-[9px] text-theme-text-muted"
+                            title={la}
+                          >
+                            {la}
+                          </span>
                         ))}
                       </>
                     ) : null}

@@ -355,6 +355,11 @@ dev = [
     { name = "ruff" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "playwright" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "black", marker = "extra == 'dev'", specifier = ">=25.1.0" },
@@ -373,6 +378,9 @@ requires-dist = [
     { name = "uvicorn", specifier = ">=0.30.1" },
 ]
 provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "playwright", specifier = ">=1.56.0" }]
 
 [[package]]
 name = "fastapi"

@@ -56,6 +56,7 @@ export interface RunSummary {
   session_name?: string | null
   run_name?: string | null
   run_id: string
+  is_paused?: boolean
   total_evaluations?: number
   selected_total?: number | null
   total_errors?: number

@@ -2,9 +2,11 @@
 
 import re
 import time
+import urllib.parse
 
 from playwright.sync_api import sync_playwright, expect
 
+from ezvals.discovery import EvalDiscovery
 from ezvals.server import create_app
 from ezvals.storage import ResultsStore
 
@@ -99,6 +101,178 @@ def make_summary_with_messages():
                                 "content": '{"results": [1, 2, 3]}',
                             },
                             {"role": "assistant", "content": "Here are your results"},
+                        ],
+                    },
+                },
+            },
+        ],
+    }
+
+
+def make_summary_with_long_chip_text():
+    long_dataset = "dataset_with_an_extremely_long_name_that_should_be_truncated_in_chip_ui_components"
+    long_label = "label_with_an_extremely_long_name_that_should_be_truncated_in_chip_ui_components"
+    return {
+        "total_evaluations": 1,
+        "total_functions": 1,
+        "total_errors": 0,
+        "total_passed": 1,
+        "total_with_scores": 0,
+        "average_latency": 0.1,
+        "results": [
+            {
+                "function": "long_chip_test",
+                "dataset": long_dataset,
+                "labels": [long_label],
+                "result": {
+                    "input": "input",
+                    "output": "output",
+                    "reference": None,
+                    "scores": [],
+                    "error": None,
+                    "latency": 0.1,
+                    "metadata": None,
+                    "status": "completed",
+                },
+            }
+        ],
+    }
+
+
+def make_summary_with_message_array_tool_schemas():
+    """Summary with mixed tool-call schemas to validate tool name extraction."""
+    return {
+        "total_evaluations": 1,
+        "total_functions": 1,
+        "total_errors": 0,
+        "total_passed": 1,
+        "total_with_scores": 1,
+        "average_latency": 1.0,
+        "results": [
+            {
+                "function": "test_with_mixed_tool_schemas",
+                "dataset": "ds",
+                "labels": [],
+                "result": {
+                    "input": "test input",
+                    "output": "final output",
+                    "reference": None,
+                    "scores": [{"key": "correct", "passed": True}],
+                    "error": None,
+                    "latency": 1.0,
+                    "metadata": None,
+                    "status": "completed",
+                    "trace_data": {
+                        "messages": [
+                            {"role": "user", "content": "Find details"},
+                            {
+                                "role": "assistant",
+                                "tool_calls": [
+                                    {
+                                        "id": "call_openai_1",
+                                        "function": {
+                                            "name": "search_docs",
+                                            "arguments": '{"query":"evals"}',
+                                        },
+                                    },
+                                    {
+                                        "id": "call_openai_2",
+                                        "name": "fetch_page",
+                                        "args": {"url": "https://example.com"},
+                                    },
+                                ],
+                            },
+                            {
+                                "role": "assistant",
+                                "content": [
+                                    {
+                                        "type": "tool_use",
+                                        "id": "toolu_1",
+                                        "name": "search_docs",
+                                        "input": {"query": "evals"},
+                                    },
+                                    {
+                                        "type": "tool_use",
+                                        "id": "toolu_2",
+                                        "name": "rank_results",
+                                        "input": {"top_k": 5},
+                                    },
+                                ],
+                            },
+                            {
+                                "role": "assistant",
+                                "content": [
+                                    {
+                                        "type": "function_call",
+                                        "call_id": "fc_1",
+                                        "name": "summarize_results",
+                                        "arguments": {"format": "bullets"},
+                                    }
+                                ],
+                            },
+                        ]
+                    },
+                },
+            },
+        ],
+    }
+
+
+def make_summary_with_message_rendering_across_panels():
+    """Summary where input/output/reference all use message arrays."""
+    return {
+        "total_evaluations": 1,
+        "total_functions": 1,
+        "total_errors": 0,
+        "total_passed": 1,
+        "total_with_scores": 1,
+        "average_latency": 0.4,
+        "results": [
+            {
+                "function": "test_message_rendering",
+                "dataset": "ds",
+                "labels": [],
+                "result": {
+                    "input": [
+                        {"role": "system", "content": "You are a concise assistant."},
+                        {"role": "user", "content": "Summarize this paragraph."},
+                    ],
+                    "output": [
+                        {
+                            "role": "assistant",
+                            "content": [
+                                {"type": "text", "text": "Short summary line 1."},
+                                {"type": "text", "text": "Short summary line 2."},
+                            ],
+                        }
+                    ],
+                    "reference": [
+                        {"role": "assistant", "message": "Expected concise summary."},
+                    ],
+                    "scores": [{"key": "correct", "passed": True}],
+                    "error": None,
+                    "latency": 0.4,
+                    "metadata": None,
+                    "status": "completed",
+                    "trace_data": {
+                        "messages": [
+                            {"role": "user", "content": "Find docs about scoring."},
+                            {
+                                "role": "assistant",
+                                "content": "Searching docs now.",
+                                "tool_calls": [
+                                    {
+                                        "id": "call_docs_1",
+                                        "name": "search_docs",
+                                        "args": {"query": "scoring"},
+                                    }
+                                ],
+                            },
+                            {
+                                "role": "tool",
+                                "tool_call_id": "call_docs_1",
+                                "content": '{"matches": 3}',
+                            },
                         ],
                     },
                 },
@@ -273,6 +447,29 @@ class TestToolDisplay:
 
                 browser.close()
 
+    def test_sidebar_tool_names_from_common_message_arrays(self, tmp_path):
+        store = ResultsStore(tmp_path / "runs")
+        run_id = store.save_run(make_summary_with_message_array_tool_schemas(), "2024-01-01T00-00-00Z")
+        app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+        with run_server(app) as url:
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page()
+                page.goto(f"{url}/runs/{run_id}/results/0")
+                page.wait_for_selector("header")
+
+                tool_names = page.locator("#tool-names")
+                expect(tool_names).to_be_visible()
+                text = tool_names.inner_text()
+                assert "search_docs" in text
+                assert "fetch_page" in text
+                assert "rank_results" in text
+                assert "summarize_results" in text
+                assert text.count("search_docs") == 1
+
+                browser.close()
+
 
 class TestTraceUrl:
     """#8: Trace URL should be styled as a visible button."""
@@ -330,6 +527,61 @@ class TestMessagesPane:
                 browser.close()
 
 
+class TestMessageRenderingNormalization:
+    """#27: Message-like data renders pretty with a raw toggle everywhere."""
+
+    def test_input_output_reference_render_pretty_by_default(self, tmp_path):
+        store = ResultsStore(tmp_path / "runs")
+        run_id = store.save_run(make_summary_with_message_rendering_across_panels(), "2024-01-01T00-00-00Z")
+        app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+        with run_server(app) as url:
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page()
+                page.goto(f"{url}/runs/{run_id}/results/0")
+                page.wait_for_selector("#input-panel")
+                page.wait_for_selector("#output-panel")
+                page.wait_for_selector("#ref-panel")
+
+                expect(page.locator("#input-panel .msg-box").first).to_be_visible()
+                expect(page.locator("#output-panel .msg-box").first).to_be_visible()
+                expect(page.locator("#ref-panel .msg-box").first).to_be_visible()
+                expect(page.locator("#input-panel button:has-text('Pretty')")).to_be_visible()
+                expect(page.locator("#output-panel button:has-text('Pretty')")).to_be_visible()
+                expect(page.locator("#ref-panel button:has-text('Pretty')")).to_be_visible()
+
+                browser.close()
+
+    def test_message_view_toggle_switches_between_pretty_and_raw(self, tmp_path):
+        store = ResultsStore(tmp_path / "runs")
+        run_id = store.save_run(make_summary_with_message_rendering_across_panels(), "2024-01-01T00-00-00Z")
+        app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+        with run_server(app) as url:
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page()
+                page.goto(f"{url}/runs/{run_id}/results/0")
+                page.wait_for_selector("#input-panel")
+
+                input_panel = page.locator("#input-panel")
+                input_panel.locator("button:has-text('Raw')").click()
+                expect(input_panel.locator("pre.data-pre")).to_contain_text('"role": "user"')
+                input_panel.locator("button:has-text('Pretty')").click()
+                expect(input_panel.locator(".msg-box").first).to_be_visible()
+
+                page.click("button:has-text('Messages')")
+                page.wait_for_selector("#messages-pane:not(.translate-x-full)")
+                pane = page.locator("#messages-pane")
+                pane.locator("button:has-text('Raw')").click()
+                expect(pane.locator("pre.data-pre")).to_contain_text('"role": "assistant"')
+                pane.locator("button:has-text('Pretty')").click()
+                expect(pane.locator(".msg-box").first).to_be_visible()
+
+                browser.close()
+
+
 class TestScoresSorting:
     """#15: Scores column should be sortable."""
 
@@ -380,6 +632,47 @@ class TestScoresSorting:
 
                 browser.close()
 
+    def test_sort_from_query_descending(self, tmp_path):
+        store = ResultsStore(tmp_path / "runs")
+        run_id = store.save_run(make_summary_for_sorting(), "2024-01-01T00-00-00Z")
+        app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+        with run_server(app) as url:
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page()
+                page.goto(f"{url}?sort=scores,desc,number")
+                page.wait_for_selector("#results-table")
+
+                first_func = page.locator(
+                    "tbody tr[data-row='main'] td[data-col='function'] a"
+                ).first
+                expect(first_func).to_contain_text("test_high")
+
+                browser.close()
+
+    def test_sort_updates_url_query(self, tmp_path):
+        store = ResultsStore(tmp_path / "runs")
+        run_id = store.save_run(make_summary_for_sorting(), "2024-01-01T00-00-00Z")
+        app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+        with run_server(app) as url:
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page()
+                page.goto(url)
+                page.wait_for_selector("#results-table")
+
+                page.locator("thead th[data-col='scores']").click()
+                page.wait_for_function(
+                    "() => new URLSearchParams(window.location.search).getAll('sort').includes('scores,asc,number')"
+                )
+
+                params = urllib.parse.parse_qs(urllib.parse.urlparse(page.url).query)
+                assert "scores,asc,number" in params.get("sort", [])
+
+                browser.close()
+
 
 class TestRerunButton:
     """#6: Detail page should have a rerun button."""
@@ -400,6 +693,45 @@ class TestRerunButton:
                 rerun_btn = page.locator("#rerun-btn")
                 expect(rerun_btn).to_be_visible()
                 expect(rerun_btn).to_contain_text("Rerun")
+
+                browser.close()
+
+
+class TestDetailLayoutDefaults:
+    """Detail split defaults should stay usable in a fresh session."""
+
+    def test_fresh_session_uses_balanced_detail_split(self, tmp_path):
+        store = ResultsStore(tmp_path / "runs")
+        run_id = store.save_run(make_summary_with_messages(), "2024-01-01T00-00-00Z")
+        app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+        with run_server(app) as url:
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page(viewport={"width": 840, "height": 420})
+                page.add_init_script("localStorage.clear(); sessionStorage.clear();")
+                page.goto(f"{url}/runs/{run_id}/results/0")
+                page.wait_for_selector("#input-panel")
+                page.wait_for_selector("#ref-panel")
+
+                dims = page.evaluate(
+                    """
+                    () => {
+                      const sidebar = document.querySelector('#sidebar-panel')?.getBoundingClientRect();
+                      const ref = document.querySelector('#ref-panel')?.getBoundingClientRect();
+                      const main = document.querySelector('#main-panel')?.getBoundingClientRect();
+                      return {
+                        sidebarWidth: sidebar?.width || 0,
+                        refHeight: ref?.height || 0,
+                        mainHeight: main?.height || 0,
+                        viewportWidth: window.innerWidth,
+                      };
+                    }
+                    """
+                )
+
+                assert dims["sidebarWidth"] <= dims["viewportWidth"] * 0.35
+                assert dims["refHeight"] <= dims["mainHeight"] * 0.35
 
                 browser.close()
 
@@ -600,6 +932,47 @@ class TestRunDropdown:
 
                 browser.close()
 
+    def test_run_dropdown_shows_with_unsaved_active_and_one_existing_run(self, tmp_path):
+        store = ResultsStore(tmp_path / "runs")
+        summary = make_summary_with_error()
+        summary["session_name"] = "test-session"
+        summary["run_name"] = "headless-run"
+        store.save_run(summary, run_id="headless01", session_name="test-session", run_name="headless-run")
+
+        eval_path = tmp_path / "evals.py"
+        eval_path.write_text(
+            "from ezvals import eval, EvalContext\n\n"
+            "@eval\n"
+            "def test_discovered(ctx: EvalContext):\n"
+            "    ctx.output = 'ok'\n"
+        )
+        discovered = EvalDiscovery().discover(path=str(eval_path))
+
+        app = create_app(
+            results_dir=str(tmp_path / "runs"),
+            active_run_id="servefresh",
+            path=str(eval_path),
+            discovered_functions=discovered,
+            session_name="test-session",
+            run_name="fresh-serve-run",
+        )
+
+        with run_server(app) as url:
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page()
+                page.goto(url)
+                page.wait_for_selector("#results-table")
+                time.sleep(1)
+                page.reload()
+                page.wait_for_selector("#results-table")
+                time.sleep(0.5)
+
+                dropdown = page.locator(".stats-run-dropdown, .stats-run-dropdown-compact")
+                assert dropdown.count() > 0, "Run dropdown should appear when one existing session run can be switched to"
+
+                browser.close()
+
 
 class TestStatusChipPosition:
     """Status chips (running/error) should appear in subtext row, not next to function name."""
@@ -679,3 +1052,62 @@ class TestStatusChipPosition:
                 expect(func_name_row.locator(".status-pill")).to_have_count(0)
 
                 browser.close()
+
+
+def test_long_dataset_and_label_chips_truncate_with_tooltips(tmp_path):
+    store = ResultsStore(tmp_path / "runs")
+    summary = make_summary_with_long_chip_text()
+    run_id = store.save_run(summary, "2024-01-01T00-00-00Z")
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+    expected_dataset = summary["results"][0]["dataset"]
+    expected_label = summary["results"][0]["labels"][0]
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(url)
+            page.wait_for_selector("#results-table")
+
+            dataset_chip = page.locator(".dataset-chip").first
+            label_chip = page.locator(".label-chip").first
+
+            expect(dataset_chip).to_have_attribute("title", expected_dataset)
+            expect(label_chip).to_have_attribute("title", expected_label)
+
+            dataset_style = dataset_chip.evaluate(
+                "el => ({ textOverflow: getComputedStyle(el).textOverflow, whiteSpace: getComputedStyle(el).whiteSpace })"
+            )
+            label_style = label_chip.evaluate(
+                "el => ({ textOverflow: getComputedStyle(el).textOverflow, whiteSpace: getComputedStyle(el).whiteSpace })"
+            )
+            assert dataset_style["textOverflow"] == "ellipsis"
+            assert dataset_style["whiteSpace"] == "nowrap"
+            assert label_style["textOverflow"] == "ellipsis"
+            assert label_style["whiteSpace"] == "nowrap"
+
+            page.locator("#filters-toggle").click()
+            page.wait_for_selector("#dataset-pills")
+
+            filter_dataset_pill = page.locator("#dataset-pills button").first
+            filter_label_pill = page.locator("#label-pills button").first
+            expect(filter_dataset_pill).to_have_attribute("title", expected_dataset)
+            expect(filter_label_pill).to_have_attribute("title", expected_label)
+
+            dataset_pill_text = filter_dataset_pill.locator(".filter-pill-text")
+            label_pill_text = filter_label_pill.locator(".filter-pill-text")
+            expect(dataset_pill_text).to_have_text(expected_dataset)
+            expect(label_pill_text).to_have_text(expected_label)
+
+            dataset_pill_style = dataset_pill_text.evaluate(
+                "el => ({ textOverflow: getComputedStyle(el).textOverflow, whiteSpace: getComputedStyle(el).whiteSpace })"
+            )
+            label_pill_style = label_pill_text.evaluate(
+                "el => ({ textOverflow: getComputedStyle(el).textOverflow, whiteSpace: getComputedStyle(el).whiteSpace })"
+            )
+            assert dataset_pill_style["textOverflow"] == "ellipsis"
+            assert dataset_pill_style["whiteSpace"] == "nowrap"
+            assert label_pill_style["textOverflow"] == "ellipsis"
+            assert label_pill_style["whiteSpace"] == "nowrap"
+
+            browser.close()

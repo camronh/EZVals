@@ -25,7 +25,7 @@ Where `PATH` can be:
 - A specific function: `ezvals serve evals.py::test_refund`
 - A run JSON file: `ezvals serve .ezvals/sessions/default/run_123.json`
 
-The UI opens automatically in your browser. Evaluations are discovered and displayed but not run until you click the Run button.
+The UI opens automatically in your browser by default. Use `--no-open` to disable browser launch. Evaluations are discovered and displayed but not run until you click the Run button.
 
 ### Loading Previous Runs
 
@@ -129,6 +129,14 @@ ezvals serve evals/ --annotation yes --has-error
 
 ```bash
 ezvals serve evals/ --run
+```
+
+<ParamField path="--open/--no-open" type="boolean" default="open">
+  Control whether `ezvals serve` automatically opens your browser.
+</ParamField>
+
+```bash
+ezvals serve evals/ --no-open
 ```
 
 ## ezvals run

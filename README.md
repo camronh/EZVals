@@ -337,6 +337,7 @@ npm run build
 --session TEXT          Session name to group runs
 --run-name TEXT         Name for this run
 --port INT              Port (default 8000)
+--open / --no-open      Automatically open browser (default: open)
 ```
 
 ## Sessions and runs

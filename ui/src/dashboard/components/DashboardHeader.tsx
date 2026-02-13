@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import type { ColumnDef, FilterState, RunButtonState, SortStateItem } from '../../types'
 import { DEFAULT_HIDDEN_COLS, defaultFilters } from '../utils'
@@ -31,6 +32,8 @@ type DashboardHeaderProps = {
   setColWidths: React.Dispatch<React.SetStateAction<Record<string, number>>>
   handleExport: (format: string) => void
   handleSettingsOpen: () => void
+  isRestartingServer: boolean
+  onRestartServer: () => void
   runButtonState: RunButtonState
   runMode: string
   setRunMode: (value: string) => void
@@ -38,6 +41,9 @@ type DashboardHeaderProps = {
   setRunMenuOpen: (value: boolean | ((prev: boolean) => boolean)) => void
   isComparisonMode: boolean
   onRunExecute: (mode: string) => void
+  showPauseButton: boolean
+  pauseButtonText: 'Pause' | 'Resume'
+  onPauseToggle: () => void
 }
 
 export default function DashboardHeader({
@@ -69,6 +75,8 @@ export default function DashboardHeader({
   setColWidths,
   handleExport,
   handleSettingsOpen,
+  isRestartingServer,
+  onRestartServer,
   runButtonState,
   runMode,
   setRunMode,
@@ -76,7 +84,26 @@ export default function DashboardHeader({
   setRunMenuOpen,
   isComparisonMode,
   onRunExecute,
+  showPauseButton,
+  pauseButtonText,
+  onPauseToggle,
 }: DashboardHeaderProps) {
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false)
+  const moreMenuRef = useRef<HTMLDivElement | null>(null)
+  const moreToggleRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    if (!moreMenuOpen) return
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (!moreMenuRef.current?.contains(target) && !moreToggleRef.current?.contains(target)) {
+        setMoreMenuOpen(false)
+      }
+    }
+    document.addEventListener('click', handleClick)
+    return () => document.removeEventListener('click', handleClick)
+  }, [moreMenuOpen])
+
   return (
     <header className="sticky top-0 z-40 border-b border-theme-border bg-theme-bg/95 backdrop-blur-sm">
       <div className="flex items-center justify-between px-4 py-2">
@@ -242,7 +269,8 @@ export default function DashboardHeader({
                     return (
                       <button
                         key={ds}
-                        className={`rounded px-2 py-0.5 text-[10px] font-medium cursor-pointer ${pillClass}`}
+                        className={`inline-flex max-w-full items-center rounded px-2 py-0.5 text-[10px] font-medium cursor-pointer ${pillClass}`}
+                        title={ds}
                         onClick={() => {
                           setFilters((prev) => {
                             const next = { ...prev, selectedDatasets: { include: [...prev.selectedDatasets.include], exclude: [...prev.selectedDatasets.exclude] } }
@@ -260,7 +288,8 @@ export default function DashboardHeader({
                           })
                         }}
                       >
-                        {isExc ? `x ${ds}` : ds}
+                        {isExc ? <span className="mr-1">x</span> : null}
+                        <span className="filter-pill-text max-w-[220px] truncate">{ds}</span>
                       </button>
                     )
                   })}
@@ -278,7 +307,8 @@ export default function DashboardHeader({
                     return (
                       <button
                         key={la}
-                        className={`rounded px-2 py-0.5 text-[10px] font-medium cursor-pointer ${pillClass}`}
+                        className={`inline-flex max-w-full items-center rounded px-2 py-0.5 text-[10px] font-medium cursor-pointer ${pillClass}`}
+                        title={la}
                         onClick={() => {
                           setFilters((prev) => {
                             const next = { ...prev, selectedLabels: { include: [...prev.selectedLabels.include], exclude: [...prev.selectedLabels.exclude] } }
@@ -296,7 +326,8 @@ export default function DashboardHeader({
                           })
                         }}
                       >
-                        {isExc ? `x ${la}` : la}
+                        {isExc ? <span className="mr-1">x</span> : null}
+                        <span className="filter-pill-text max-w-[220px] truncate">{la}</span>
                       </button>
                     )
                   })}
@@ -326,32 +357,34 @@ export default function DashboardHeader({
                   </span>
                 ) : null}
                 {(filters.selectedDatasets?.include || []).map((ds) => (
-                  <span key={`ds-inc-${ds}`} className="inline-flex items-center gap-1 rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] text-emerald-300">
-                    {ds}
+                  <span key={`ds-inc-${ds}`} className="inline-flex max-w-full items-center gap-1 rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] text-emerald-300">
+                    <span className="filter-pill-text max-w-[180px] truncate" title={ds}>{ds}</span>
                     <button className="ml-1 hover:text-white" onClick={() => {
                       setFilters((prev) => ({ ...prev, selectedDatasets: { ...prev.selectedDatasets, include: prev.selectedDatasets.include.filter((d) => d !== ds) } }))
                     }}>x</button>
                   </span>
                 ))}
                 {(filters.selectedDatasets?.exclude || []).map((ds) => (
-                  <span key={`ds-exc-${ds}`} className="inline-flex items-center gap-1 rounded bg-rose-500/20 px-2 py-0.5 text-[10px] text-rose-300">
-                    x {ds}
+                  <span key={`ds-exc-${ds}`} className="inline-flex max-w-full items-center gap-1 rounded bg-rose-500/20 px-2 py-0.5 text-[10px] text-rose-300">
+                    <span>x</span>
+                    <span className="filter-pill-text max-w-[180px] truncate" title={ds}>{ds}</span>
                     <button className="ml-1 hover:text-white" onClick={() => {
                       setFilters((prev) => ({ ...prev, selectedDatasets: { ...prev.selectedDatasets, exclude: prev.selectedDatasets.exclude.filter((d) => d !== ds) } }))
                     }}>x</button>
                   </span>
                 ))}
                 {(filters.selectedLabels?.include || []).map((la) => (
-                  <span key={`la-inc-${la}`} className="inline-flex items-center gap-1 rounded bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-300">
-                    {la}
+                  <span key={`la-inc-${la}`} className="inline-flex max-w-full items-center gap-1 rounded bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-300">
+                    <span className="filter-pill-text max-w-[180px] truncate" title={la}>{la}</span>
                     <button className="ml-1 hover:text-white" onClick={() => {
                       setFilters((prev) => ({ ...prev, selectedLabels: { ...prev.selectedLabels, include: prev.selectedLabels.include.filter((l) => l !== la) } }))
                     }}>x</button>
                   </span>
                 ))}
                 {(filters.selectedLabels?.exclude || []).map((la) => (
-                  <span key={`la-exc-${la}`} className="inline-flex items-center gap-1 rounded bg-rose-500/20 px-2 py-0.5 text-[10px] text-rose-300">
-                    x {la}
+                  <span key={`la-exc-${la}`} className="inline-flex max-w-full items-center gap-1 rounded bg-rose-500/20 px-2 py-0.5 text-[10px] text-rose-300">
+                    <span>x</span>
+                    <span className="filter-pill-text max-w-[180px] truncate" title={la}>{la}</span>
                     <button className="ml-1 hover:text-white" onClick={() => {
                       setFilters((prev) => ({ ...prev, selectedLabels: { ...prev.selectedLabels, exclude: prev.selectedLabels.exclude.filter((l) => l !== la) } }))
                     }}>x</button>
@@ -463,23 +496,103 @@ export default function DashboardHeader({
               <use href="#icon-gear"></use>
             </svg>
           </button>
+          <div className="dropdown relative">
+            <button
+              ref={moreToggleRef}
+              id="more-menu-toggle"
+              className="flex h-7 w-4 items-center justify-center text-theme-text-muted hover:text-theme-text-secondary"
+              onClick={() => setMoreMenuOpen((prev) => !prev)}
+              title="More actions"
+            >
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="12" cy="5" r="1.6"></circle>
+                <circle cx="12" cy="12" r="1.6"></circle>
+                <circle cx="12" cy="19" r="1.6"></circle>
+              </svg>
+            </button>
+            <div
+              ref={moreMenuRef}
+              id="more-menu"
+              className={`absolute right-0 z-50 mt-1 w-44 rounded border border-zinc-700 bg-zinc-900 p-1.5 text-xs shadow-xl ${moreMenuOpen ? '' : 'hidden'}`}
+            >
+              <button
+                id="restart-server-btn"
+                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-amber-300 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => {
+                  setMoreMenuOpen(false)
+                  onRestartServer()
+                }}
+                disabled={isRestartingServer}
+                title="Restart the EZVals server"
+              >
+                <svg className={`h-3.5 w-3.5 ${isRestartingServer ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <use href="#icon-refresh"></use>
+                </svg>
+                <span>{isRestartingServer ? 'Restarting...' : 'Reload Server'}</span>
+              </button>
+            </div>
+          </div>
           <div className="flex items-center">
             <span id="compare-mode-label" className={`h-7 items-center px-3 text-xs font-medium text-theme-text-muted select-none cursor-default border border-transparent ${isComparisonMode ? 'flex' : 'hidden'}`}>
               Compare Mode
             </span>
-            <button
-              id="play-btn"
-              className={`flex h-7 items-center gap-1.5 ${runButtonState.showDropdown ? 'rounded-l' : 'rounded'} bg-emerald-600 px-3 text-xs font-medium text-white hover:bg-emerald-500 ${runButtonState.hidden ? 'hidden' : ''}`}
-              onClick={() => onRunExecute(runMode)}
-            >
-              <svg className={`play-icon h-3 w-3 ${runButtonState.isRunning ? 'hidden' : ''}`} viewBox="0 0 24 24" fill="currentColor">
-                <use href="#icon-play"></use>
-              </svg>
-              <svg className={`stop-icon h-3 w-3 ${runButtonState.isRunning ? '' : 'hidden'}`} viewBox="0 0 24 24" fill="currentColor">
-                <use href="#icon-stop"></use>
-              </svg>
-              <span id="play-btn-text">{runButtonState.text}</span>
-            </button>
+            {showPauseButton ? (
+              <div className="ml-2 flex items-center overflow-hidden rounded border border-theme-btn-border bg-theme-btn-bg shadow-sm">
+                <button
+                  id="pause-btn"
+                  className={`flex h-7 w-8 items-center justify-center transition-colors ${
+                    pauseButtonText === 'Pause'
+                      ? 'text-amber-500 hover:bg-amber-500/10'
+                      : 'text-emerald-500 hover:bg-emerald-500/10'
+                  }`}
+                  onClick={onPauseToggle}
+                  aria-label={pauseButtonText}
+                  title={pauseButtonText}
+                >
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+                    {pauseButtonText === 'Pause' ? (
+                      <>
+                        <rect x="6" y="5" width="4" height="14"></rect>
+                        <rect x="14" y="5" width="4" height="14"></rect>
+                      </>
+                    ) : (
+                      <use href="#icon-play"></use>
+                    )}
+                  </svg>
+                </button>
+                <button
+                  id="play-btn"
+                  className={`flex h-7 w-8 items-center justify-center border-l border-theme-btn-border text-rose-500 hover:bg-rose-500/10 ${runButtonState.hidden ? 'hidden' : ''}`}
+                  onClick={() => onRunExecute(runMode)}
+                  aria-label={runButtonState.text}
+                  title={runButtonState.text}
+                >
+                  <svg className="stop-icon h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+                    <use href="#icon-stop"></use>
+                  </svg>
+                  <svg className="play-icon hidden h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+                    <use href="#icon-play"></use>
+                  </svg>
+                  <span id="play-btn-text" className="sr-only">{runButtonState.text}</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                id="play-btn"
+                className={`ml-2 flex h-7 items-center gap-1.5 ${
+                  runButtonState.showDropdown ? 'rounded-l' : 'rounded'
+                } bg-emerald-600 px-3 text-xs font-medium text-white hover:bg-emerald-500 ${runButtonState.hidden ? 'hidden' : ''}`}
+                onClick={() => onRunExecute(runMode)}
+              >
+                <svg className="play-icon h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
+                  <use href="#icon-play"></use>
+                </svg>
+                <svg className="stop-icon hidden h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
+                  <use href="#icon-stop"></use>
+                </svg>
+                <span id="play-btn-text">{runButtonState.text}</span>
+              </button>
+            )}
             <div className="dropdown relative">
               <button
                 id="run-dropdown-toggle"

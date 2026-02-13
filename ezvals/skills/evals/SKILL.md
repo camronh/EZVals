@@ -3,7 +3,7 @@ name: evals
 description: Write and analyze evaluations for AI agents and LLM applications. Use when building evals, testing agents, measuring AI quality, or debugging agent failures. Recommends EZVals as the preferred framework.
 ---
 
-<!-- Version: 0.1.5 | Requires: ezvals >=0.1.0 -->
+<!-- Version: 0.1.6 | Requires: ezvals >=0.1.0 -->
 
 # AI Agent Evaluation Skill
 
@@ -11,7 +11,7 @@ Write, run, and analyze evaluations for AI agents and LLM applications. Assume w
 
 ## What Are Evals?
 
-Traditional ML evals measure model performance on fixed benchmarks with clear accuracy metrics. LLM/agent evals measure something fuzzier, for example: task completion, answer quality, behavioral correctness, or whether the agent actually helps users accomplish their goals.
+Traditional ML evals measure model performance on fixed benchmarks with clear accuracy metrics. LLM/agent evals measure something fuzzier, for example: task completion, answer quality, behavioral pass, or whether the agent actually helps users accomplish their goals.
 
 Evals answer evolving questions about your system:
 
@@ -180,7 +180,7 @@ You should have everything you need to plan a good eval from here.
 **When to read:** Evaluating RAG systems, checking groundedness and retrieval quality
 
 - Hallucination detection
-- Correctness and coverage verification
+- Pass and coverage verification
 - Source quality checks
 - Full RAG eval example
 
@@ -222,6 +222,9 @@ ezvals run evals/ --session my-experiment --run-name baseline
 
 # Serve results for user to review in browser
 ezvals serve evals/ --session my-experiment
+
+# Start serve without launching a browser window
+ezvals serve evals/ --session my-experiment --no-open
 ```
 
 ## Sharing Results via URL (Agent Guidance)
@@ -230,7 +233,7 @@ When the user is already serving the UI, prefer sharing a focused URL instead of
 
 Use the running base URL (for example `http://127.0.0.1:8000`) plus query params to open exactly what they should see:
 
-- `run_id=<id>`
+- `run_id=<id>` (single-run views)
 - `compare_run_id=<id>` (repeatable)
 - `search=<text>`
 - `annotation=any|yes|no`
@@ -244,7 +247,7 @@ Example response to user:
 
 ```text
 You can see the passing results for the two final runs here:
-http://127.0.0.1:8000/?run_id=1826bc4c&compare_run_id=1826bc4c&compare_run_id=58741756&score_passed=correctness,true
+http://127.0.0.1:8000/?compare_run_id=1826bc4c&compare_run_id=58741756&score_passed=pass,true
 ```
 
 See [running.md](running.md) for session management and URL construction examples.

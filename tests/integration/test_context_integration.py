@@ -23,7 +23,7 @@ class TestSimpleContextUsage:
             ctx.store(output="Hello", latency=0.01)
 
             ctx.store(
-                scores={"passed": ctx.output == ctx.reference, "key": "correctness"}
+                scores={"passed": ctx.output == ctx.reference, "key": "pass"}
             )
 
         result = await test_func.call_async()
@@ -33,7 +33,7 @@ class TestSimpleContextUsage:
         assert result.output == "Hello"
         assert result.latency > 0
         assert len(result.scores) == 1
-        assert result.scores[0].key == "correctness"
+        assert result.scores[0].key == "pass"
         assert result.scores[0].passed is True
 
 
@@ -45,7 +45,7 @@ class TestContextWithDefaults:
 
         @eval(
             dataset="test",
-            default_score_key="correctness",
+            default_score_key="pass",
             metadata={"model": "test-model", "version": "1.0"},
         )
         def test_func(ctx: EvalContext):
@@ -60,7 +60,7 @@ class TestContextWithDefaults:
 
         assert result.metadata == {"model": "test-model", "version": "1.0"}
         assert len(result.scores) == 1
-        assert result.scores[0].key == "correctness"
+        assert result.scores[0].key == "pass"
 
 
 class TestContextManager:
@@ -139,7 +139,7 @@ class TestCasesCustomParams:
 
         @eval(
             dataset="test",
-            default_score_key="correctness",
+            default_score_key="pass",
             cases=[
                 {"input": {"operation": "add", "a": 2, "b": 3}, "reference": 5},
                 {"input": {"operation": "multiply", "a": 4, "b": 7}, "reference": 28},
@@ -220,7 +220,7 @@ class TestAssertionPreservation:
     async def test_assertion_preserves_data(self):
         """Test that assertion failures preserve context data and create failing scores"""
 
-        @eval(dataset="test", default_score_key="correctness")
+        @eval(dataset="test", default_score_key="pass")
         async def test_func(ctx: EvalContext):
             ctx.input = "test input"
             ctx.reference = "expected output"
@@ -242,7 +242,7 @@ class TestAssertionPreservation:
         assert len(result.scores) == 1
         assert result.scores[0].passed is False
         assert "Output does not match reference" in result.scores[0].notes
-        assert result.scores[0].key == "correctness"
+        assert result.scores[0].key == "pass"
         # All data should be preserved
         assert result.input == "test input"
         assert result.output == "wrong output"
@@ -272,7 +272,7 @@ class TestAssertionPreservation:
     def test_actual_error_still_creates_error_field(self):
         """Test that non-assertion errors still set the error field"""
 
-        @eval(dataset="test", default_score_key="correctness")
+        @eval(dataset="test", default_score_key="pass")
         def test_func(ctx: EvalContext):
             ctx.input = "test"
             ctx.store(output="some output")
@@ -383,7 +383,7 @@ class TestExplicitReturn:
     async def test_explicit_return(self):
         """Test explicit return of context"""
 
-        @eval(dataset="test", default_score_key="correctness")
+        @eval(dataset="test", default_score_key="pass")
         async def test_func(ctx: EvalContext):
             ctx.input = "test"
             await asyncio.sleep(0.01)
@@ -405,7 +405,7 @@ class TestAutoReturn:
     async def test_auto_return(self):
         """Test auto-return when no explicit return"""
 
-        @eval(dataset="test", default_score_key="correctness")
+        @eval(dataset="test", default_score_key="pass")
         async def test_func(ctx: EvalContext):
             ctx.input = "test"
             await asyncio.sleep(0.01)
@@ -489,7 +489,7 @@ class TestEdgeCases:
         # Should have a default passing score
         assert result.scores is not None
         assert len(result.scores) == 1
-        assert result.scores[0].key == "correctness"
+        assert result.scores[0].key == "pass"
         assert result.scores[0].passed is True
 
     def test_context_score_without_notes(self):

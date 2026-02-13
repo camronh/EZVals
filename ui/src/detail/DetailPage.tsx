@@ -2,9 +2,11 @@ import type { MouseEvent as ReactMouseEvent } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ComparisonRun, NormalizedComparisonRun, RunResultRow, Score, TraceData } from '../types'
 import { getResultKey, normalizeComparisonRuns } from '../dashboard/utils'
+import { DataViewer, extractToolNamesFromMessages, getRawText } from '../components/DataViewer'
 
 const DETAIL_BODY_CLASS = 'min-h-screen bg-blue-50/40 font-sans text-zinc-800 dark:bg-neutral-950 dark:text-zinc-100'
 const COMPARISON_STORAGE_KEY = 'ezvals:comparisonRuns'
+const DETAIL_HEADER_HEIGHT = 120
 
 type ResultDetailPayload = {
   result: RunResultRow
@@ -45,34 +47,6 @@ type ResizeState = {
   container: HTMLDivElement
 }
 
-type MessageItem = {
-  key: string
-  role: string
-  title: string
-  content: string
-}
-
-type MessageSchema = {
-  role?: string
-  type?: string
-  name?: string
-  tool_call_id?: string
-  content?: unknown
-  text?: unknown
-  message?: unknown
-  tool_calls?: Array<{
-    id?: string
-    function?: { name?: string; arguments?: unknown }
-    name?: string
-    args?: unknown
-    input?: unknown
-  } | Record<string, unknown>>
-}
-
-type MarkedLike = { parse: (input: string) => string }
-type DomPurifyLike = { sanitize: (input: string) => string }
-type HljsLike = { highlight: (input: string, opts: { language: string }) => { value: string } }
-
 function useBodyClass(bodyClass: string, title?: string) {
   useEffect(() => {
     if (title) document.title = title
@@ -81,20 +55,6 @@ function useBodyClass(bodyClass: string, title?: string) {
       document.body.className = ''
     }
   }, [bodyClass, title])
-}
-
-function escapeHtml(str: unknown) {
-  if (str == null) return ''
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-}
-
-function looksLikeMarkdown(text: string) {
-  if (!text) return false
-  return [/^#{1,6}\s+\S/m, /^\s*[-*+]\s+\S/m, /^\s*\d+\.\s+\S/m, /^>+\s+\S/m, /`{3,}[\s\S]*?`{3,}/m, /\[.+?\]\(.+?\)/m]
-    .some((re) => re.test(text))
 }
 
 function buildRunCommand(path: string | null | undefined, name: string | null | undefined) {
@@ -108,64 +68,13 @@ function getLatencyColor(latency?: number | null) {
   return 'text-amber-600 dark:text-amber-400'
 }
 
-function getRawText(content: unknown) {
-  if (content == null) return ''
-  if (typeof content === 'string') return content
-  if (typeof content === 'number' || typeof content === 'boolean') return String(content)
-  try {
-    return JSON.stringify(content, null, 2)
-  } catch {
-    return String(content)
-  }
-}
-
-function buildViewer(content: unknown, placeholder = '—') {
-  if (content == null || content === '') {
-    return {
-      raw: '',
-      html: `<div class="data-surface text-xs text-zinc-400">${escapeHtml(placeholder)}</div>`,
-    }
-  }
-
-  let rawText = getRawText(content)
-  let mode = 'text'
-  if (typeof content === 'object' && content !== null) {
-    mode = 'json'
-  } else if (typeof content === 'string') {
-    try {
-      const parsed = JSON.parse(rawText)
-      rawText = JSON.stringify(parsed, null, 2)
-      mode = 'json'
-    } catch {
-      if (looksLikeMarkdown(rawText.trim())) mode = 'markdown'
-    }
-  }
-
-  if (mode === 'markdown') {
-    const marked = typeof window !== 'undefined' ? (window as unknown as { marked?: MarkedLike }).marked : undefined
-    const purifier = typeof window !== 'undefined' ? (window as unknown as { DOMPurify?: DomPurifyLike }).DOMPurify : undefined
-    let html = marked ? marked.parse(rawText) : `<pre class="data-pre">${escapeHtml(rawText)}</pre>`
-    if (purifier) html = purifier.sanitize(html)
-    return { raw: rawText, html: `<div class="data-surface markdown-body">${html}</div>` }
-  }
-
-  if (mode === 'json') {
-    const hljs = typeof window !== 'undefined' ? (window as unknown as { hljs?: HljsLike }).hljs : undefined
-    let highlighted = escapeHtml(rawText)
-    if (hljs) {
-      try {
-        highlighted = hljs.highlight(rawText, { language: 'json' }).value
-      } catch {
-        highlighted = escapeHtml(rawText)
-      }
-    }
-    return {
-      raw: rawText,
-      html: `<div class="data-surface"><pre class="data-pre"><code class="hljs language-json">${highlighted}</code></pre></div>`,
-    }
-  }
-
-  return { raw: rawText, html: `<div class="data-surface"><pre class="data-pre">${escapeHtml(rawText)}</pre></div>` }
+function formatMetadataLabel(key: string) {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (ch) => ch.toUpperCase())
 }
 
 type CopyButtonProps = {
@@ -199,22 +108,6 @@ function CopyButton({ getText, className = '', title = 'Copy' }: CopyButtonProps
         <path d="M20 6L9 17l-5-5" />
       </svg>
     </button>
-  )
-}
-
-type DataViewerProps = {
-  content: unknown
-  placeholder?: string
-}
-
-function DataViewer({ content, placeholder }: DataViewerProps) {
-  const { html, raw } = useMemo(() => buildViewer(content, placeholder), [content, placeholder])
-  return (
-    <div
-      className="data-viewer"
-      data-raw={raw}
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
   )
 }
 
@@ -287,118 +180,6 @@ function InlineScoreBadges({ scores, latency }: InlineScoreBadgesProps) {
   )
 }
 
-function buildMessageItems(messages: MessageSchema[] | unknown) {
-  if (!Array.isArray(messages) || messages.length === 0) return { raw: '', items: [] }
-  const typedMessages = messages as MessageSchema[]
-  const isKnownSchema = typedMessages.every(
-    (msg) => (msg.role || msg.type) && (msg.content !== undefined || msg.text !== undefined || msg.message !== undefined || msg.tool_calls),
-  )
-
-  if (!isKnownSchema) {
-    return { raw: JSON.stringify(messages, null, 2), items: null }
-  }
-
-  const items: MessageItem[] = []
-  for (const msg of typedMessages) {
-    const role = (msg.role || msg.type || 'unknown').toLowerCase()
-    if (msg.tool_calls && Array.isArray(msg.tool_calls)) {
-      const toolCallsContent = msg.tool_calls.map((tc) => {
-        const fn = (tc as { function?: { name?: string; arguments?: unknown } }).function || tc
-        const name = (fn as { name?: string }).name || (tc as { name?: string }).name || 'tool'
-        let args = (fn as { arguments?: unknown }).arguments || (tc as { args?: unknown }).args || (tc as { input?: unknown }).input || {}
-        let argsStr
-        if (typeof args === 'string') {
-          try {
-            argsStr = JSON.stringify(JSON.parse(args), null, 2)
-          } catch {
-            argsStr = args
-          }
-        } else {
-          argsStr = JSON.stringify(args, null, 2)
-        }
-        return `${name}(${argsStr})`
-      }).join('\n\n')
-      items.push({
-        key: `tool-calls-${items.length}`,
-        role: 'tool_calls',
-        title: 'Tool Calls',
-        content: toolCallsContent,
-      })
-      continue
-    }
-
-    if (role === 'tool' || role === 'tool_result' || role === 'function') {
-      let toolName = msg.name
-      if (!toolName && msg.tool_call_id) {
-        for (const m of typedMessages) {
-          if (!m.tool_calls) continue
-          const found = m.tool_calls.find((t) => (t as { id?: string }).id === msg.tool_call_id)
-          if (found) {
-            const typed = found as { function?: { name?: string }; name?: string }
-            toolName = typed.function?.name || typed.name
-            break
-          }
-        }
-      }
-      toolName = toolName || 'tool'
-      let content = msg.content || msg.text || msg.message || ''
-      if (typeof content === 'object' && content !== null) {
-        content = JSON.stringify(content, null, 2)
-      } else if (typeof content === 'string') {
-        try {
-          content = JSON.stringify(JSON.parse(content), null, 2)
-        } catch {
-          try {
-            const jsonified = String(content)
-              .replace(/'/g, '"')
-              .replace(/True/g, 'true')
-              .replace(/False/g, 'false')
-              .replace(/None/g, 'null')
-              .replace(/datetime\.date\([^)]+\)/g, '"[date]"')
-              .replace(/datetime\.datetime\([^)]+\)/g, '"[datetime]"')
-            content = JSON.stringify(JSON.parse(jsonified), null, 2)
-          } catch {
-            // keep original
-          }
-        }
-      }
-      items.push({
-        key: `tool-result-${items.length}`,
-        role: 'tool_result',
-        title: `${toolName} Result`,
-        content: String(content),
-      })
-      continue
-    }
-
-    let content = msg.content || msg.text || msg.message || ''
-    if (Array.isArray(content)) {
-      content = content.map((c) => {
-        if (typeof c === 'string') return c
-        if (typeof c === 'object' && c !== null) {
-          const typed = c as { text?: string; content?: string }
-          return typed.text || typed.content || JSON.stringify(c)
-        }
-        return String(c)
-      }).join('\n')
-    }
-    if (typeof content === 'object' && content !== null) {
-      content = JSON.stringify(content, null, 2)
-    }
-
-    const normalizedRole = role === 'human' ? 'user' : role === 'ai' ? 'assistant' : role
-    const displayRole = normalizedRole.charAt(0).toUpperCase() + normalizedRole.slice(1)
-    items.push({
-      key: `msg-${items.length}`,
-      role: normalizedRole,
-      title: displayRole,
-      content: String(content),
-    })
-  }
-
-  return { raw: JSON.stringify(messages, null, 2), items }
-}
-
 export default function DetailPage() {
   useBodyClass(DETAIL_BODY_CLASS, 'Result Detail - EZVals')
 
@@ -421,9 +202,14 @@ export default function DetailPage() {
   const [annotationDraft, setAnnotationDraft] = useState('')
   const [annotationSaving, setAnnotationSaving] = useState(false)
   const [annotationError, setAnnotationError] = useState<string | null>(null)
-  const [inputWidth, setInputWidth] = useState(50)
-  const [refHeight, setRefHeight] = useState(150)
-  const [sidebarWidth, setSidebarWidth] = useState(320)
+  const [inputWidth, setInputWidth] = useState(() => (window.innerWidth < 1100 ? 55 : 50))
+  const [refHeight, setRefHeight] = useState(() => {
+    const availableHeight = Math.max(200, window.innerHeight - DETAIL_HEADER_HEIGHT)
+    return Math.max(100, Math.min(150, Math.floor(availableHeight * 0.3)))
+  })
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    return Math.max(220, Math.min(320, Math.floor(window.innerWidth * 0.28)))
+  })
   const resizingRef = useRef<ResizeState | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
 
@@ -459,6 +245,19 @@ export default function DetailPage() {
   useEffect(() => {
     fetchDetail()
   }, [fetchDetail])
+
+  useEffect(() => {
+    const handleViewportResize = () => {
+      const maxSidebar = Math.max(220, Math.min(600, Math.floor(window.innerWidth * 0.35)))
+      const availableHeight = Math.max(200, window.innerHeight - DETAIL_HEADER_HEIGHT)
+      const maxRefHeight = Math.max(100, Math.min(400, Math.floor(availableHeight * 0.35)))
+      setSidebarWidth((prev) => Math.min(prev, maxSidebar))
+      setRefHeight((prev) => Math.min(prev, maxRefHeight))
+    }
+    handleViewportResize()
+    window.addEventListener('resize', handleViewportResize)
+    return () => window.removeEventListener('resize', handleViewportResize)
+  }, [])
 
   useEffect(() => {
     if (!data || !isComparisonMode) {
@@ -544,7 +343,7 @@ export default function DetailPage() {
       const { type, startX, startY, startValue, container } = resizingRef.current
       if (type === 'input-width') {
         const dx = e.clientX - startX
-        const containerWidth = container.offsetWidth - sidebarWidth
+        const containerWidth = Math.max(1, container.offsetWidth - sidebarWidth)
         const newPct = Math.max(20, Math.min(80, startValue + (dx / containerWidth) * 100))
         setInputWidth(newPct)
       } else if (type === 'ref-height') {
@@ -683,6 +482,9 @@ export default function DetailPage() {
   const status = result.status || 'completed'
   const hasReference = result.reference != null && result.reference !== '—'
   const hasMetadata = result.metadata != null && result.metadata !== '—'
+  const metadataEntries = hasMetadata
+    ? Object.entries(result.metadata as Record<string, unknown>)
+    : []
   const traceData = (result.trace_data || null) as TraceData | null
   const messages = Array.isArray(traceData?.messages) ? traceData?.messages : []
   const hasMessages = messages.length > 0
@@ -692,7 +494,7 @@ export default function DetailPage() {
   const filteredTrace = traceData
     ? Object.fromEntries(Object.entries(traceData).filter(([k]) => k !== 'messages' && k !== 'trace_url'))
     : null
-  const messageData = buildMessageItems(messages)
+  const toolNames = extractToolNamesFromMessages(messages)
   const runCommand = buildRunCommand(data.eval_path, resultEntry?.function)
 
   const baseForCompare = comparison?.baseResult || resultEntry
@@ -916,17 +718,25 @@ export default function DetailPage() {
                 </div>
               ) : null}
               {resultEntry?.dataset ? (
-                <div className="flex items-center justify-between">
+                <div className="flex min-w-0 items-center justify-between gap-2">
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Dataset</span>
-                  <span className="text-xs text-zinc-600 dark:text-zinc-300">{resultEntry.dataset}</span>
+                  <span className="max-w-[70%] truncate text-right text-xs text-zinc-600 dark:text-zinc-300" title={resultEntry.dataset}>
+                    {resultEntry.dataset}
+                  </span>
                 </div>
               ) : null}
               {resultEntry?.labels?.length ? (
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Labels</span>
-                  <div className="flex gap-1">
+                  <div className="flex max-w-[70%] flex-wrap justify-end gap-1">
                     {resultEntry.labels.map((label) => (
-                      <span key={label} className="rounded bg-zinc-200 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">{label}</span>
+                      <span
+                        key={label}
+                        className="max-w-[140px] truncate rounded bg-zinc-200 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300"
+                        title={label}
+                      >
+                        {label}
+                      </span>
                     ))}
                   </div>
                 </div>
@@ -943,6 +753,16 @@ export default function DetailPage() {
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
                     View Trace
                   </a>
+                </div>
+              ) : null}
+              {toolNames.length > 0 ? (
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Tools</span>
+                  <div id="tool-names" className="flex max-w-[70%] flex-wrap justify-end gap-1">
+                    {toolNames.map((toolName) => (
+                      <span key={toolName} className="rounded bg-zinc-200 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">{toolName}</span>
+                    ))}
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -984,8 +804,35 @@ export default function DetailPage() {
                 </button>
                 <div className={`collapsible-content ${collapsed.metadata ? '' : 'open'}`}>
                   <div>
-                    <div className="p-2 max-h-40 overflow-auto">
-                      <DataViewer content={result.metadata} placeholder="—" />
+                    <div className="p-2 max-h-48 overflow-auto">
+                      <dl className="space-y-2">
+                        {metadataEntries.map(([key, value]) => {
+                          const valueText = getRawText(value) || '—'
+                          const isUrl = typeof value === 'string' && /^https?:\/\/\S+$/i.test(value.trim())
+                          const label = formatMetadataLabel(key)
+                          return (
+                            <div key={key} className="rounded border border-zinc-200 bg-white/70 px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900/60">
+                              <dt className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">{label}</dt>
+                              <dd className="mt-1">
+                                {isUrl ? (
+                                  <a
+                                    href={value}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-xs text-blue-600 underline underline-offset-2 break-all hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
+                                  >
+                                    {value}
+                                  </a>
+                                ) : (
+                                  <pre className="font-mono text-xs text-zinc-700 dark:text-zinc-200 whitespace-pre-wrap break-words">
+                                    {valueText}
+                                  </pre>
+                                )}
+                              </dd>
+                            </div>
+                          )
+                        })}
+                      </dl>
                     </div>
                   </div>
                 </div>
@@ -1121,7 +968,7 @@ export default function DetailPage() {
             style={{ width: '700px' }}
           >
             <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-2 dark:border-zinc-700">
-              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Messages <span className="text-zinc-400">({traceData.messages.length})</span></span>
+              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Messages <span className="text-zinc-400">({messages.length})</span></span>
               <button
                 onClick={() => setMessagesOpen(false)}
                 className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800"
@@ -1130,17 +977,8 @@ export default function DetailPage() {
               </button>
             </div>
             <div className="h-[calc(100%-41px)] overflow-auto">
-              <div className="space-y-1 p-2">
-                {messageData.items ? (
-                  messageData.items.map((item) => (
-                    <div key={item.key} className={`msg-box msg-${item.role}`}>
-                      <div className="msg-box-header">{item.title}</div>
-                      <div className="msg-box-content">{item.content}</div>
-                    </div>
-                  ))
-                ) : (
-                  <pre className="data-pre text-zinc-300 text-xs p-2">{messageData.raw}</pre>
-                )}
+              <div className="p-2">
+                <DataViewer content={messages} placeholder="—" />
               </div>
             </div>
           </div>

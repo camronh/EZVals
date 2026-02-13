@@ -91,8 +91,16 @@ type ComparisonRow = {
   searchText: string
 }
 
-type ResizeState = { colKey: string; startX: number; startWidth: number }
+type ResizeState = { colKey: string; startX: number; startWidth: number; moved: boolean }
 type SettingsFormState = { concurrency: string; results_dir: string; timeout: string }
+type DashboardQueryState = {
+  runId: string | null
+  comparisonRuns: ComparisonRun[]
+  search: string | null
+  hasFilters: boolean
+  filters: FilterState
+  sortState: SortStateItem[]
+}
 
 function parseScoreValueRule(raw: string) {
   const parts = raw.split(',')
@@ -123,8 +131,161 @@ function parseScorePassedRule(raw: string) {
   return { key, value: valueRaw === 'true' }
 }
 
+function parseSortRule(raw: string) {
+  const parts = raw.split(',')
+  if (parts.length < 2 || parts.length > 3) return null
+  const col = (parts[0] || '').trim()
+  const dirRaw = (parts[1] || '').trim()
+  const type = (parts[2] || 'string').trim()
+  if (!col || (dirRaw !== 'asc' && dirRaw !== 'desc') || !type) return null
+  return { col, dir: dirRaw, type } as SortStateItem
+}
+
+function serializeSortRule(rule: SortStateItem) {
+  const col = (rule.col || '').trim()
+  const dir = rule.dir
+  const type = (rule.type || 'string').trim()
+  if (!col || (dir !== 'asc' && dir !== 'desc') || !type) return null
+  return `${col},${dir},${type}`
+}
+
+function readDashboardQuery(params: URLSearchParams): DashboardQueryState {
+  const search = params.get('search')
+  const annotationParam = params.get('annotation')
+  const annotation = (annotationParam === 'yes' || annotationParam === 'no' || annotationParam === 'any')
+    ? annotationParam
+    : 'any'
+  const hasErrorRaw = params.get('has_error')
+  const hasUrlRaw = params.get('has_url')
+  const hasMessagesRaw = params.get('has_messages')
+
+  const hasError = hasErrorRaw === '1' ? true : hasErrorRaw === '0' ? false : null
+  const hasUrl = hasUrlRaw === '1' ? true : hasUrlRaw === '0' ? false : null
+  const hasMessages = hasMessagesRaw === '1' ? true : hasMessagesRaw === '0' ? false : null
+
+  const valueRules = params.getAll('score_value')
+    .map(parseScoreValueRule)
+    .filter((v): v is NonNullable<typeof v> => !!v)
+  const passedRules = params.getAll('score_passed')
+    .map(parseScorePassedRule)
+    .filter((v): v is NonNullable<typeof v> => !!v)
+
+  const datasetIn = params.getAll('dataset_in').map((x) => x.trim()).filter(Boolean)
+  const datasetOut = params.getAll('dataset_out').map((x) => x.trim()).filter(Boolean)
+  const labelIn = params.getAll('label_in').map((x) => x.trim()).filter(Boolean)
+  const labelOut = params.getAll('label_out').map((x) => x.trim()).filter(Boolean)
+  const sortState = params.getAll('sort')
+    .map(parseSortRule)
+    .filter((v): v is NonNullable<typeof v> => !!v)
+
+  const runIdRaw = (params.get('run_id') || '').trim()
+  const runId = runIdRaw || null
+  const compareRunIds = params.getAll('compare_run_id').map((x) => x.trim()).filter(Boolean)
+  const effectiveCompareIds: string[] = []
+  if (compareRunIds.length) {
+    if (compareRunIds.length === 1 && runId) effectiveCompareIds.push(runId)
+    compareRunIds.forEach((id) => {
+      if (!effectiveCompareIds.includes(id)) effectiveCompareIds.push(id)
+    })
+  }
+
+  return {
+    runId: compareRunIds.length > 1 ? null : runId,
+    comparisonRuns: effectiveCompareIds.map((id) => ({ runId: id, runName: id })),
+    search,
+    hasFilters:
+      params.has('annotation') ||
+      params.has('has_error') ||
+      params.has('has_url') ||
+      params.has('has_messages') ||
+      params.has('score_value') ||
+      params.has('score_passed') ||
+      params.has('dataset_in') ||
+      params.has('dataset_out') ||
+      params.has('label_in') ||
+      params.has('label_out'),
+    filters: {
+      valueRules,
+      passedRules,
+      annotation,
+      selectedDatasets: { include: datasetIn, exclude: datasetOut },
+      selectedLabels: { include: labelIn, exclude: labelOut },
+      hasUrl,
+      hasMessages,
+      hasError,
+    },
+    sortState,
+  }
+}
+
+function writeDashboardQuery(args: {
+  runId: string | null | undefined
+  comparisonRuns: ComparisonRun[] | NormalizedComparisonRun[]
+  search: string
+  filters: FilterState
+  sortState: SortStateItem[]
+}) {
+  const params = new URLSearchParams()
+  const normalizedComparison = normalizeComparisonRuns(args.comparisonRuns)
+  const isComparisonMode = normalizedComparison.length > 1
+  const runId = (args.runId || '').trim()
+  if (runId && !isComparisonMode) params.set('run_id', runId)
+
+  normalizedComparison.forEach((run) => {
+    params.append('compare_run_id', run.runId)
+  })
+
+  const q = args.search.trim()
+  if (q) params.set('search', q)
+
+  const filters = args.filters || defaultFilters()
+  if (filters.annotation && filters.annotation !== 'any') params.set('annotation', filters.annotation)
+  if (filters.hasError !== null) params.set('has_error', filters.hasError ? '1' : '0')
+  if (filters.hasUrl !== null) params.set('has_url', filters.hasUrl ? '1' : '0')
+  if (filters.hasMessages !== null) params.set('has_messages', filters.hasMessages ? '1' : '0')
+  filters.selectedDatasets?.include?.forEach((value) => { if (value) params.append('dataset_in', value) })
+  filters.selectedDatasets?.exclude?.forEach((value) => { if (value) params.append('dataset_out', value) })
+  filters.selectedLabels?.include?.forEach((value) => { if (value) params.append('label_in', value) })
+  filters.selectedLabels?.exclude?.forEach((value) => { if (value) params.append('label_out', value) })
+
+  const valueOpMap: Record<string, string> = {
+    '>': 'gt',
+    '>=': 'gte',
+    '<': 'lt',
+    '<=': 'lte',
+    '==': 'eq',
+    '!=': 'neq',
+  }
+  filters.valueRules?.forEach((rule) => {
+    const key = (rule.key || '').trim()
+    const op = valueOpMap[rule.op]
+    if (!key || !op || Number.isNaN(rule.value)) return
+    params.append('score_value', `${key},${op},${rule.value}`)
+  })
+  filters.passedRules?.forEach((rule) => {
+    const key = (rule.key || '').trim()
+    if (!key || typeof rule.value !== 'boolean') return
+    params.append('score_passed', `${key},${rule.value ? 'true' : 'false'}`)
+  })
+
+  args.sortState.forEach((rule) => {
+    const serialized = serializeSortRule(rule)
+    if (serialized) params.append('sort', serialized)
+  })
+  return params
+}
+
 function hasRunningResults(data: RunSummary | null) {
+  if (!data || data.is_paused) return false
+  return (data.results || []).some((r) => ['pending', 'running'].includes(r.result?.status))
+}
+
+function hasActiveResults(data: RunSummary | null) {
   return (data?.results || []).some((r) => ['pending', 'running'].includes(r.result?.status))
+}
+
+function hasRunningRows(data: RunSummary | null) {
+  return (data?.results || []).some((r) => r.result?.status === 'running')
 }
 
 function buildRowSearchText(row: RunResultRow) {
@@ -229,6 +390,7 @@ export default function DashboardPage() {
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set())
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set())
   const [isRunningOverride, setIsRunningOverride] = useState(false)
+  const [isRestartingServer, setIsRestartingServer] = useState(false)
   const [hasRunBefore, setHasRunBefore] = useState(false)
   const [animateStats, setAnimateStats] = useState(false)
   const [settingsForm, setSettingsForm] = useState<SettingsFormState>({ concurrency: '', results_dir: '', timeout: '' })
@@ -247,7 +409,9 @@ export default function DashboardPage() {
   const selectAllRef = useRef<HTMLInputElement | null>(null)
   const lastCheckedRef = useRef<number | null>(null)
   const resizeStateRef = useRef<ResizeState | null>(null)
+  const suppressSortUntilRef = useRef<number>(0)
   const headerRefs = useRef<Record<string, HTMLElement | null>>({})
+  const isHydratingFromQueryRef = useRef(false)
 
   const debouncedSearch = useDebouncedValue(search, 120)
   const normalizedComparisonRuns = useMemo(() => normalizeComparisonRuns(comparisonRuns), [comparisonRuns])
@@ -353,7 +517,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!data || isComparisonMode) return undefined
-    if (!hasRunningResults(data)) return undefined
+    const shouldRefresh = hasRunningRows(data) || (!data.is_paused && hasActiveResults(data))
+    if (!shouldRefresh) return undefined
     const timer = setTimeout(() => {
       loadResults(true)
     }, 500)
@@ -366,75 +531,44 @@ export default function DashboardPage() {
   }, [data])
 
   useEffect(() => {
+    isHydratingFromQueryRef.current = true
     const savedY = sessionStorage.getItem('ezvals:scrollY')
     const params = new URLSearchParams(window.location.search)
-    const searchParam = params.get('search')
-    if (searchParam != null) setSearch(searchParam)
+    const query = readDashboardQuery(params)
 
-    const annotationParam = params.get('annotation')
-    const annotation = (annotationParam === 'yes' || annotationParam === 'no' || annotationParam === 'any')
-      ? annotationParam
-      : 'any'
-    const hasErrorRaw = params.get('has_error')
-    const hasUrlRaw = params.get('has_url')
-    const hasMessagesRaw = params.get('has_messages')
+    if (query.search != null) setSearch(query.search)
+    if (query.hasFilters) setFilters(query.filters)
+    if (params.has('sort')) setSortState(query.sortState)
+    if (query.comparisonRuns.length) setComparisonRuns(query.comparisonRuns)
+    if (query.runId) setQueryActiveRunId(query.runId)
 
-    const hasError = hasErrorRaw === '1' ? true : hasErrorRaw === '0' ? false : null
-    const hasUrl = hasUrlRaw === '1' ? true : hasUrlRaw === '0' ? false : null
-    const hasMessages = hasMessagesRaw === '1' ? true : hasMessagesRaw === '0' ? false : null
-
-    const valueRules = params.getAll('score_value')
-      .map(parseScoreValueRule)
-      .filter((v): v is NonNullable<typeof v> => !!v)
-    const passedRules = params.getAll('score_passed')
-      .map(parseScorePassedRule)
-      .filter((v): v is NonNullable<typeof v> => !!v)
-
-    const datasetIn = params.getAll('dataset_in').map((x) => x.trim()).filter(Boolean)
-    const datasetOut = params.getAll('dataset_out').map((x) => x.trim()).filter(Boolean)
-    const labelIn = params.getAll('label_in').map((x) => x.trim()).filter(Boolean)
-    const labelOut = params.getAll('label_out').map((x) => x.trim()).filter(Boolean)
-
-    if (
-      params.has('annotation') ||
-      params.has('has_error') ||
-      params.has('has_url') ||
-      params.has('has_messages') ||
-      params.has('score_value') ||
-      params.has('score_passed') ||
-      params.has('dataset_in') ||
-      params.has('dataset_out') ||
-      params.has('label_in') ||
-      params.has('label_out')
-    ) {
-      setFilters({
-        valueRules,
-        passedRules,
-        annotation,
-        selectedDatasets: { include: datasetIn, exclude: datasetOut },
-        selectedLabels: { include: labelIn, exclude: labelOut },
-        hasUrl,
-        hasMessages,
-        hasError,
-      })
-    }
-
-    const compareRunIds = params.getAll('compare_run_id').map((x) => x.trim()).filter(Boolean)
-    if (compareRunIds.length) {
-      setComparisonRuns(compareRunIds.map((runId) => ({ runId, runName: runId } as ComparisonRun)))
-    }
-    const runId = params.get('run_id')
-    if (runId) {
-      setQueryActiveRunId(runId)
-    }
     if (savedY != null) {
       window.scrollTo(0, parseInt(savedY, 10))
       sessionStorage.removeItem('ezvals:scrollY')
     }
     if (params.has('scroll')) {
-      history.replaceState(null, '', window.location.pathname)
+      params.delete('scroll')
+      const queryString = params.toString()
+      const nextUrl = queryString ? `${window.location.pathname}?${queryString}` : window.location.pathname
+      history.replaceState(null, '', nextUrl)
     }
+    isHydratingFromQueryRef.current = false
   }, [setComparisonRuns, setFilters, setSearch])
+
+  useEffect(() => {
+    if (!data || isHydratingFromQueryRef.current) return
+    const params = writeDashboardQuery({
+      runId: data.run_id,
+      comparisonRuns: normalizedComparisonRuns,
+      search,
+      filters,
+      sortState,
+    })
+    const query = params.toString()
+    const nextUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname
+    const currentUrl = `${window.location.pathname}${window.location.search}`
+    if (nextUrl !== currentUrl) history.replaceState(null, '', nextUrl)
+  }, [data, filters, normalizedComparisonRuns, search, sortState])
 
   useEffect(() => {
     if (!queryActiveRunId || !data) return
@@ -663,13 +797,15 @@ export default function DashboardPage() {
   const displayFilteredCount = filteredStats ? filteredStats.filtered : null
 
   const runButtonState = useMemo<RunButtonState>(() => {
+    const isPaused = !!data?.is_paused
     const isRunning = isRunningOverride || hasRunningResults(data)
+    const isActive = isPaused || isRunning
     const hasSelections = selectedIndices.size > 0
     if (isComparisonMode) {
       return { hidden: true, text: 'Run', showDropdown: false, isRunning }
     }
-    if (isRunning) {
-      return { hidden: false, text: 'Stop', showDropdown: false, isRunning }
+    if (isActive) {
+      return { hidden: false, text: 'Stop', showDropdown: false, isRunning: true }
     }
     if (!hasRunBefore) {
       return { hidden: false, text: 'Run', showDropdown: false, isRunning }
@@ -680,7 +816,16 @@ export default function DashboardPage() {
     return { hidden: false, text: runMode === 'new' ? 'New Run' : 'Rerun', showDropdown: true, isRunning }
   }, [data, hasRunBefore, isComparisonMode, runMode, selectedIndices.size, isRunningOverride])
 
+  const showPauseButton = useMemo(() => {
+    if (isComparisonMode) return false
+    return hasActiveResults(data)
+  }, [data, isComparisonMode])
+
+  const pauseButtonText = useMemo<'Pause' | 'Resume'>(() => (data?.is_paused ? 'Resume' : 'Pause'), [data])
+
   const handleToggleSort = useCallback((col: string, type: string, multi: boolean) => {
+    if (resizeStateRef.current) return
+    if (performance.now() < suppressSortUntilRef.current) return
     setSortState((prev) => {
       const next = [...prev]
       const idx = next.findIndex((s) => s.col === col)
@@ -746,23 +891,34 @@ export default function DashboardPage() {
     event.stopPropagation()
     const th = headerRefs.current[colKey]
     if (!th) return
+
+    const measuredWidths: Record<string, number> = {}
+    Object.entries(headerRefs.current).forEach(([key, header]) => {
+      if (!header || header.classList.contains('hidden')) return
+      const width = Math.round(header.getBoundingClientRect().width)
+      if (width > 0) measuredWidths[key] = width
+    })
+    if (Object.keys(measuredWidths).length) setColWidths((prev) => ({ ...prev, ...measuredWidths }))
+
     const startX = event.clientX
-    const startWidth = th.getBoundingClientRect().width
-    resizeStateRef.current = { colKey, startX, startWidth }
+    const startWidth = measuredWidths[colKey] ?? th.getBoundingClientRect().width
+    resizeStateRef.current = { colKey, startX, startWidth, moved: false }
     document.body.classList.add('ezvals-col-resize')
-  }, [])
+  }, [setColWidths])
 
   useEffect(() => {
     const handleMove = (event: MouseEvent) => {
       if (!resizeStateRef.current) return
       const { colKey, startX, startWidth } = resizeStateRef.current
       const dx = event.clientX - startX
+      if (!resizeStateRef.current.moved && Math.abs(dx) >= 2) resizeStateRef.current.moved = true
       const minWidth = 50
       const maxWidth = 500
       const nextWidth = Math.max(minWidth, Math.min(maxWidth, startWidth + dx))
       setColWidths((prev) => ({ ...prev, [colKey]: Math.round(nextWidth) }))
     }
     const handleUp = () => {
+      if (resizeStateRef.current?.moved) suppressSortUntilRef.current = performance.now() + 200
       resizeStateRef.current = null
       document.body.classList.remove('ezvals-col-resize')
     }
@@ -806,6 +962,21 @@ export default function DashboardPage() {
     })
   }, [setComparisonRuns])
 
+  const handleMoveComparison = useCallback((runId: string, direction: 'up' | 'down') => {
+    setComparisonRuns((prev) => {
+      const existing = normalizeComparisonRuns(prev)
+      const currentIndex = existing.findIndex((run) => run.runId === runId)
+      if (currentIndex === -1) return prev
+      const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
+      if (targetIndex < 0 || targetIndex >= existing.length) return prev
+      const next = [...existing]
+      const temp = next[currentIndex]
+      next[currentIndex] = next[targetIndex]
+      next[targetIndex] = temp
+      return next.map((run) => ({ runId: run.runId, runName: run.runName }))
+    })
+  }, [setComparisonRuns])
+
   useEffect(() => {
     if (normalizedComparisonRuns.length <= 1) {
       if (comparisonRuns.length) setComparisonRuns([])
@@ -814,8 +985,8 @@ export default function DashboardPage() {
   }, [comparisonDataCount, comparisonRuns.length, normalizedComparisonRuns.length, setComparisonRuns])
 
   const handleRunExecute = useCallback(async (mode: string) => {
-    const isRunning = isRunningOverride || hasRunningResults(data)
-    if (isRunning) {
+    const isActive = !!data?.is_paused || isRunningOverride || hasRunningResults(data)
+    if (isActive) {
       try {
         await fetch('/api/runs/stop', { method: 'POST' })
       } catch {
@@ -859,6 +1030,40 @@ export default function DashboardPage() {
       alert(`Run failed: ${message}`)
     }
   }, [data, isRunningOverride, loadResults, selectedIndices])
+
+  const handlePauseToggle = useCallback(async () => {
+    if (!hasActiveResults(data)) return
+    const endpoint = data?.is_paused ? '/api/runs/resume' : '/api/runs/pause'
+    try {
+      const resp = await fetch(endpoint, { method: 'POST' })
+      if (!resp.ok) {
+        const text = await resp.text()
+        throw new Error(text || `HTTP ${resp.status}`)
+      }
+      if (data?.is_paused) setIsRunningOverride(true)
+      await loadResults(true)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      alert(`Run control failed: ${message}`)
+    }
+  }, [data, loadResults])
+
+  const handleRestartServer = useCallback(async () => {
+    if (isRestartingServer) return
+    setIsRestartingServer(true)
+    try {
+      const resp = await fetch('/api/server/restart', { method: 'POST' })
+      if (!resp.ok) {
+        const text = await resp.text()
+        throw new Error(text || `HTTP ${resp.status}`)
+      }
+      window.setTimeout(() => window.location.reload(), 700)
+    } catch (err) {
+      setIsRestartingServer(false)
+      const message = err instanceof Error ? err.message : String(err)
+      alert(`Restart failed: ${message}`)
+    }
+  }, [isRestartingServer])
 
   const handleThemeToggle = useCallback(() => {
     const html = document.documentElement
@@ -1079,6 +1284,8 @@ export default function DashboardPage() {
         setColWidths={setColWidths}
         handleExport={handleExport}
         handleSettingsOpen={handleSettingsOpen}
+        isRestartingServer={isRestartingServer}
+        onRestartServer={handleRestartServer}
         runButtonState={runButtonState}
         runMode={runMode}
         setRunMode={setRunMode}
@@ -1086,6 +1293,9 @@ export default function DashboardPage() {
         setRunMenuOpen={setRunMenuOpen}
         isComparisonMode={isComparisonMode}
         onRunExecute={handleRunExecute}
+        showPauseButton={showPauseButton}
+        pauseButtonText={pauseButtonText}
+        onPauseToggle={handlePauseToggle}
       />
 
       <main className="flex-1 overflow-auto px-4 py-4">
@@ -1112,6 +1322,7 @@ export default function DashboardPage() {
           onAddCompareToggle={() => setCompareDropdownOpen((prev) => !prev)}
           onAddMoreCompareToggle={() => setAddCompareOpen((prev) => !prev)}
           onRemoveComparison={handleRemoveComparison}
+          onMoveComparison={handleMoveComparison}
           runDropdownExpandedRef={runDropdownExpandedRef}
           compareDropdownAnchorRef={compareDropdownAnchorRef}
           addCompareAnchorRef={addCompareAnchorRef}

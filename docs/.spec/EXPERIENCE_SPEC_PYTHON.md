@@ -50,7 +50,7 @@ Scenario: Pre-populated context fields
 | `dataset` | str | filename | Group name for filtering | ✓ |
 | `labels` | list[str] | [] | Tags for filtering | ✓ (merges) |
 | `metadata` | dict | {} | Pre-populate ctx.metadata | ✓ (merges) |
-| `default_score_key` | str | "correctness" | Key for auto-added scores | ✓ |
+| `default_score_key` | str | "pass" | Key for auto-added scores | ✓ |
 | `timeout` | float | None | Max execution time (seconds) | ✓ |
 | `target` | callable | None | Pre-hook that runs first | ✓ |
 | `evaluators` | list[callable] | [] | Post-processing score functions | ✓ |
@@ -214,10 +214,10 @@ Scenario: Access run metadata in eval function
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `run_id` | str \| None | Unique run identifier (timestamp) |
-| `session_name` | str \| None | Session name for the run |
-| `run_name` | str \| None | Human-readable run name |
-| `eval_path` | str \| None | Path to eval file(s) being run |
+| `run_id` | str \| None | Unique run identifier (timestamp), read-only |
+| `session_name` | str \| None | Session name for the run, read-only |
+| `run_name` | str \| None | Human-readable run name, read-only |
+| `eval_path` | str \| None | Path to eval file(s) being run, read-only |
 
 **Per-eval metadata** (from the decorated function):
 
@@ -581,7 +581,7 @@ class TraceData:
 
 ```python
 class Score:
-    key: str = "correctness"    # Required, default is "correctness"
+    key: str = "pass"    # Required, default is "pass"
     value: float = None         # At least one of
     passed: bool = None         # these are required
     notes: str = None

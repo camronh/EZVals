@@ -10,7 +10,7 @@ This document specifies the web interface experience for EZVals.
 ezvals serve evals/
 ```
 
-Opens browser to `http://127.0.0.1:8000`. Evaluations are discovered but not auto-run.
+Starts at `http://127.0.0.1:8000` (browser opens by default unless `--no-open` is used). Evaluations are discovered but not auto-run.
 
 ---
 
@@ -103,8 +103,23 @@ Scenario: Run selected evaluations
 Scenario: Stop running evaluations
   Given evaluations are currently running
   When the user clicks Stop
-  Then pending evaluations are marked "cancelled"
-  And running evaluations complete but no new ones start
+  Then pending and running evaluations are marked "cancelled" immediately
+
+Scenario: Pause and resume running evaluations
+  Given evaluations are currently running
+  When the user clicks Pause
+  Then currently running evaluations complete
+  And no new evaluations start
+  And remaining queued evaluations stay pending
+
+  When the user clicks Resume
+  Then pending evaluations continue running from where the run paused
+
+Scenario: Reload server from UI
+  Given the UI is open
+  When the user clicks "Reload Server"
+  Then the current serve process is restarted
+  And it comes back on the same port with the same serve command arguments
 ```
 
 ### Result Status Indicators
@@ -136,11 +151,20 @@ Scenario: Detail view contents
     - Output (expandable JSON)
     - Reference (if set)
     - Scores (with key, value/passed, notes)
-    - Metadata (expandable JSON)
+    - Metadata (expandable key-value list with formatted labels and clickable links)
     - Run Data (expandable JSON)
     - Annotations (editable)
+    - Tools used (unique tool names from trace_data.messages tool calls, if present)
     - Latency
     - Error message (if any)
+
+Scenario: Message-format data rendering
+  Given the detail view is open
+  And input, output, reference, or trace messages contain chat-style message arrays
+  When the UI detects common message schemas (OpenAI, Anthropic, or text/message variants)
+  Then those sections default to a pretty chat-style rendering
+  And each section provides a Pretty/Raw toggle
+  And Raw shows the underlying JSON payload without transformation
 ```
 
 ### Navigation
@@ -214,20 +238,11 @@ Scenario: Keyboard navigation disabled while editing
 - **Edit mode**: Shows textarea with Save/Cancel buttons and Cmd+Enter hint
 - **Saving**: Shows spinner on Save button, buttons disabled
 
-### Score Editing
-
-```gherkin
-Scenario: Edit scores
-  Given the detail view is open
-  When the user modifies a score's value, passed, or notes
-  Then the change saves to the JSON file immediately
-```
-
 **Editable Fields:**
 - Annotations (via textarea with explicit save)
-- Scores (value, passed, notes)
 
 **Read-Only Fields:**
+- Scores
 - Input
 - Output
 - Reference
@@ -279,12 +294,18 @@ Scenario: Export as Markdown
 Scenario: Export as PNG
   Given evaluation results exist
   When the user clicks Export > PNG
-  Then a modal opens with a preview of a 1200x630 PNG image showing:
+  Then a modal opens with a PNG preview
+  And export controls are collapsed by default behind a compact options button
+  And the controls include:
+    - Editable title
+    - Score color customization
+    - Toggles for showing test count and average latency in the footer
+  And the preview image shows:
     - EZVals logo and title
-    - Test count (filtered/total if filters active)
-    - Average latency
+    - Test count (when enabled) in the bottom-left
+    - Average latency (when enabled) in the bottom-left
     - Vertical bar chart for each score metric with percentages
-    - "ezvals.com" branding
+    - EZVals logo and "ezvals.com" branding in the bottom-right
   And the image matches the current theme (dark or light)
   And the user can click Save to download the PNG
   And the user can click Copy to copy the image to clipboard
@@ -292,7 +313,10 @@ Scenario: Export as PNG
 Scenario: Export as PNG in comparison mode
   Given comparison mode is active with 2+ runs
   When the user clicks Export > PNG
-  Then the PNG preview shows:
+  Then the default title is the session name
+  And the modal includes editable run names and run colors
+  And the modal includes up/down controls to reorder runs
+  And the PNG preview shows:
     - Run chips with colors and test counts
     - Grouped bars per metric (one bar per run, colored by run)
     - Percentage labels above each bar
@@ -305,9 +329,6 @@ Scenario: Export as PNG in comparison mode
 
 | Key | Action | Context |
 |-----|--------|---------|
-| `r` | Refresh results | Table view |
-| `e` | Open export menu | Table view |
-| `f` | Focus filter input | Table view |
 | `↑` | Previous result | Detail view |
 | `↓` | Next result | Detail view |
 | `Esc` | Back to table | Detail view |
@@ -472,7 +493,10 @@ The UI is backed by these REST endpoints, also available programmatically.
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/runs/rerun` | POST | Start new run or rerun selected |
+| `/api/runs/pause` | POST | Pause queued execution after in-flight evals finish |
+| `/api/runs/resume` | POST | Resume pending evals on a paused run |
 | `/api/runs/stop` | POST | Cancel pending/running evals |
+| `/api/server/restart` | POST | Restart the current `ezvals serve` process |
 
 **Rerun Request Body:**
 ```json
@@ -582,7 +606,7 @@ Results are stored in `.ezvals/sessions/` with hierarchical session directories:
         "input": "I want a refund",
         "output": "I'll help you with that",
         "reference": null,
-        "scores": [{"key": "correctness", "passed": true}],
+        "scores": [{"key": "pass", "passed": true}],
         "error": null,
         "latency": 0.234,
         "metadata": {"model": "gpt-4"},
@@ -629,6 +653,13 @@ Scenario: Left panel in comparison mode
     - A "+" button to add more runs (if < 4 runs)
   And average latency is NOT shown (moved to chart)
   And test count is NOT shown (embedded in chips)
+
+Scenario: Reorder compared runs
+  Given comparison mode is active with 2+ runs
+  When the user clicks up/down controls on a run chip
+  Then the chip order updates immediately without exiting comparison mode
+  And chart bars and comparison table columns follow the new run order
+  And the first chip remains the primary run (cannot be removed)
 
 Scenario: Chart in comparison mode
   Given comparison mode is active
@@ -718,8 +749,8 @@ Response format: Same as `/results` endpoint (includes `score_chips`).
 | Result streaming | Tested |
 | JSON export | Tested |
 | CSV export | Partially tested |
-| Inline editing | Annotation editing tested, others minimal |
-| Keyboard shortcuts | Tested |
+| Inline editing | Annotation editing tested |
+| Keyboard shortcuts | Detail view arrows/Esc tested |
 | Stats bar | Tested |
 | Three-state filtering | Not tested |
 | Filter persistence | Not tested |

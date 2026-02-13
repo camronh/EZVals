@@ -10,7 +10,7 @@ Don't check if the agent used a specific sequence of tools or followed a particu
 
 | Metric | How to Measure |
 |--------|----------------|
-| **Correctness** | Unit tests pass |
+| **Pass** | Unit tests pass |
 | **No regressions** | Full test suite passes |
 | **Code quality** | Static analysis (linting, types, security) |
 | **Efficiency** | Turns taken, tokens used, tool calls |
@@ -31,7 +31,7 @@ def test_prime_function(ctx: EvalContext):
     exec(ctx.output, {}, local_ns)
     is_prime = local_ns.get("is_prime") or local_ns.get("check_prime")
 
-    # Test correctness with known cases
+    # Test pass with known cases
     assert is_prime(2) == True, "2 is prime"
     assert is_prime(4) == False, "4 is not prime"
     assert is_prime(17) == True, "17 is prime"
@@ -72,7 +72,7 @@ def test_security_fix(ctx: EvalContext):
 
 ## Static Analysis
 
-Check code quality beyond just correctness:
+Check code quality beyond just pass:
 
 ```python
 import subprocess
@@ -207,7 +207,7 @@ def test_with_isolation(ctx: EvalContext):
 
 ## Tracking Efficiency
 
-Monitor resource usage alongside correctness:
+Monitor resource usage alongside pass:
 
 ```python
 import time
@@ -228,7 +228,7 @@ async def coding_agent_target(ctx: EvalContext):
 
 @eval(target=coding_agent_target, input="Fix the bug in auth.py")
 async def test_with_efficiency(ctx: EvalContext):
-    # Correctness check
+    # Pass check
     assert verify_solution(ctx.output), "Solution doesn't work"
 
     # Efficiency metrics (informational, not failing)

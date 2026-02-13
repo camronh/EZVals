@@ -17,7 +17,7 @@
   },
   "topbarCtaButton": {
     "name": "Get Started",
-    "url": "/quickstart",
+    "url": "/setup",
     "type": "link"
   },
   "anchors": [
@@ -35,7 +35,7 @@
   "navigation": [
     {
       "group": "Getting Started",
-      "pages": ["introduction", "quickstart"]
+      "pages": ["introduction", "setup"]
     },
     {
       "group": "Examples",
