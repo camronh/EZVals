@@ -5,6 +5,9 @@ description: "All notable changes to EZVals"
 
 ## Unreleased
 
+- Added: Dashboard now includes a slim overflow menu action to reload the EZVals server from the UI when state gets stuck or eval files change.
+- Changed: In-app reload now performs a full `ezvals serve` process restart with the same serve arguments and preserves the active bound port.
+- Tests: Added unit and E2E coverage for restart re-exec flow, restart API signaling, and overflow-menu restart interaction.
 - Changed: Detail view metadata now renders as a readable key-value list instead of raw JSON, with human-friendly key labels.
 - Fixed: URL metadata values in detail view are now clickable links.
 - Tests: Added E2E coverage for metadata label formatting and clickable metadata URLs in detail view.

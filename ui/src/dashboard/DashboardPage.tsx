@@ -390,6 +390,7 @@ export default function DashboardPage() {
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set())
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set())
   const [isRunningOverride, setIsRunningOverride] = useState(false)
+  const [isRestartingServer, setIsRestartingServer] = useState(false)
   const [hasRunBefore, setHasRunBefore] = useState(false)
   const [animateStats, setAnimateStats] = useState(false)
   const [settingsForm, setSettingsForm] = useState<SettingsFormState>({ concurrency: '', results_dir: '', timeout: '' })
@@ -1033,6 +1034,23 @@ export default function DashboardPage() {
     }
   }, [data, loadResults])
 
+  const handleRestartServer = useCallback(async () => {
+    if (isRestartingServer) return
+    setIsRestartingServer(true)
+    try {
+      const resp = await fetch('/api/server/restart', { method: 'POST' })
+      if (!resp.ok) {
+        const text = await resp.text()
+        throw new Error(text || `HTTP ${resp.status}`)
+      }
+      window.setTimeout(() => window.location.reload(), 700)
+    } catch (err) {
+      setIsRestartingServer(false)
+      const message = err instanceof Error ? err.message : String(err)
+      alert(`Restart failed: ${message}`)
+    }
+  }, [isRestartingServer])
+
   const handleThemeToggle = useCallback(() => {
     const html = document.documentElement
     const isDark = html.classList.contains('dark')
@@ -1252,6 +1270,8 @@ export default function DashboardPage() {
         setColWidths={setColWidths}
         handleExport={handleExport}
         handleSettingsOpen={handleSettingsOpen}
+        isRestartingServer={isRestartingServer}
+        onRestartServer={handleRestartServer}
         runButtonState={runButtonState}
         runMode={runMode}
         setRunMode={setRunMode}

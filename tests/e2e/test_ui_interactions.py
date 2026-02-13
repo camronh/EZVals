@@ -232,3 +232,42 @@ def test_metadata_renders_as_key_values_with_links(tmp_path):
             expect(link).to_have_text("https://example.com/runs/123")
 
             browser.close()
+
+
+def test_restart_endpoint_sets_restart_requested_flag(tmp_path):
+    store = ResultsStore(tmp_path / "runs")
+    run_id = store.save_run(make_summary(), "2024-01-01T00-00-00Z")
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+    assert app.state.restart_requested is False
+
+    with run_server(app) as url:
+        resp = requests.post(f"{url}/api/server/restart", timeout=5)
+        assert resp.status_code == 200
+        assert resp.json()["ok"] is True
+
+    assert app.state.restart_requested is True
+
+
+def test_reload_server_button_posts_restart_endpoint(tmp_path):
+    store = ResultsStore(tmp_path / "runs")
+    run_id = store.save_run(make_summary(), "2024-01-01T00-00-00Z")
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(url)
+            page.wait_for_selector("#results-table")
+
+            with page.expect_request("**/api/server/restart") as req:
+                page.locator("#more-menu-toggle").click()
+                page.wait_for_selector("#more-menu")
+                page.locator("#restart-server-btn").click()
+
+            assert req.value.method == "POST"
+            expect(page.locator("#restart-server-btn")).to_be_disabled()
+            assert app.state.restart_requested is True
+
+            browser.close()

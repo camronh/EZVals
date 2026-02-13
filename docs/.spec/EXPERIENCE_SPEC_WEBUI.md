@@ -114,6 +114,12 @@ Scenario: Pause and resume running evaluations
 
   When the user clicks Resume
   Then pending evaluations continue running from where the run paused
+
+Scenario: Reload server from UI
+  Given the UI is open
+  When the user clicks "Reload Server"
+  Then the current serve process is restarted
+  And it comes back on the same port with the same serve command arguments
 ```
 
 ### Result Status Indicators
@@ -485,6 +491,7 @@ The UI is backed by these REST endpoints, also available programmatically.
 | `/api/runs/pause` | POST | Pause queued execution after in-flight evals finish |
 | `/api/runs/resume` | POST | Resume pending evals on a paused run |
 | `/api/runs/stop` | POST | Cancel pending/running evals |
+| `/api/server/restart` | POST | Restart the current `ezvals serve` process |
 
 **Rerun Request Body:**
 ```json

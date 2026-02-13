@@ -606,6 +606,49 @@ def test_failing():
             assert result.exit_code == 0
             assert captured["open_browser"] is False
 
+    def test_serve_restart_reexecs_process_for_eval_path(self, monkeypatch):
+        """serve should re-exec the command when in-app restart is requested"""
+        calls = {"serve": 0, "restart_port": None}
+
+        def fake_serve(**kwargs):
+            calls["serve"] += 1
+            return 8123
+
+        def fake_restart(port=None):
+            calls["restart_port"] = port
+
+        monkeypatch.setattr('ezvals.cli._serve', fake_serve)
+        monkeypatch.setattr('ezvals.cli._restart_current_process', fake_restart)
+
+        with self.runner.isolated_filesystem():
+            Path('evals.py').write_text('def x():\n    return 1\n')
+            result = self.runner.invoke(cli, ['serve', 'evals.py', '--no-open'])
+            assert result.exit_code == 0
+            assert calls["serve"] == 1
+            assert calls["restart_port"] == 8123
+
+    def test_serve_restart_reexecs_process_for_json_path(self, monkeypatch):
+        """serve should re-exec the command when JSON-mode app restart is requested"""
+        calls = {"serve_json": 0, "restart_port": None}
+
+        def fake_serve_from_json(**kwargs):
+            calls["serve_json"] += 1
+            return 9333
+
+        def fake_restart(port=None):
+            calls["restart_port"] = port
+
+        monkeypatch.setattr('ezvals.cli._serve_from_json', fake_serve_from_json)
+        monkeypatch.setattr('ezvals.cli._restart_current_process', fake_restart)
+
+        with self.runner.isolated_filesystem():
+            run_file = Path('run.json')
+            run_file.write_text('{"run_id":"r1","results":[]}')
+            result = self.runner.invoke(cli, ['serve', str(run_file), '--no-open'])
+            assert result.exit_code == 0
+            assert calls["serve_json"] == 1
+            assert calls["restart_port"] == 9333
+
     def test_serve_compare_runs_requires_two_names(self):
         """serve --compare-runs validates minimum names"""
         with self.runner.isolated_filesystem():

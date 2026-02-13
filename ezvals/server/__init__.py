@@ -130,6 +130,7 @@ def create_app(
     app.state.cancel_lock = Lock()
     app.state.run_thread = None
     app.state.selected_total = None  # Track count for selective reruns
+    app.state.restart_requested = False
 
     def start_run(
         functions: List[EvalFunction],
@@ -475,6 +476,12 @@ def create_app(
                     _atomic_write_json(run_file, data)
             except Exception:
                 pass
+        return {"ok": True}
+
+    @app.post("/api/server/restart")
+    def restart_server():
+        """Request a full serve-process restart."""
+        app.state.restart_requested = True
         return {"ok": True}
 
     @app.post("/api/runs/rerun")

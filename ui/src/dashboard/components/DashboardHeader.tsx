@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import type { ColumnDef, FilterState, RunButtonState, SortStateItem } from '../../types'
 import { DEFAULT_HIDDEN_COLS, defaultFilters } from '../utils'
@@ -31,6 +32,8 @@ type DashboardHeaderProps = {
   setColWidths: React.Dispatch<React.SetStateAction<Record<string, number>>>
   handleExport: (format: string) => void
   handleSettingsOpen: () => void
+  isRestartingServer: boolean
+  onRestartServer: () => void
   runButtonState: RunButtonState
   runMode: string
   setRunMode: (value: string) => void
@@ -72,6 +75,8 @@ export default function DashboardHeader({
   setColWidths,
   handleExport,
   handleSettingsOpen,
+  isRestartingServer,
+  onRestartServer,
   runButtonState,
   runMode,
   setRunMode,
@@ -83,6 +88,22 @@ export default function DashboardHeader({
   pauseButtonText,
   onPauseToggle,
 }: DashboardHeaderProps) {
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false)
+  const moreMenuRef = useRef<HTMLDivElement | null>(null)
+  const moreToggleRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    if (!moreMenuOpen) return
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (!moreMenuRef.current?.contains(target) && !moreToggleRef.current?.contains(target)) {
+        setMoreMenuOpen(false)
+      }
+    }
+    document.addEventListener('click', handleClick)
+    return () => document.removeEventListener('click', handleClick)
+  }, [moreMenuOpen])
+
   return (
     <header className="sticky top-0 z-40 border-b border-theme-border bg-theme-bg/95 backdrop-blur-sm">
       <div className="flex items-center justify-between px-4 py-2">
@@ -469,6 +490,42 @@ export default function DashboardHeader({
               <use href="#icon-gear"></use>
             </svg>
           </button>
+          <div className="dropdown relative">
+            <button
+              ref={moreToggleRef}
+              id="more-menu-toggle"
+              className="flex h-7 w-4 items-center justify-center text-theme-text-muted hover:text-theme-text-secondary"
+              onClick={() => setMoreMenuOpen((prev) => !prev)}
+              title="More actions"
+            >
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="12" cy="5" r="1.6"></circle>
+                <circle cx="12" cy="12" r="1.6"></circle>
+                <circle cx="12" cy="19" r="1.6"></circle>
+              </svg>
+            </button>
+            <div
+              ref={moreMenuRef}
+              id="more-menu"
+              className={`absolute right-0 z-50 mt-1 w-44 rounded border border-zinc-700 bg-zinc-900 p-1.5 text-xs shadow-xl ${moreMenuOpen ? '' : 'hidden'}`}
+            >
+              <button
+                id="restart-server-btn"
+                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-amber-300 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => {
+                  setMoreMenuOpen(false)
+                  onRestartServer()
+                }}
+                disabled={isRestartingServer}
+                title="Restart the EZVals server"
+              >
+                <svg className={`h-3.5 w-3.5 ${isRestartingServer ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <use href="#icon-refresh"></use>
+                </svg>
+                <span>{isRestartingServer ? 'Restarting...' : 'Reload Server'}</span>
+              </button>
+            </div>
+          </div>
           <div className="flex items-center">
             <span id="compare-mode-label" className={`h-7 items-center px-3 text-xs font-medium text-theme-text-muted select-none cursor-default border border-transparent ${isComparisonMode ? 'flex' : 'hidden'}`}>
               Compare Mode

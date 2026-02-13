@@ -95,6 +95,22 @@ def _ensure_ui_assets_fresh():
         )
 
 
+def _restart_current_process(port: Optional[int] = None) -> None:
+    """Re-exec the current command, preserving args."""
+    argv = list(sys.argv)
+    if port is not None:
+        if "--port" in argv:
+            idx = argv.index("--port")
+            if idx + 1 < len(argv):
+                argv[idx + 1] = str(port)
+            else:
+                argv.append(str(port))
+        else:
+            argv.extend(["--port", str(port)])
+    console.print("[cyan]Restarting EZVals server...[/cyan]")
+    os.execvp(argv[0], argv)
+
+
 def _build_serve_query_params(
     active_run_id: Optional[str],
     comparison_run_ids: List[str],
@@ -305,7 +321,7 @@ def serve_cmd(
     has_messages: Optional[bool],
     annotation: str,
     auto_run: bool,
-    open_browser: bool,
+    open_browser: bool = True,
 ):
     """Start the web UI to browse and run evaluations."""
     from pathlib import Path as PathLib
@@ -345,13 +361,15 @@ def serve_cmd(
             has_messages=has_messages,
             annotation=annotation,
         )
-        _serve_from_json(
+        restart_port = _serve_from_json(
             json_path=path,
             results_dir=results_dir,
             port=port,
             query_params=query_params,
             open_browser=open_browser,
         )
+        if restart_port is not None:
+            _restart_current_process(port=restart_port)
         return
 
     labels = list(label) if label else None
@@ -413,7 +431,7 @@ def serve_cmd(
         annotation=annotation,
     )
 
-    _serve(
+    restart_port = _serve(
         path=serve_path,
         dataset=serve_dataset,
         labels=serve_labels,
@@ -427,6 +445,8 @@ def serve_cmd(
         auto_run=auto_run,
         open_browser=open_browser,
     )
+    if restart_port is not None:
+        _restart_current_process(port=restart_port)
 
 
 @cli.command('run')
@@ -624,7 +644,7 @@ def _serve(
     query_params: Optional[List[tuple[str, str]]] = None,
     auto_run: bool = False,
     open_browser: bool = True,
-):
+) -> Optional[int]:
     """Serve a web UI to browse and run evaluations."""
     try:
         from ezvals.server import create_app
@@ -690,6 +710,7 @@ def _serve(
 
     server_thread = Thread(target=server.run)
     server_thread.start()
+    restart_requested = False
 
     # Auto-run evals if --run flag was passed
     if auto_run:
@@ -711,8 +732,11 @@ def _serve(
         """Wait for Esc or Ctrl+C while preserving log output formatting."""
         try:
             if not sys.stdin.isatty():
-                server_thread.join()
-                return False
+                while server_thread.is_alive():
+                    if app.state.restart_requested:
+                        return "restart"
+                    time.sleep(0.2)
+                return None
 
             import termios
             import select
@@ -724,26 +748,32 @@ def _serve(
                 termios.tcsetattr(fd, termios.TCSADRAIN, mode)
 
                 while server_thread.is_alive():
+                    if app.state.restart_requested:
+                        return "restart"
                     if select.select([sys.stdin], [], [], 0.5)[0]:
                         ch = sys.stdin.read(1)
                         if not ch:
-                            return False
+                            return None
                         if ch == '\x1b' or ch == '\x03':
-                            return True
+                            return "stop"
             finally:
                 termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
         except (ImportError, AttributeError, OSError):
             try:
                 while server_thread.is_alive():
+                    if app.state.restart_requested:
+                        return "restart"
                     ch = click.getchar()
                     if ch == '\x1b' or ch == '\x03':
-                        return True
+                        return "stop"
             except (EOFError, KeyboardInterrupt):
-                return True
-        return False
+                return "stop"
+        return None
 
     try:
-        if wait_for_stop_signal():
+        signal = wait_for_stop_signal()
+        restart_requested = signal == "restart"
+        if signal in ("stop", "restart"):
             console.print("\nStopping server...")
             server.should_exit = True
     except (KeyboardInterrupt, SystemExit):
@@ -751,6 +781,7 @@ def _serve(
         server.should_exit = True
 
     server_thread.join()
+    return port if restart_requested else None
 
 
 def _serve_from_json(
@@ -759,7 +790,7 @@ def _serve_from_json(
     port: int,
     query_params: Optional[List[tuple[str, str]]] = None,
     open_browser: bool = True,
-):
+) -> Optional[int]:
     """Serve web UI loading an existing run JSON file."""
     try:
         from ezvals.server import create_app
@@ -836,13 +867,17 @@ def _serve_from_json(
 
     server_thread = Thread(target=server.run)
     server_thread.start()
+    restart_requested = False
 
     def wait_for_stop_signal():
         """Wait for Esc or Ctrl+C while preserving log output formatting."""
         try:
             if not sys.stdin.isatty():
-                server_thread.join()
-                return False
+                while server_thread.is_alive():
+                    if app.state.restart_requested:
+                        return "restart"
+                    time.sleep(0.2)
+                return None
 
             import termios
             import select
@@ -854,26 +889,32 @@ def _serve_from_json(
                 termios.tcsetattr(fd, termios.TCSADRAIN, mode)
 
                 while server_thread.is_alive():
+                    if app.state.restart_requested:
+                        return "restart"
                     if select.select([sys.stdin], [], [], 0.5)[0]:
                         ch = sys.stdin.read(1)
                         if not ch:
-                            return False
+                            return None
                         if ch == '\x1b' or ch == '\x03':
-                            return True
+                            return "stop"
             finally:
                 termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
         except (ImportError, AttributeError, OSError):
             try:
                 while server_thread.is_alive():
+                    if app.state.restart_requested:
+                        return "restart"
                     ch = click.getchar()
                     if ch == '\x1b' or ch == '\x03':
-                        return True
+                        return "stop"
             except (EOFError, KeyboardInterrupt):
-                return True
-        return False
+                return "stop"
+        return None
 
     try:
-        if wait_for_stop_signal():
+        signal = wait_for_stop_signal()
+        restart_requested = signal == "restart"
+        if signal in ("stop", "restart"):
             console.print("\nStopping server...")
             server.should_exit = True
     except (KeyboardInterrupt, SystemExit):
@@ -881,6 +922,7 @@ def _serve_from_json(
         server.should_exit = True
 
     server_thread.join()
+    return port if restart_requested else None
 
 
 # ============================================================================
