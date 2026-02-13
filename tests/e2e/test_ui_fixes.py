@@ -109,6 +109,85 @@ def make_summary_with_messages():
     }
 
 
+def make_summary_with_message_array_tool_schemas():
+    """Summary with mixed tool-call schemas to validate tool name extraction."""
+    return {
+        "total_evaluations": 1,
+        "total_functions": 1,
+        "total_errors": 0,
+        "total_passed": 1,
+        "total_with_scores": 1,
+        "average_latency": 1.0,
+        "results": [
+            {
+                "function": "test_with_mixed_tool_schemas",
+                "dataset": "ds",
+                "labels": [],
+                "result": {
+                    "input": "test input",
+                    "output": "final output",
+                    "reference": None,
+                    "scores": [{"key": "correct", "passed": True}],
+                    "error": None,
+                    "latency": 1.0,
+                    "metadata": None,
+                    "status": "completed",
+                    "trace_data": {
+                        "messages": [
+                            {"role": "user", "content": "Find details"},
+                            {
+                                "role": "assistant",
+                                "tool_calls": [
+                                    {
+                                        "id": "call_openai_1",
+                                        "function": {
+                                            "name": "search_docs",
+                                            "arguments": '{"query":"evals"}',
+                                        },
+                                    },
+                                    {
+                                        "id": "call_openai_2",
+                                        "name": "fetch_page",
+                                        "args": {"url": "https://example.com"},
+                                    },
+                                ],
+                            },
+                            {
+                                "role": "assistant",
+                                "content": [
+                                    {
+                                        "type": "tool_use",
+                                        "id": "toolu_1",
+                                        "name": "search_docs",
+                                        "input": {"query": "evals"},
+                                    },
+                                    {
+                                        "type": "tool_use",
+                                        "id": "toolu_2",
+                                        "name": "rank_results",
+                                        "input": {"top_k": 5},
+                                    },
+                                ],
+                            },
+                            {
+                                "role": "assistant",
+                                "content": [
+                                    {
+                                        "type": "function_call",
+                                        "call_id": "fc_1",
+                                        "name": "summarize_results",
+                                        "arguments": {"format": "bullets"},
+                                    }
+                                ],
+                            },
+                        ]
+                    },
+                },
+            },
+        ],
+    }
+
+
 def make_summary_for_sorting():
     """Summary with multiple scores for sorting tests."""
     return {
@@ -272,6 +351,29 @@ class TestToolDisplay:
                 assert "get_data" in messages_content
                 # The cryptic ID shouldn't be prominently displayed
                 assert "CALL_" not in messages_content.upper() or "get_data" in messages_content
+
+                browser.close()
+
+    def test_sidebar_tool_names_from_common_message_arrays(self, tmp_path):
+        store = ResultsStore(tmp_path / "runs")
+        run_id = store.save_run(make_summary_with_message_array_tool_schemas(), "2024-01-01T00-00-00Z")
+        app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+        with run_server(app) as url:
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page()
+                page.goto(f"{url}/runs/{run_id}/results/0")
+                page.wait_for_selector("header")
+
+                tool_names = page.locator("#tool-names")
+                expect(tool_names).to_be_visible()
+                text = tool_names.inner_text()
+                assert "search_docs" in text
+                assert "fetch_page" in text
+                assert "rank_results" in text
+                assert "summarize_results" in text
+                assert text.count("search_docs") == 1
 
                 browser.close()
 

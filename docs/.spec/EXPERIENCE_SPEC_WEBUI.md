@@ -139,6 +139,7 @@ Scenario: Detail view contents
     - Metadata (expandable key-value list with formatted labels and clickable links)
     - Run Data (expandable JSON)
     - Annotations (editable)
+    - Tools used (unique tool names from trace_data.messages tool calls, if present)
     - Latency
     - Error message (if any)
 ```

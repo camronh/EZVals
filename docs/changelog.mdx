@@ -8,6 +8,9 @@ description: "All notable changes to EZVals"
 - Changed: Detail view metadata now renders as a readable key-value list instead of raw JSON, with human-friendly key labels.
 - Fixed: URL metadata values in detail view are now clickable links.
 - Tests: Added E2E coverage for metadata label formatting and clickable metadata URLs in detail view.
+- Added: Detail sidebar now shows a subtle "Tools" row with unique tool names detected from `trace_data.messages` tool calls.
+- Changed: Detail message parsing now supports common message-array tool-call schemas (`tool_calls`, `tool_use`, `tool_call`, and `function_call`) so tool usage is extracted more reliably.
+- Tests: Added E2E coverage for mixed message-array tool-call schemas to verify tool name extraction and deduplication in the detail sidebar.
 - Added: `ezvals serve` now supports `--open/--no-open` to control whether the browser opens automatically on startup.
 - Changed: CLI and web UI docs now describe browser auto-open as default behavior and document `--no-open` for terminal-only startup flows.
 - Tests: Added CLI unit coverage to verify `--no-open` is exposed in help and propagated for both eval-path and JSON-path serve flows.

@@ -58,6 +58,7 @@ type MessageSchema = {
   type?: string
   name?: string
   tool_call_id?: string
+  tool_use_id?: string
   content?: unknown
   text?: unknown
   message?: unknown
@@ -68,6 +69,12 @@ type MessageSchema = {
     args?: unknown
     input?: unknown
   } | Record<string, unknown>>
+}
+
+type ToolCallInfo = {
+  id?: string
+  name: string
+  args: unknown
 }
 
 type MarkedLike = { parse: (input: string) => string }
@@ -297,6 +304,45 @@ function InlineScoreBadges({ scores, latency }: InlineScoreBadgesProps) {
   )
 }
 
+function extractToolCalls(msg: MessageSchema): ToolCallInfo[] {
+  const rawCalls: unknown[] = []
+  if (Array.isArray(msg.tool_calls)) rawCalls.push(...msg.tool_calls)
+
+  if (Array.isArray(msg.content)) {
+    for (const block of msg.content) {
+      if (!block || typeof block !== 'object') continue
+      const typedBlock = block as Record<string, unknown>
+      const type = String(typedBlock.type || '').toLowerCase()
+      if (type === 'tool_use' || type === 'tool_call' || type === 'function_call') {
+        rawCalls.push(typedBlock)
+      }
+    }
+  }
+
+  const calls: ToolCallInfo[] = []
+  for (const call of rawCalls) {
+    if (!call || typeof call !== 'object') continue
+    const typed = call as Record<string, unknown>
+    const fn = typed.function && typeof typed.function === 'object' ? typed.function as Record<string, unknown> : null
+    const name = fn?.name || typed.name
+    if (typeof name !== 'string' || !name) continue
+    const id = fn?.id || typed.id || typed.call_id || typed.tool_call_id || typed.tool_use_id
+    const args = fn?.arguments ?? typed.arguments ?? typed.args ?? typed.input ?? {}
+    calls.push({ id: typeof id === 'string' ? id : undefined, name, args })
+  }
+
+  return calls
+}
+
+function extractToolNames(messages: MessageSchema[] | unknown) {
+  if (!Array.isArray(messages) || messages.length === 0) return []
+  const names = new Set<string>()
+  for (const msg of messages as MessageSchema[]) {
+    for (const call of extractToolCalls(msg)) names.add(call.name)
+  }
+  return Array.from(names)
+}
+
 function buildMessageItems(messages: MessageSchema[] | unknown) {
   if (!Array.isArray(messages) || messages.length === 0) return { raw: '', items: [] }
   const typedMessages = messages as MessageSchema[]
@@ -309,13 +355,19 @@ function buildMessageItems(messages: MessageSchema[] | unknown) {
   }
 
   const items: MessageItem[] = []
+  const toolCallsById = new Map<string, ToolCallInfo>()
+  for (const msg of typedMessages) {
+    for (const call of extractToolCalls(msg)) {
+      if (call.id) toolCallsById.set(call.id, call)
+    }
+  }
+
   for (const msg of typedMessages) {
     const role = (msg.role || msg.type || 'unknown').toLowerCase()
-    if (msg.tool_calls && Array.isArray(msg.tool_calls)) {
-      const toolCallsContent = msg.tool_calls.map((tc) => {
-        const fn = (tc as { function?: { name?: string; arguments?: unknown } }).function || tc
-        const name = (fn as { name?: string }).name || (tc as { name?: string }).name || 'tool'
-        let args = (fn as { arguments?: unknown }).arguments || (tc as { args?: unknown }).args || (tc as { input?: unknown }).input || {}
+    const toolCalls = extractToolCalls(msg)
+    if (toolCalls.length > 0) {
+      const toolCallsContent = toolCalls.map((call) => {
+        const args = call.args
         let argsStr
         if (typeof args === 'string') {
           try {
@@ -326,7 +378,7 @@ function buildMessageItems(messages: MessageSchema[] | unknown) {
         } else {
           argsStr = JSON.stringify(args, null, 2)
         }
-        return `${name}(${argsStr})`
+        return `${call.name}(${argsStr})`
       }).join('\n\n')
       items.push({
         key: `tool-calls-${items.length}`,
@@ -339,16 +391,9 @@ function buildMessageItems(messages: MessageSchema[] | unknown) {
 
     if (role === 'tool' || role === 'tool_result' || role === 'function') {
       let toolName = msg.name
-      if (!toolName && msg.tool_call_id) {
-        for (const m of typedMessages) {
-          if (!m.tool_calls) continue
-          const found = m.tool_calls.find((t) => (t as { id?: string }).id === msg.tool_call_id)
-          if (found) {
-            const typed = found as { function?: { name?: string }; name?: string }
-            toolName = typed.function?.name || typed.name
-            break
-          }
-        }
+      const callRef = msg.tool_call_id || msg.tool_use_id
+      if (!toolName && callRef) {
+        toolName = toolCallsById.get(callRef)?.name
       }
       toolName = toolName || 'tool'
       let content = msg.content || msg.text || msg.message || ''
@@ -724,6 +769,7 @@ export default function DetailPage() {
     ? Object.fromEntries(Object.entries(traceData).filter(([k]) => k !== 'messages' && k !== 'trace_url'))
     : null
   const messageData = buildMessageItems(messages)
+  const toolNames = extractToolNames(messages)
   const runCommand = buildRunCommand(data.eval_path, resultEntry?.function)
 
   const baseForCompare = comparison?.baseResult || resultEntry
@@ -974,6 +1020,16 @@ export default function DetailPage() {
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
                     View Trace
                   </a>
+                </div>
+              ) : null}
+              {toolNames.length > 0 ? (
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Tools</span>
+                  <div id="tool-names" className="flex max-w-[70%] flex-wrap justify-end gap-1">
+                    {toolNames.map((toolName) => (
+                      <span key={toolName} className="rounded bg-zinc-200 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">{toolName}</span>
+                    ))}
+                  </div>
                 </div>
               ) : null}
             </div>
