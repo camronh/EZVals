@@ -5,6 +5,9 @@ description: "All notable changes to EZVals"
 
 ## Unreleased
 
+- Changed: Detail view metadata now renders as a readable key-value list instead of raw JSON, with human-friendly key labels.
+- Fixed: URL metadata values in detail view are now clickable links.
+- Tests: Added E2E coverage for metadata label formatting and clickable metadata URLs in detail view.
 - Added: `ezvals serve` now supports `--open/--no-open` to control whether the browser opens automatically on startup.
 - Changed: CLI and web UI docs now describe browser auto-open as default behavior and document `--no-open` for terminal-only startup flows.
 - Tests: Added CLI unit coverage to verify `--no-open` is exposed in help and propagated for both eval-path and JSON-path serve flows.

@@ -136,7 +136,7 @@ Scenario: Detail view contents
     - Output (expandable JSON)
     - Reference (if set)
     - Scores (with key, value/passed, notes)
-    - Metadata (expandable JSON)
+    - Metadata (expandable key-value list with formatted labels and clickable links)
     - Run Data (expandable JSON)
     - Annotations (editable)
     - Latency

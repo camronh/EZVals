@@ -120,6 +120,15 @@ function getRawText(content: unknown) {
   }
 }
 
+function formatMetadataLabel(key: string) {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (ch) => ch.toUpperCase())
+}
+
 function buildViewer(content: unknown, placeholder = '—') {
   if (content == null || content === '') {
     return {
@@ -702,6 +711,9 @@ export default function DetailPage() {
   const status = result.status || 'completed'
   const hasReference = result.reference != null && result.reference !== '—'
   const hasMetadata = result.metadata != null && result.metadata !== '—'
+  const metadataEntries = hasMetadata
+    ? Object.entries(result.metadata as Record<string, unknown>)
+    : []
   const traceData = (result.trace_data || null) as TraceData | null
   const messages = Array.isArray(traceData?.messages) ? traceData?.messages : []
   const hasMessages = messages.length > 0
@@ -1003,8 +1015,35 @@ export default function DetailPage() {
                 </button>
                 <div className={`collapsible-content ${collapsed.metadata ? '' : 'open'}`}>
                   <div>
-                    <div className="p-2 max-h-40 overflow-auto">
-                      <DataViewer content={result.metadata} placeholder="—" />
+                    <div className="p-2 max-h-48 overflow-auto">
+                      <dl className="space-y-2">
+                        {metadataEntries.map(([key, value]) => {
+                          const valueText = getRawText(value) || '—'
+                          const isUrl = typeof value === 'string' && /^https?:\/\/\S+$/i.test(value.trim())
+                          const label = formatMetadataLabel(key)
+                          return (
+                            <div key={key} className="rounded border border-zinc-200 bg-white/70 px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900/60">
+                              <dt className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">{label}</dt>
+                              <dd className="mt-1">
+                                {isUrl ? (
+                                  <a
+                                    href={value}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-xs text-blue-600 underline underline-offset-2 break-all hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
+                                  >
+                                    {value}
+                                  </a>
+                                ) : (
+                                  <pre className="font-mono text-xs text-zinc-700 dark:text-zinc-200 whitespace-pre-wrap break-words">
+                                    {valueText}
+                                  </pre>
+                                )}
+                              </dd>
+                            </div>
+                          )
+                        })}
+                      </dl>
                     </div>
                   </div>
                 </div>

@@ -29,7 +29,11 @@ def make_summary():
                     "scores": None,
                     "error": None,
                     "latency": 1.2,
-                    "metadata": None,
+                    "metadata": {
+                        "model_name": "gpt-5-mini",
+                        "run_url": "https://example.com/runs/123",
+                        "token_count": 42,
+                    },
                 },
             },
             {
@@ -204,3 +208,27 @@ def test_row_click_no_expand_when_content_fits(tmp_path):
 
 # Sticky headers are intentionally disabled per product decision; related test removed.
 # Inline editing tests removed - editing now happens on detail page.
+
+
+def test_metadata_renders_as_key_values_with_links(tmp_path):
+    store = ResultsStore(tmp_path / "runs")
+    run_id = store.save_run(make_summary(), "2024-01-01T00-00-00Z")
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+
+            page.goto(f"{url}/runs/{run_id}/results/0")
+            metadata_header = page.locator("button:has-text('Metadata')")
+            expect(metadata_header).to_be_visible()
+            expect(page.locator("dt:has-text('Model Name')")).to_be_visible()
+            expect(page.locator("dt:has-text('Run Url')")).to_be_visible()
+            expect(page.locator("dt:has-text('Token Count')")).to_be_visible()
+
+            link = page.locator("a[href='https://example.com/runs/123']")
+            expect(link).to_be_visible()
+            expect(link).to_have_text("https://example.com/runs/123")
+
+            browser.close()
