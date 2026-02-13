@@ -41,14 +41,30 @@ class EvalContext:
         self.scores: List[Dict] = []
         self.error: Optional[str] = None
         # Run-level metadata
-        self.run_id = run_id
-        self.session_name = session_name
-        self.run_name = run_name
-        self.eval_path = eval_path
+        self._run_id = run_id
+        self._session_name = session_name
+        self._run_name = run_name
+        self._eval_path = eval_path
         # Per-eval metadata
         self.function_name = function_name
         self.dataset = dataset
         self.labels = labels
+
+    @property
+    def run_id(self) -> Optional[str]:
+        return self._run_id
+
+    @property
+    def session_name(self) -> Optional[str]:
+        return self._session_name
+
+    @property
+    def run_name(self) -> Optional[str]:
+        return self._run_name
+
+    @property
+    def eval_path(self) -> Optional[str]:
+        return self._eval_path
 
     def store(
         self,

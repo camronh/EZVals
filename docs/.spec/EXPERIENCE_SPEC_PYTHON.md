@@ -214,10 +214,10 @@ Scenario: Access run metadata in eval function
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `run_id` | str \| None | Unique run identifier (timestamp) |
-| `session_name` | str \| None | Session name for the run |
-| `run_name` | str \| None | Human-readable run name |
-| `eval_path` | str \| None | Path to eval file(s) being run |
+| `run_id` | str \| None | Unique run identifier (timestamp), read-only |
+| `session_name` | str \| None | Session name for the run, read-only |
+| `run_name` | str \| None | Human-readable run name, read-only |
+| `eval_path` | str \| None | Path to eval file(s) being run, read-only |
 
 **Per-eval metadata** (from the decorated function):
 

@@ -495,6 +495,24 @@ class TestRunMetadata:
         assert ctx.dataset is None
         assert ctx.labels is None
 
+    def test_run_metadata_fields_are_read_only(self):
+        """Run metadata should not be mutable after context creation."""
+        ctx = EvalContext(
+            run_id="12345",
+            session_name="test-session",
+            run_name="baseline-run",
+            eval_path="evals/my_eval.py",
+        )
+
+        with pytest.raises(AttributeError):
+            ctx.run_id = "new-run-id"
+        with pytest.raises(AttributeError):
+            ctx.session_name = "new-session"
+        with pytest.raises(AttributeError):
+            ctx.run_name = "new-run-name"
+        with pytest.raises(AttributeError):
+            ctx.eval_path = "evals/new_eval.py"
+
 
 class TestRunMetadataInjection:
     """Test that run_metadata_var ContextVar is injected into context"""
