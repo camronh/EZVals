@@ -3,9 +3,9 @@ from ezvals import eval, EvalResult, EvalContext
 def custom_evaluator(result: EvalResult):
     """Custom evaluator to check if the reference output is in the output"""
     if result.reference in result.output.lower():
-        return {"key": "correctness", "passed": True}
+        return {"key": "pass", "passed": True}
     else:
-        return {"key": "correctness", "passed": False, "notes": f"Expected reference '{result.reference}' not found in output"}
+        return {"key": "pass", "passed": False, "notes": f"Expected reference '{result.reference}' not found in output"}
 
 
 # Example 1: Simple cases with multiple test cases

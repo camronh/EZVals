@@ -111,7 +111,7 @@ def test_builtin_defaults():
     return EvalResult(
         input="test input",
         output="test output",
-        scores={"correctness": 0.95}
+        scores={"pass": 0.95}
     )
 """)
 
@@ -143,7 +143,7 @@ def test_with_file_metadata():
     return EvalResult(
         input="test input",
         output="test output",
-        scores={"correctness": 0.95}
+        scores={"pass": 0.95}
     )
 
 @eval(metadata={"experiment": "A"})  # Additional metadata
@@ -151,7 +151,7 @@ def test_with_decorator_metadata():
     return EvalResult(
         input="test input",
         output="test output",
-        scores={"correctness": 0.88}
+        scores={"pass": 0.88}
     )
 """)
 
@@ -189,7 +189,7 @@ def test_math(ctx: EvalContext):
     return EvalResult(
         input=ctx.input,
         output=ctx.reference,
-        scores={"correctness": 1.0}
+        scores={"pass": 1.0}
     )
 """)
 
@@ -217,7 +217,7 @@ def test_empty_defaults():
     return EvalResult(
         input="test input",
         output="test output",
-        scores={"correctness": 0.95}
+        scores={"pass": 0.95}
     )
 """)
 
@@ -249,7 +249,7 @@ def test_partial_defaults():
     return EvalResult(
         input="test input",
         output="test output",
-        scores={"correctness": 0.95}
+        scores={"pass": 0.95}
     )
 """)
 
@@ -284,7 +284,7 @@ def test_empty_lists_override():
     return EvalResult(
         input="test input",
         output="test output",
-        scores={"correctness": 0.95}
+        scores={"pass": 0.95}
     )
 """)
 
@@ -311,7 +311,7 @@ def test_invalid_defaults():
     return EvalResult(
         input="test input",
         output="test output",
-        scores={"correctness": 0.95}
+        scores={"pass": 0.95}
     )
 """)
 
@@ -346,7 +346,7 @@ def test_with_invalid_keys():
     return EvalResult(
         input="test",
         output="test",
-        scores={"key": "correctness", "value": 1.0}
+        scores={"key": "pass", "value": 1.0}
     )
 """)
 
@@ -383,7 +383,7 @@ def test_merged_metadata():
     return EvalResult(
         input="test",
         output="test",
-        scores={"key": "correctness", "value": 1.0}
+        scores={"key": "pass", "value": 1.0}
     )
 """)
 
@@ -419,7 +419,7 @@ def test_one():
     return EvalResult(
         input="test1",
         output="test1",
-        scores={"key": "correctness", "value": 1.0}
+        scores={"key": "pass", "value": 1.0}
     )
 
 @eval
@@ -427,7 +427,7 @@ def test_two():
     return EvalResult(
         input="test2",
         output="test2",
-        scores={"key": "correctness", "value": 1.0}
+        scores={"key": "pass", "value": 1.0}
     )
 """)
 
@@ -464,7 +464,7 @@ def test_with_evaluator():
     return EvalResult(
         input="test",
         output="test",
-        scores={"key": "correctness", "value": 1.0}
+        scores={"key": "pass", "value": 1.0}
     )
 """)
 
@@ -502,16 +502,16 @@ def test_with_target(context):
         assert functions[0].target is not None
         assert functions[0].target.__name__ == "my_target"
 
-    def test_default_score_key_fallback_to_correctness(self, tmp_path: Path):
-        """When no default_score_key is set anywhere, should fall back to 'correctness'."""
+    def test_default_score_key_fallback_to_pass(self, tmp_path: Path):
+        """When no default_score_key is set anywhere, should fall back to 'pass'."""
         test_file = tmp_path / "test_default_fallback.py"
         test_file.write_text("""
 from ezvals import eval
 from ezvals.context import EvalContext
 
 @eval  # No default_score_key in decorator or file
-def test_uses_correctness_default(context: EvalContext):
-    # Should default to "correctness" when using store with scores
+def test_uses_pass_default(context: EvalContext):
+    # Should default to "pass" when using store with scores
     context.store(input="test", output="test", scores=True)
     return context.build()
 """)
@@ -526,12 +526,12 @@ def test_uses_correctness_default(context: EvalContext):
         import asyncio
         result = asyncio.run(func.call_async())
 
-        # The score should use "correctness" as the key
-        assert result.scores[0].key == "correctness"
+        # The score should use "pass" as the key
+        assert result.scores[0].key == "pass"
         assert result.scores[0].passed == True
 
     def test_file_default_score_key_overrides_builtin(self, tmp_path: Path):
-        """File default_score_key should override built-in 'correctness' default."""
+        """File default_score_key should override built-in 'pass' default."""
         test_file = tmp_path / "test_file_default_score.py"
         test_file.write_text("""
 from ezvals import eval

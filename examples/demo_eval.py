@@ -44,7 +44,7 @@ async def test_refund_requests():
             **result, # Populate input, output, and latency
             reference=expected_keyword,
             scores={
-                "key": "correctness",
+                "key": "pass",
                 "passed": expected_keyword in result["output"].lower(),
                 "notes": f"Expected keyword '{expected_keyword}' not found in output" if expected_keyword not in result["output"].lower() else None
             },
@@ -83,7 +83,7 @@ def test_greeting_responses():
             output=response,
             scores=[
                 {"key": "quality", "value": 0.95},
-                {"key": "correctness", "passed": True}
+                {"key": "pass", "passed": True}
             ],
             metadata={"model": "gpt-4", "temperature": 0.7},
             latency=0.05,  # Override latency for testing

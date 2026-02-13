@@ -11,7 +11,7 @@ class EvalContext:
         input: Any = None,
         output: Any = None,
         reference: Any = None,
-        default_score_key: Optional[str] = "correctness",
+        default_score_key: Optional[str] = "pass",
         metadata: Optional[Dict[str, Any]] = None,
         trace_data: Optional[Union[Dict[str, Any], TraceData]] = None,
         latency: Optional[float] = None,
@@ -127,11 +127,11 @@ class EvalContext:
         if isinstance(score, dict):
             score_dict = score.copy()
             if 'key' not in score_dict:
-                score_dict['key'] = self.default_score_key or "correctness"
+                score_dict['key'] = self.default_score_key or "pass"
         elif isinstance(score, bool):
-            score_dict = {'key': self.default_score_key or "correctness", 'passed': score}
+            score_dict = {'key': self.default_score_key or "pass", 'passed': score}
         elif isinstance(score, (int, float)):
-            score_dict = {'key': self.default_score_key or "correctness", 'value': score}
+            score_dict = {'key': self.default_score_key or "pass", 'value': score}
         else:
             return
 
@@ -145,7 +145,7 @@ class EvalContext:
 
     def build(self) -> EvalResult:
         """Convert to immutable EvalResult."""
-        scores = self.scores or ([{"key": self.default_score_key or "correctness", "passed": True}] if not self.error else None)
+        scores = self.scores or ([{"key": self.default_score_key or "pass", "passed": True}] if not self.error else None)
         return EvalResult(
             input=self.input, output=self.output, reference=self.reference,
             scores=scores, error=self.error, latency=self.latency,

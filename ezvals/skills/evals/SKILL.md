@@ -11,7 +11,7 @@ Write, run, and analyze evaluations for AI agents and LLM applications. Assume w
 
 ## What Are Evals?
 
-Traditional ML evals measure model performance on fixed benchmarks with clear accuracy metrics. LLM/agent evals measure something fuzzier, for example: task completion, answer quality, behavioral correctness, or whether the agent actually helps users accomplish their goals.
+Traditional ML evals measure model performance on fixed benchmarks with clear accuracy metrics. LLM/agent evals measure something fuzzier, for example: task completion, answer quality, behavioral pass, or whether the agent actually helps users accomplish their goals.
 
 Evals answer evolving questions about your system:
 
@@ -180,7 +180,7 @@ You should have everything you need to plan a good eval from here.
 **When to read:** Evaluating RAG systems, checking groundedness and retrieval quality
 
 - Hallucination detection
-- Correctness and coverage verification
+- Pass and coverage verification
 - Source quality checks
 - Full RAG eval example
 
@@ -247,7 +247,7 @@ Example response to user:
 
 ```text
 You can see the passing results for the two final runs here:
-http://127.0.0.1:8000/?compare_run_id=1826bc4c&compare_run_id=58741756&score_passed=correctness,true
+http://127.0.0.1:8000/?compare_run_id=1826bc4c&compare_run_id=58741756&score_passed=pass,true
 ```
 
 See [running.md](running.md) for session management and URL construction examples.

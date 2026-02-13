@@ -609,7 +609,7 @@ Results are stored in `.ezvals/sessions/` with hierarchical session directories:
         "input": "I want a refund",
         "output": "I'll help you with that",
         "reference": null,
-        "scores": [{"key": "correctness", "passed": true}],
+        "scores": [{"key": "pass", "passed": true}],
         "error": null,
         "latency": 0.234,
         "metadata": {"model": "gpt-4"},

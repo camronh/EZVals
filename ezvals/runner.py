@@ -129,7 +129,7 @@ class EvalRunner:
         if not result.scores and not result.error:
             # Create a new result with default passing score
             result_dict = result.model_dump()
-            result_dict['scores'] = [{"key": "correctness", "passed": True}]
+            result_dict['scores'] = [{"key": "pass", "passed": True}]
             return EvalResult(**result_dict)
         return result
 

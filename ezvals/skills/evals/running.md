@@ -208,8 +208,8 @@ http://127.0.0.1:8000/?run_id=1826bc4c&has_error=1
 ```
 
 ```text
-You can see passing correctness-only results for QA labels here:
-http://127.0.0.1:8000/?run_id=1826bc4c&score_passed=correctness,true&label_in=qa
+You can see passing pass-only results for QA labels here:
+http://127.0.0.1:8000/?run_id=1826bc4c&score_passed=pass,true&label_in=qa
 ```
 
 ### Loading Previous Results
@@ -268,7 +268,7 @@ Each item in `results` has run metadata plus a `result` object that matches `Eva
     "output": "You can request a refund within 30 days.",
     "reference": "Refunds are allowed within 30 days",
     "scores": [
-      {"key": "correctness", "passed": true, "value": 1.0, "notes": null},
+      {"key": "pass", "passed": true, "value": 1.0, "notes": null},
       {"key": "tone", "passed": true, "value": 0.9, "notes": "Professional"}
     ],
     "error": null,
@@ -343,8 +343,8 @@ def score_for(row, key):
             return score
     return None
 
-correctness_values = [
-    (row["function"], score_for(row, "correctness"))
+pass_values = [
+    (row["function"], score_for(row, "pass"))
     for row in results
 ]
 ```
@@ -354,11 +354,11 @@ Average numeric score for a key:
 ```python
 vals = []
 for row in results:
-    score = score_for(row, "correctness")
+    score = score_for(row, "pass")
     if score and score.get("value") is not None:
         vals.append(score["value"])
 
-avg_correctness = (sum(vals) / len(vals)) if vals else None
+avg_pass = (sum(vals) / len(vals)) if vals else None
 ```
 
 ## Workflow: Agent Runs, User Reviews

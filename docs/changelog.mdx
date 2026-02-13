@@ -12,6 +12,8 @@ description: "All notable changes to EZVals"
 - Changed: Message normalization/rendering now lives in a reusable UI component (`DataViewer`) used across detail panels and the trace messages drawer.
 - Changed: `examples/demo_trace_data.py::test_direct_trace_data` now includes message-array examples for `input`, `output`, and `reference`.
 - Tests: Added E2E coverage to verify pretty/raw message rendering and toggling across input/output/reference and the messages pane.
+- Changed: Default score-key naming now uses `pass`/`Pass` in runtime fallbacks, examples, tests, and docs where the previous default used `correctness`/`Correctness`.
+- Tests: Updated integration, unit, and E2E expectations to assert the `pass` default score key label.
 - Changed: Detail view metadata now renders as a readable key-value list instead of raw JSON, with human-friendly key labels.
 - Fixed: URL metadata values in detail view are now clickable links.
 - Tests: Added E2E coverage for metadata label formatting and clickable metadata URLs in detail view.
@@ -266,7 +268,7 @@ description: "All notable changes to EZVals"
 - Added: Deep merge for metadata - when both file defaults and decorator specify metadata, they are merged with decorator values taking precedence on conflicts.
 - Added: Deep copy of mutable values (lists, dicts) in file defaults to prevent shared mutation between tests.
 - Added: Validation and warnings for unknown keys in `ezvals_defaults` dictionary.
-- Changed: `default_score_key` parameter default changed from "correctness" to None to enable file-level defaults, with "correctness" still applied as final fallback via EvalContext.
+- Changed: `default_score_key` parameter default changed from "pass" to None to enable file-level defaults, with "pass" still applied as final fallback via EvalContext.
 - Tests: Added 17 comprehensive tests for file defaults including inheritance, overrides, deep merge, mutable value copying, and default_score_key priority chain.
 
 ## 0.0.2a6 - 2025-11-23
@@ -327,10 +329,10 @@ description: "All notable changes to EZVals"
 - Added: `set_params()` helper for parametrized tests to set both input and metadata from params.
 - Added: Filters in the web UI for dataset, labels, and status with multi-select support and persistence.
 - Added: Reference column in results table to display expected/ground truth outputs.
-- Changed: Tests that complete without calling `add_score()` now automatically pass with a default "correctness" score, similar to pytest behavior.
-- Changed: `EvalContext` defaults to "correctness" as the default score key (previously required explicit key).
+- Changed: Tests that complete without calling `add_score()` now automatically pass with a default "pass" score, similar to pytest behavior.
+- Changed: `EvalContext` defaults to "pass" as the default score key (previously required explicit key).
 - Changed: Migrated from Poetry to uv for faster dependency management and installation.
-- Changed: `EvalContext.build()` auto-adds `{"key": "correctness", "passed": True}` when no scores are provided and no error occurred.
+- Changed: `EvalContext.build()` auto-adds `{"key": "pass", "passed": True}` when no scores are provided and no error occurred.
 - Changed: `EvalRunner` ensures all results without scores and without errors receive a default passing score.
 - Tests: Added comprehensive unit tests for EvalContext methods, context manager pattern, and decorator integration.
 - Tests: Added integration tests for context usage patterns, parametrize auto-mapping, and assertion preservation.

@@ -5,7 +5,7 @@ description: Evaluating a retrieval-augmented generation agent with case dataset
 
 # RAG Agent Evaluation
 
-This example shows a common pattern: evaluating a RAG agent across a dataset of question-answer pairs, checking for both hallucination and correctness.
+This example shows a common pattern: evaluating a RAG agent across a dataset of question-answer pairs, checking for both hallucination and pass.
 
 ## The Setup
 
@@ -16,14 +16,14 @@ You have a RAG agent that:
 
 You want to evaluate:
 - **Hallucination** — Is the answer grounded in the retrieved documents?
-- **Correctness** — Does the answer match the expected reference?
+- **Pass** — Does the answer match the expected reference?
 
 ```mermaid
 flowchart LR
     A[Input] --> B[RAG Agent]
     B --> C[Output]
     B --> D[Source Docs]
-    C --> E[Correctness Judge]
+    C --> E[Pass Judge]
     D --> F[Hallucination Judge]
     C --> F
     E --> G[Scores]
@@ -54,7 +54,7 @@ async def run_agent(ctx: EvalContext):
     ],
 )
 async def test_rag_agent(ctx: EvalContext):
-    """Evaluate a RAG Agent for correctness and hallucinations"""
+    """Evaluate a RAG Agent for pass and hallucinations"""
     # LLM-as-a-Judge for hallucination
     score, reasoning = await hallucination_judge(
         answer=ctx.output,
@@ -62,12 +62,12 @@ async def test_rag_agent(ctx: EvalContext):
     )
     ctx.store(scores={"value": score, "key": "hallucination", "notes": reasoning})
 
-    # Check correctness against reference
-    correctness_result = await correctness_judge(
+    # Check pass against reference
+    pass_result = await pass_judge(
         answer=ctx.output,
         reference=ctx.reference
     )
-    assert correctness_result.is_correct, correctness_result.explanation
+    assert pass_result.is_correct, pass_result.explanation
 ```
 
 ## What's Happening
@@ -78,9 +78,9 @@ async def test_rag_agent(ctx: EvalContext):
 
 **Storing context for analysis** — We save the retrieved documents to `ctx.metadata`. This shows up in the results JSON and Web UI, so you can debug retrieval issues.
 
-**Multiple scoring criteria** — We use `ctx.store(scores=...)` for hallucination (a named score) and `assert` for correctness (the default score). Both appear in your results.
+**Multiple scoring criteria** — We use `ctx.store(scores=...)` for hallucination (a named score) and `assert` for pass (the default score). Both appear in your results.
 
-**LLM-as-judge** — The `hallucination_judge` and `correctness_judge` are placeholder functions representing whatever LLM judge you're using (OpenAI, Anthropic, your own prompts, etc.).
+**LLM-as-judge** — The `hallucination_judge` and `pass_judge` are placeholder functions representing whatever LLM judge you're using (OpenAI, Anthropic, your own prompts, etc.).
 
 ## Running It
 

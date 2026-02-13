@@ -121,7 +121,7 @@ EZVals is a **pytest-inspired, code-first evaluation framework** for LLM applica
 ### Scoring
 
 1. Every score must have at least `value` or `passed`
-2. Default score key is "correctness" unless overridden
+2. Default score key is "pass" unless overridden
 3. Failed assertions become **scores** (passed=False), not errors
 4. No explicit scoring = auto-pass score added
 

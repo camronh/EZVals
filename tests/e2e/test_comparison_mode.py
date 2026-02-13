@@ -31,7 +31,7 @@ def make_run_summary(run_name, avg_score=0.8):
                     "input": "input A",
                     "output": f"output A from {run_name}",
                     "reference": "ref A",
-                    "scores": [{"key": "correctness", "passed": True}],
+                    "scores": [{"key": "pass", "passed": True}],
                     "error": None,
                     "latency": 1.0,
                     "metadata": None,
@@ -46,7 +46,7 @@ def make_run_summary(run_name, avg_score=0.8):
                     "input": "input B",
                     "output": f"output B from {run_name}",
                     "reference": None,
-                    "scores": [{"key": "correctness", "passed": False}],
+                    "scores": [{"key": "pass", "passed": False}],
                     "error": None,
                     "latency": 2.0,
                     "metadata": None,
@@ -61,7 +61,7 @@ def make_run_summary(run_name, avg_score=0.8):
                     "input": "input C",
                     "output": f"output C from {run_name}",
                     "reference": "ref C",
-                    "scores": [{"key": "correctness", "passed": True}, {"key": "quality", "value": avg_score}],
+                    "scores": [{"key": "pass", "passed": True}, {"key": "quality", "value": avg_score}],
                     "error": None,
                     "latency": 1.5,
                     "metadata": None,
@@ -215,17 +215,17 @@ def test_comparison_filters_or_logic(tmp_path):
             page.wait_for_selector("#results-table")
             page.wait_for_selector(".comparison-chips")
 
-            initial_correctness = page.evaluate(
+            initial_pass = page.evaluate(
                 """() => {
                     const labels = Array.from(document.querySelectorAll('.stats-chart-label'))
-                    const labelIndex = labels.findIndex((el) => el.textContent.trim() === 'correctness')
+                    const labelIndex = labels.findIndex((el) => el.textContent.trim() === 'pass')
                     if (labelIndex < 0) return null
                     const group = document.querySelectorAll('.stats-bar-group')[labelIndex]
                     if (!group) return null
                     return Array.from(group.querySelectorAll('.comparison-bar-label')).map((el) => el.textContent.trim())
                 }"""
             )
-            assert initial_correctness == ["67%", "67%"]
+            assert initial_pass == ["67%", "67%"]
 
             page.click("#filters-toggle")
             page.wait_for_selector("#filters-menu.active")
@@ -242,17 +242,17 @@ def test_comparison_filters_or_logic(tmp_path):
             row_a = page.locator("tbody tr[data-row='main']").filter(has_text="test_func_a")
             expect(row_a).to_have_count(0)
 
-            filtered_correctness = page.evaluate(
+            filtered_pass = page.evaluate(
                 """() => {
                     const labels = Array.from(document.querySelectorAll('.stats-chart-label'))
-                    const labelIndex = labels.findIndex((el) => el.textContent.trim() === 'correctness')
+                    const labelIndex = labels.findIndex((el) => el.textContent.trim() === 'pass')
                     if (labelIndex < 0) return null
                     const group = document.querySelectorAll('.stats-bar-group')[labelIndex]
                     if (!group) return null
                     return Array.from(group.querySelectorAll('.comparison-bar-label')).map((el) => el.textContent.trim())
                 }"""
             )
-            assert filtered_correctness == ["100%", "100%"]
+            assert filtered_pass == ["100%", "100%"]
 
             browser.close()
 
@@ -615,7 +615,7 @@ def test_comparison_detail_scores_and_latency_badges(tmp_path):
             _open_comparison_detail(page, url, run1_id, saved_runs)
 
             # Scores and latency should be visible in the comparison view
-            expect(page.locator("#main-panel", has_text="correctness")).to_be_visible()
+            expect(page.locator("#main-panel", has_text="pass")).to_be_visible()
             expect(page.locator("#main-panel", has_text="1.00s")).to_be_visible()
 
             browser.close()

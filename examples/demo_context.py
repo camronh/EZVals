@@ -70,7 +70,7 @@ async def test_simple_context(ctx: EvalContext):
 
 @eval(
     dataset="customer_service",
-    default_score_key="correctness",  # Set default key in decorator!
+    default_score_key="pass",  # Set default key in decorator!
     metadata={"model": AGENT_MODEL, "temperature": AGENT_TEMPERATURE}
 )
 async def test_with_defaults(ctx: EvalContext):
@@ -91,7 +91,7 @@ async def test_with_defaults(ctx: EvalContext):
     input="I want a refund",  # Set input in decorator!
     reference="I'll help you process your refund request.",  # Reference too!
     dataset="customer_service",
-    default_score_key="correctness",
+    default_score_key="pass",
     metadata={"model": AGENT_MODEL, "temperature": AGENT_TEMPERATURE}
 )
 async def test_input_in_decorator(ctx: EvalContext):
@@ -108,12 +108,12 @@ async def test_input_in_decorator(ctx: EvalContext):
 # Pattern 4: Context Manager (Explicit Return)
 # ============================================================================
 
-@eval(dataset="customer_service", default_score_key="correctness")
+@eval(dataset="customer_service", default_score_key="pass")
 async def test_context_manager():
     """Context manager pattern - explicit return of context"""
     with EvalContext(
         input="I want a refund",
-        default_score_key="correctness",
+        default_score_key="pass",
         metadata={"model": AGENT_MODEL}
     ) as ctx:
         ctx.reference = fetch_ground_truth(ctx.input)
@@ -128,7 +128,7 @@ async def test_context_manager():
 
 @eval(
     dataset="sentiment_analysis",
-    default_score_key="correctness",
+    default_score_key="pass",
     cases=[
         {"input": "I love this product!", "reference": "positive"},
         {"input": "This is terrible", "reference": "negative"},
@@ -161,7 +161,7 @@ def test_cases_auto_mapping(ctx: EvalContext):
 
 @eval(
     dataset="math_operations",
-    default_score_key="correctness",
+    default_score_key="pass",
     cases=[
         {"input": {"operation": "add", "a": 2, "b": 3}, "reference": 5},
         {"input": {"operation": "multiply", "a": 4, "b": 7}, "reference": 28},
@@ -190,7 +190,7 @@ def test_calculator(ctx: EvalContext):
 # Pattern 7: Multiple Score Types
 # ============================================================================
 
-@eval(dataset="qa_system", default_score_key="correctness")
+@eval(dataset="qa_system", default_score_key="pass")
 async def test_multiple_scores(ctx: EvalContext):
     """Show different score types in one eval"""
     ctx.input = "What is the capital of France?"
@@ -210,7 +210,7 @@ async def test_multiple_scores(ctx: EvalContext):
 # Pattern 8: Assertion Preservation
 # ============================================================================
 
-@eval(dataset="validation", default_score_key="correctness")
+@eval(dataset="validation", default_score_key="pass")
 async def test_assertion_preservation(ctx: EvalContext):
     """Assertions still raise, but ctx data is preserved!"""
     ctx.input = "test input"
@@ -259,7 +259,7 @@ async def test_track_params(ctx: EvalContext):
 
 @eval(
     dataset="sentiment",
-    default_score_key="correctness",
+    default_score_key="pass",
     cases=[
         {"input": "I love this!", "reference": "positive"},
         {"input": "Terrible!", "reference": "negative"},
@@ -275,7 +275,7 @@ def test_ultra_minimal(ctx: EvalContext):
 # Pattern 11: Explicit Return (Still Works!)
 # ============================================================================
 
-@eval(dataset="explicit_return", default_score_key="correctness")
+@eval(dataset="explicit_return", default_score_key="pass")
 async def test_explicit_return(ctx: EvalContext):
     """You can still explicitly return ctx if you want"""
     ctx.input = "test"
@@ -289,7 +289,7 @@ async def test_explicit_return(ctx: EvalContext):
 # Pattern 12: No Return (Auto-Return!)
 # ============================================================================
 
-@eval(dataset="auto_return", default_score_key="correctness")
+@eval(dataset="auto_return", default_score_key="pass")
 async def test_auto_return(ctx: EvalContext):
     """No return statement - decorator auto-returns ctx.build()"""
     ctx.input = "test"

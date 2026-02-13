@@ -61,7 +61,7 @@ Once installed, just ask Claude Code to help with evaluation tasks:
 
 | Use Case | Description |
 |----------|-------------|
-| [rag-agents.md](use-cases/rag-agents.md) | Hallucination detection, correctness, source quality |
+| [rag-agents.md](use-cases/rag-agents.md) | Hallucination detection, pass, source quality |
 | [coding-agents.md](use-cases/coding-agents.md) | Unit tests, fail-to-pass, static analysis, pass@k |
 | [testing-internals.md](use-cases/testing-internals.md) | Tool calls, multi-agent coordination, state verification |
 

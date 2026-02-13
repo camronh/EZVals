@@ -75,7 +75,7 @@ assert ctx.output == "Paris", "Wrong capital"
 
 # It creates this score:
 {
-    "key": "correctness",
+    "key": "pass",
     "passed": False,
     "notes": "Wrong capital"
 }
@@ -164,7 +164,7 @@ Each score has:
 
 ```python
 {
-    "key": "metric_name",    # Identifier (default: "correctness")
+    "key": "metric_name",    # Identifier (default: "pass")
     "value": 0.95,           # Optional: numeric score (0-1 range)
     "passed": True,          # Optional: boolean pass/fail
     "notes": "Explanation"   # Optional: human-readable notes

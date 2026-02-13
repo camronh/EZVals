@@ -113,7 +113,7 @@ def test_article_summarization(ctx: EvalContext):
     ctx.store(
         input=LONG_ARTICLE,
         output=summary,
-        reference="AI evaluation requires robust frameworks assessing correctness, consistency, safety and alignment.",
+        reference="AI evaluation requires robust frameworks assessing pass, consistency, safety and alignment.",
         latency=1.23,
         scores=[
             {"value": 0.92, "key": "quality"},
@@ -411,7 +411,7 @@ def test_structured_data_processing(ctx: EvalContext):
         output=output,
         latency=0.34,
         scores=[
-            {"passed": True, "key": "correctness"},
+            {"passed": True, "key": "pass"},
             {"value": 0.99, "key": "quality"}
         ],
         trace_data={

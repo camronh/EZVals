@@ -7,14 +7,14 @@ The grader is the logic that determines whether an agent's output is correct. Ch
 | Type | Speed | Cost | Best For |
 |------|-------|------|----------|
 | **Code-based** | Fast | Free | Exact values, patterns, structure, verifiable outcomes |
-| **Model-based** | Slow | $$$ | Subjective quality, semantic correctness, open-ended tasks |
+| **Model-based** | Slow | $$$ | Subjective quality, semantic pass, open-ended tasks |
 | **Human** | Slowest | $$$$ | Gold standard labels, calibrating LLM judges, ambiguous cases |
 
 **Start with code-based graders whenever possible.** They're fast, cheap, and deterministic. Only escalate to model-based when code can't capture what you need to check.
 
 ## Code-Based Graders
 
-Use when you can verify correctness programmatically. These should be your default.
+Use when you can verify pass programmatically. These should be your default.
 
 ### Assertions
 
@@ -87,7 +87,7 @@ async def test_booking_created(ctx: EvalContext):
 
 ## Model-Based Graders (LLM-as-Judge)
 
-Use when correctness is subjective or requires semantic understanding.
+Use when pass is subjective or requires semantic understanding.
 
 ### Binary Pass/Fail Judge
 
@@ -239,7 +239,7 @@ async def test_comprehensive(ctx: EvalContext):
 
 ```python
 {
-    "key": "metric_name",    # Identifier (default: "correctness")
+    "key": "metric_name",    # Identifier (default: "pass")
     "value": 0.95,           # Optional: numeric score (0-1 range)
     "passed": True,          # Optional: boolean pass/fail
     "notes": "Explanation"   # Optional: human-readable notes

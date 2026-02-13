@@ -7,7 +7,7 @@ RAG (Retrieval-Augmented Generation) agents retrieve documents and generate answ
 | Metric | What It Measures |
 |--------|------------------|
 | **Groundedness** | Are claims supported by retrieved sources? |
-| **Correctness** | Does the answer match the expected reference? |
+| **Pass** | Does the answer match the expected reference? |
 | **Coverage** | Are key facts/topics included? |
 | **Source Quality** | Are sources authoritative and relevant? |
 
@@ -37,7 +37,7 @@ async def run_rag_agent(ctx: EvalContext):
     ],
 )
 async def test_rag_accuracy(ctx: EvalContext):
-    # Check correctness against reference
+    # Check pass against reference
     assert ctx.reference.lower() in ctx.output.lower(), \
         f"Expected '{ctx.reference}' in output"
 ```
@@ -195,7 +195,7 @@ async def run_rag_agent(ctx: EvalContext):
     ],
 )
 async def test_rag_comprehensive(ctx: EvalContext):
-    # 1. Basic correctness (code-based, fast)
+    # 1. Basic pass (code-based, fast)
     assert ctx.reference.lower() in ctx.output.lower(), \
         f"Missing reference: {ctx.reference}"
 
