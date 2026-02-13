@@ -174,6 +174,50 @@ def test_row_expand_sort_and_toggle_columns(tmp_path):
             browser.close()
 
 
+def test_column_resize_changes_header_width(tmp_path):
+    store = ResultsStore(tmp_path / "runs")
+    run_id = store.save_run(make_summary(), "2024-01-01T00-00-00Z")
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page(viewport={"width": 1600, "height": 900})
+            page.goto(url)
+            page.wait_for_selector("#results-table")
+
+            input_header = page.locator("thead th[data-col='input']").first
+            start_box = input_header.bounding_box()
+            assert start_box is not None
+
+            resize_handle = input_header.locator(".col-resizer")
+            handle_box = resize_handle.bounding_box()
+            assert handle_box is not None
+
+            drag_x = handle_box["x"] + (handle_box["width"] / 2)
+            drag_y = handle_box["y"] + (handle_box["height"] / 2)
+            start_edge = start_box["x"] + start_box["width"]
+            page.mouse.move(drag_x, drag_y)
+            page.mouse.down()
+            page.mouse.move(drag_x + 5, drag_y)
+            page.wait_for_timeout(20)
+            mid_box = input_header.bounding_box()
+            assert mid_box is not None
+            mid_edge = mid_box["x"] + mid_box["width"]
+            assert abs((mid_edge - start_edge) - 5) < 25
+            page.mouse.move(drag_x + 120, drag_y)
+            page.mouse.up()
+
+            page.wait_for_timeout(50)
+            end_box = input_header.bounding_box()
+            assert end_box is not None
+            assert end_box["width"] > start_box["width"] + 20
+            assert page.evaluate("new URLSearchParams(window.location.search).getAll('sort').length") == 0
+            expect(input_header).to_have_attribute("aria-sort", "none")
+
+            browser.close()
+
+
 def test_detail_page_navigation(tmp_path):
     """Test navigating to detail page and keyboard navigation."""
     store = ResultsStore(tmp_path / "runs")

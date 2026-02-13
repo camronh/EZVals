@@ -76,7 +76,7 @@ export default function ResultsTable({
               data-type={col.type}
               ref={(el) => { if (headerRefs?.current) headerRefs.current[col.key] = el }}
               style={{ width: colWidths[col.key] ? `${colWidths[col.key]}px` : col.width, textAlign: col.align }}
-              className={`bg-theme-bg px-3 py-2 text-[10px] font-medium uppercase tracking-wider text-theme-text-muted ${hiddenSet.has(col.key) ? 'hidden' : ''}`}
+              className={`relative bg-theme-bg px-3 py-2 text-[10px] font-medium uppercase tracking-wider text-theme-text-muted ${hiddenSet.has(col.key) ? 'hidden' : ''}`}
               aria-sort={(() => {
                 const s = sortState.find((item) => item.col === col.key)
                 if (!s) return 'none'

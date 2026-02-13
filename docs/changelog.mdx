@@ -9,6 +9,9 @@ description: "All notable changes to EZVals"
 - Fixed: Detail sidebar dataset/label chips now truncate long values so long names do not stretch metadata layout.
 - Changed: Example eval labels now include intentionally long three-word values so chip truncation behavior is easier to verify in the UI.
 - Tests: Added E2E coverage for long dataset/label chip truncation and tooltip behavior.
+- Fixed: Dashboard table column resizing now keeps the dragged edge aligned with cursor movement by stabilizing visible header widths at drag start.
+- Fixed: Resizing a column no longer unintentionally toggles table sorting on mouse release.
+- Tests: Added E2E coverage for column-resize drag behavior (edge tracking, width change, and no-sort-on-drag regression guard).
 - Added: Dashboard now includes a slim overflow menu action to reload the EZVals server from the UI when state gets stuck or eval files change.
 - Changed: In-app reload now performs a full `ezvals serve` process restart with the same serve arguments and preserves the active bound port.
 - Tests: Added unit and E2E coverage for restart re-exec flow, restart API signaling, and overflow-menu restart interaction.

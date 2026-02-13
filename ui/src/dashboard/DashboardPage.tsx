@@ -91,7 +91,7 @@ type ComparisonRow = {
   searchText: string
 }
 
-type ResizeState = { colKey: string; startX: number; startWidth: number }
+type ResizeState = { colKey: string; startX: number; startWidth: number; moved: boolean }
 type SettingsFormState = { concurrency: string; results_dir: string; timeout: string }
 type DashboardQueryState = {
   runId: string | null
@@ -409,6 +409,7 @@ export default function DashboardPage() {
   const selectAllRef = useRef<HTMLInputElement | null>(null)
   const lastCheckedRef = useRef<number | null>(null)
   const resizeStateRef = useRef<ResizeState | null>(null)
+  const suppressSortUntilRef = useRef<number>(0)
   const headerRefs = useRef<Record<string, HTMLElement | null>>({})
   const isHydratingFromQueryRef = useRef(false)
 
@@ -823,6 +824,8 @@ export default function DashboardPage() {
   const pauseButtonText = useMemo<'Pause' | 'Resume'>(() => (data?.is_paused ? 'Resume' : 'Pause'), [data])
 
   const handleToggleSort = useCallback((col: string, type: string, multi: boolean) => {
+    if (resizeStateRef.current) return
+    if (performance.now() < suppressSortUntilRef.current) return
     setSortState((prev) => {
       const next = [...prev]
       const idx = next.findIndex((s) => s.col === col)
@@ -888,23 +891,34 @@ export default function DashboardPage() {
     event.stopPropagation()
     const th = headerRefs.current[colKey]
     if (!th) return
+
+    const measuredWidths: Record<string, number> = {}
+    Object.entries(headerRefs.current).forEach(([key, header]) => {
+      if (!header || header.classList.contains('hidden')) return
+      const width = Math.round(header.getBoundingClientRect().width)
+      if (width > 0) measuredWidths[key] = width
+    })
+    if (Object.keys(measuredWidths).length) setColWidths((prev) => ({ ...prev, ...measuredWidths }))
+
     const startX = event.clientX
-    const startWidth = th.getBoundingClientRect().width
-    resizeStateRef.current = { colKey, startX, startWidth }
+    const startWidth = measuredWidths[colKey] ?? th.getBoundingClientRect().width
+    resizeStateRef.current = { colKey, startX, startWidth, moved: false }
     document.body.classList.add('ezvals-col-resize')
-  }, [])
+  }, [setColWidths])
 
   useEffect(() => {
     const handleMove = (event: MouseEvent) => {
       if (!resizeStateRef.current) return
       const { colKey, startX, startWidth } = resizeStateRef.current
       const dx = event.clientX - startX
+      if (!resizeStateRef.current.moved && Math.abs(dx) >= 2) resizeStateRef.current.moved = true
       const minWidth = 50
       const maxWidth = 500
       const nextWidth = Math.max(minWidth, Math.min(maxWidth, startWidth + dx))
       setColWidths((prev) => ({ ...prev, [colKey]: Math.round(nextWidth) }))
     }
     const handleUp = () => {
+      if (resizeStateRef.current?.moved) suppressSortUntilRef.current = performance.now() + 200
       resizeStateRef.current = null
       document.body.classList.remove('ezvals-col-resize')
     }
