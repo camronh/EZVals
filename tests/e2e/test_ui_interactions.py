@@ -68,6 +68,57 @@ def make_summary():
     }
 
 
+def make_scored_summary():
+    return {
+        "total_evaluations": 2,
+        "total_functions": 2,
+        "total_errors": 0,
+        "total_passed": 2,
+        "total_with_scores": 2,
+        "average_latency": 0.42,
+        "score_chips": [
+            {"key": "accuracy", "type": "ratio", "passed": 2, "total": 2},
+            {"key": "coherence", "type": "avg", "avg": 0.78, "count": 2},
+        ],
+        "results": [
+            {
+                "function": "eval_a",
+                "dataset": "ds",
+                "labels": ["prod"],
+                "result": {
+                    "input": "q1",
+                    "output": "a1",
+                    "reference": None,
+                    "scores": [
+                        {"key": "accuracy", "value": True, "passed": True},
+                        {"key": "coherence", "value": 0.8, "passed": True},
+                    ],
+                    "error": None,
+                    "latency": 0.4,
+                    "metadata": None,
+                },
+            },
+            {
+                "function": "eval_b",
+                "dataset": "ds",
+                "labels": ["prod"],
+                "result": {
+                    "input": "q2",
+                    "output": "a2",
+                    "reference": None,
+                    "scores": [
+                        {"key": "accuracy", "value": True, "passed": True},
+                        {"key": "coherence", "value": 0.76, "passed": True},
+                    ],
+                    "error": None,
+                    "latency": 0.44,
+                    "metadata": None,
+                },
+            },
+        ],
+    }
+
+
 
 
 def test_row_expand_sort_and_toggle_columns(tmp_path):
@@ -270,4 +321,85 @@ def test_reload_server_button_posts_restart_endpoint(tmp_path):
             expect(page.locator("#restart-server-btn")).to_be_disabled()
             assert app.state.restart_requested is True
 
+            browser.close()
+
+
+def test_png_export_modal_allows_configurable_preview(tmp_path):
+    store = ResultsStore(tmp_path / "runs")
+    run_a = store.save_run(
+        make_scored_summary(),
+        run_id="runaaaaa",
+        session_name="pngmodal",
+        run_name="alpha",
+    )
+    run_b = store.save_run(
+        make_scored_summary(),
+        run_id="runbbbbb",
+        session_name="pngmodal",
+        run_name="beta",
+    )
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_a)
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(f"{url}?compare_run_id={run_a}&compare_run_id={run_b}")
+            page.wait_for_selector("#results-table")
+
+            page.locator("#export-toggle").click()
+            page.locator("#export-png-btn").click()
+            page.wait_for_selector("#png-export-modal")
+            assert page.locator("#png-export-title-input").count() == 0, "config should be collapsed by default"
+            page.locator("#png-export-config-toggle").click()
+            page.wait_for_selector("#png-export-title-input")
+            expect(page.locator("#png-export-title-input")).to_have_value("pngmodal")
+            assert page.locator("#png-export-size-select").count() == 0, "size selector should not be shown"
+
+            page.wait_for_function(
+                """
+                () => {
+                    const modal = document.querySelector('#png-export-modal')
+                    if (!modal) return false
+                    return !!modal.querySelector("img[alt='Export preview']")
+                        || (modal.textContent || '').includes('Failed to generate preview')
+                }
+                """
+            )
+            assert page.locator("#png-export-modal", has_text="Failed to generate preview").count() == 0, "PNG preview should not fail"
+
+            preview = page.locator("#png-export-modal img[alt='Export preview']")
+            expect(preview).to_be_visible()
+            initial_src = preview.get_attribute("src")
+            assert initial_src and initial_src.startswith("data:image/png"), "PNG preview should render"
+            page.evaluate(
+                """
+                (value) => {
+                    window.__pngPreviewBefore = value
+                }
+                """,
+                initial_src,
+            )
+
+            page.locator("#png-export-title-input").fill("Executive scorecard")
+            page.locator("#png-export-score-good-color").fill("#2563eb")
+            page.locator(f"input[data-png-run-name='{run_a}']").fill("Control")
+            page.locator(f"input[data-png-run-color='{run_a}']").fill("#0ea5e9")
+            page.locator("#png-export-show-latency").uncheck()
+            page.locator(f"button[data-png-run-move-down='{run_a}']").click()
+            expect(page.locator("input[data-png-run-name]").first).to_have_value("beta")
+
+            page.wait_for_function(
+                """
+                () => {
+                    const img = document.querySelector('#png-export-modal img[alt="Export preview"]')
+                    return !!img
+                        && !!img.getAttribute('src')
+                        && img.getAttribute('src') !== window.__pngPreviewBefore
+                }
+                """
+            )
+
+            expect(page.locator("#png-export-modal")).not_to_contain_text("1600 x 840px")
+            expect(page.locator(f"input[data-png-run-name='{run_a}']")).to_have_value("Control")
             browser.close()

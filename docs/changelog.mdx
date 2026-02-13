@@ -18,6 +18,11 @@ description: "All notable changes to EZVals"
 - Tests: Added E2E coverage to verify pretty/raw message rendering and toggling across input/output/reference and the messages pane.
 - Changed: Default score-key naming now uses `pass`/`Pass` in runtime fallbacks, examples, tests, and docs where the previous default used `correctness`/`Correctness`.
 - Tests: Updated integration, unit, and E2E expectations to assert the `pass` default score key label.
+- Changed: PNG export now uses a compact options button with a cleaner, more ergonomic configuration panel.
+- Added: PNG export supports editable title, score color tuning, comparison run rename/reorder controls, and footer toggles for test count and average latency.
+- Fixed: PNG preview updates no longer flicker while typing configuration inputs.
+- Fixed: Comparison-mode PNG exports no longer overlap footer metrics with the run key legend.
+- Tests: Added E2E coverage for configurable PNG export options, comparison run reordering in export, and preview regeneration behavior.
 - Changed: Detail view metadata now renders as a readable key-value list instead of raw JSON, with human-friendly key labels.
 - Fixed: URL metadata values in detail view are now clickable links.
 - Tests: Added E2E coverage for metadata label formatting and clickable metadata URLs in detail view.

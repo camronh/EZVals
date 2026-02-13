@@ -303,12 +303,18 @@ Scenario: Export as Markdown
 Scenario: Export as PNG
   Given evaluation results exist
   When the user clicks Export > PNG
-  Then a modal opens with a preview of a 1200x630 PNG image showing:
+  Then a modal opens with a PNG preview
+  And export controls are collapsed by default behind a compact options button
+  And the controls include:
+    - Editable title
+    - Score color customization
+    - Toggles for showing test count and average latency in the footer
+  And the preview image shows:
     - EZVals logo and title
-    - Test count (filtered/total if filters active)
-    - Average latency
+    - Test count (when enabled) in the bottom-left
+    - Average latency (when enabled) in the bottom-left
     - Vertical bar chart for each score metric with percentages
-    - "ezvals.com" branding
+    - EZVals logo and "ezvals.com" branding in the bottom-right
   And the image matches the current theme (dark or light)
   And the user can click Save to download the PNG
   And the user can click Copy to copy the image to clipboard
@@ -316,7 +322,10 @@ Scenario: Export as PNG
 Scenario: Export as PNG in comparison mode
   Given comparison mode is active with 2+ runs
   When the user clicks Export > PNG
-  Then the PNG preview shows:
+  Then the default title is the session name
+  And the modal includes editable run names and run colors
+  And the modal includes up/down controls to reorder runs
+  And the PNG preview shows:
     - Run chips with colors and test counts
     - Grouped bars per metric (one bar per run, colored by run)
     - Percentage labels above each bar
