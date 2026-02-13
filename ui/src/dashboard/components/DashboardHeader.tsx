@@ -269,7 +269,8 @@ export default function DashboardHeader({
                     return (
                       <button
                         key={ds}
-                        className={`rounded px-2 py-0.5 text-[10px] font-medium cursor-pointer ${pillClass}`}
+                        className={`inline-flex max-w-full items-center rounded px-2 py-0.5 text-[10px] font-medium cursor-pointer ${pillClass}`}
+                        title={ds}
                         onClick={() => {
                           setFilters((prev) => {
                             const next = { ...prev, selectedDatasets: { include: [...prev.selectedDatasets.include], exclude: [...prev.selectedDatasets.exclude] } }
@@ -287,7 +288,8 @@ export default function DashboardHeader({
                           })
                         }}
                       >
-                        {isExc ? `x ${ds}` : ds}
+                        {isExc ? <span className="mr-1">x</span> : null}
+                        <span className="filter-pill-text max-w-[220px] truncate">{ds}</span>
                       </button>
                     )
                   })}
@@ -305,7 +307,8 @@ export default function DashboardHeader({
                     return (
                       <button
                         key={la}
-                        className={`rounded px-2 py-0.5 text-[10px] font-medium cursor-pointer ${pillClass}`}
+                        className={`inline-flex max-w-full items-center rounded px-2 py-0.5 text-[10px] font-medium cursor-pointer ${pillClass}`}
+                        title={la}
                         onClick={() => {
                           setFilters((prev) => {
                             const next = { ...prev, selectedLabels: { include: [...prev.selectedLabels.include], exclude: [...prev.selectedLabels.exclude] } }
@@ -323,7 +326,8 @@ export default function DashboardHeader({
                           })
                         }}
                       >
-                        {isExc ? `x ${la}` : la}
+                        {isExc ? <span className="mr-1">x</span> : null}
+                        <span className="filter-pill-text max-w-[220px] truncate">{la}</span>
                       </button>
                     )
                   })}
@@ -353,32 +357,34 @@ export default function DashboardHeader({
                   </span>
                 ) : null}
                 {(filters.selectedDatasets?.include || []).map((ds) => (
-                  <span key={`ds-inc-${ds}`} className="inline-flex items-center gap-1 rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] text-emerald-300">
-                    {ds}
+                  <span key={`ds-inc-${ds}`} className="inline-flex max-w-full items-center gap-1 rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] text-emerald-300">
+                    <span className="filter-pill-text max-w-[180px] truncate" title={ds}>{ds}</span>
                     <button className="ml-1 hover:text-white" onClick={() => {
                       setFilters((prev) => ({ ...prev, selectedDatasets: { ...prev.selectedDatasets, include: prev.selectedDatasets.include.filter((d) => d !== ds) } }))
                     }}>x</button>
                   </span>
                 ))}
                 {(filters.selectedDatasets?.exclude || []).map((ds) => (
-                  <span key={`ds-exc-${ds}`} className="inline-flex items-center gap-1 rounded bg-rose-500/20 px-2 py-0.5 text-[10px] text-rose-300">
-                    x {ds}
+                  <span key={`ds-exc-${ds}`} className="inline-flex max-w-full items-center gap-1 rounded bg-rose-500/20 px-2 py-0.5 text-[10px] text-rose-300">
+                    <span>x</span>
+                    <span className="filter-pill-text max-w-[180px] truncate" title={ds}>{ds}</span>
                     <button className="ml-1 hover:text-white" onClick={() => {
                       setFilters((prev) => ({ ...prev, selectedDatasets: { ...prev.selectedDatasets, exclude: prev.selectedDatasets.exclude.filter((d) => d !== ds) } }))
                     }}>x</button>
                   </span>
                 ))}
                 {(filters.selectedLabels?.include || []).map((la) => (
-                  <span key={`la-inc-${la}`} className="inline-flex items-center gap-1 rounded bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-300">
-                    {la}
+                  <span key={`la-inc-${la}`} className="inline-flex max-w-full items-center gap-1 rounded bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-300">
+                    <span className="filter-pill-text max-w-[180px] truncate" title={la}>{la}</span>
                     <button className="ml-1 hover:text-white" onClick={() => {
                       setFilters((prev) => ({ ...prev, selectedLabels: { ...prev.selectedLabels, include: prev.selectedLabels.include.filter((l) => l !== la) } }))
                     }}>x</button>
                   </span>
                 ))}
                 {(filters.selectedLabels?.exclude || []).map((la) => (
-                  <span key={`la-exc-${la}`} className="inline-flex items-center gap-1 rounded bg-rose-500/20 px-2 py-0.5 text-[10px] text-rose-300">
-                    x {la}
+                  <span key={`la-exc-${la}`} className="inline-flex max-w-full items-center gap-1 rounded bg-rose-500/20 px-2 py-0.5 text-[10px] text-rose-300">
+                    <span>x</span>
+                    <span className="filter-pill-text max-w-[180px] truncate" title={la}>{la}</span>
                     <button className="ml-1 hover:text-white" onClick={() => {
                       setFilters((prev) => ({ ...prev, selectedLabels: { ...prev.selectedLabels, exclude: prev.selectedLabels.exclude.filter((l) => l !== la) } }))
                     }}>x</button>

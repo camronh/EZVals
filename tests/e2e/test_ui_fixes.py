@@ -109,6 +109,36 @@ def make_summary_with_messages():
     }
 
 
+def make_summary_with_long_chip_text():
+    long_dataset = "dataset_with_an_extremely_long_name_that_should_be_truncated_in_chip_ui_components"
+    long_label = "label_with_an_extremely_long_name_that_should_be_truncated_in_chip_ui_components"
+    return {
+        "total_evaluations": 1,
+        "total_functions": 1,
+        "total_errors": 0,
+        "total_passed": 1,
+        "total_with_scores": 0,
+        "average_latency": 0.1,
+        "results": [
+            {
+                "function": "long_chip_test",
+                "dataset": long_dataset,
+                "labels": [long_label],
+                "result": {
+                    "input": "input",
+                    "output": "output",
+                    "reference": None,
+                    "scores": [],
+                    "error": None,
+                    "latency": 0.1,
+                    "metadata": None,
+                    "status": "completed",
+                },
+            }
+        ],
+    }
+
+
 def make_summary_with_message_array_tool_schemas():
     """Summary with mixed tool-call schemas to validate tool name extraction."""
     return {
@@ -1022,3 +1052,62 @@ class TestStatusChipPosition:
                 expect(func_name_row.locator(".status-pill")).to_have_count(0)
 
                 browser.close()
+
+
+def test_long_dataset_and_label_chips_truncate_with_tooltips(tmp_path):
+    store = ResultsStore(tmp_path / "runs")
+    summary = make_summary_with_long_chip_text()
+    run_id = store.save_run(summary, "2024-01-01T00-00-00Z")
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+    expected_dataset = summary["results"][0]["dataset"]
+    expected_label = summary["results"][0]["labels"][0]
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(url)
+            page.wait_for_selector("#results-table")
+
+            dataset_chip = page.locator(".dataset-chip").first
+            label_chip = page.locator(".label-chip").first
+
+            expect(dataset_chip).to_have_attribute("title", expected_dataset)
+            expect(label_chip).to_have_attribute("title", expected_label)
+
+            dataset_style = dataset_chip.evaluate(
+                "el => ({ textOverflow: getComputedStyle(el).textOverflow, whiteSpace: getComputedStyle(el).whiteSpace })"
+            )
+            label_style = label_chip.evaluate(
+                "el => ({ textOverflow: getComputedStyle(el).textOverflow, whiteSpace: getComputedStyle(el).whiteSpace })"
+            )
+            assert dataset_style["textOverflow"] == "ellipsis"
+            assert dataset_style["whiteSpace"] == "nowrap"
+            assert label_style["textOverflow"] == "ellipsis"
+            assert label_style["whiteSpace"] == "nowrap"
+
+            page.locator("#filters-toggle").click()
+            page.wait_for_selector("#dataset-pills")
+
+            filter_dataset_pill = page.locator("#dataset-pills button").first
+            filter_label_pill = page.locator("#label-pills button").first
+            expect(filter_dataset_pill).to_have_attribute("title", expected_dataset)
+            expect(filter_label_pill).to_have_attribute("title", expected_label)
+
+            dataset_pill_text = filter_dataset_pill.locator(".filter-pill-text")
+            label_pill_text = filter_label_pill.locator(".filter-pill-text")
+            expect(dataset_pill_text).to_have_text(expected_dataset)
+            expect(label_pill_text).to_have_text(expected_label)
+
+            dataset_pill_style = dataset_pill_text.evaluate(
+                "el => ({ textOverflow: getComputedStyle(el).textOverflow, whiteSpace: getComputedStyle(el).whiteSpace })"
+            )
+            label_pill_style = label_pill_text.evaluate(
+                "el => ({ textOverflow: getComputedStyle(el).textOverflow, whiteSpace: getComputedStyle(el).whiteSpace })"
+            )
+            assert dataset_pill_style["textOverflow"] == "ellipsis"
+            assert dataset_pill_style["whiteSpace"] == "nowrap"
+            assert label_pill_style["textOverflow"] == "ellipsis"
+            assert label_pill_style["whiteSpace"] == "nowrap"
+
+            browser.close()

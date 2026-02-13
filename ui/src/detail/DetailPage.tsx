@@ -718,17 +718,25 @@ export default function DetailPage() {
                 </div>
               ) : null}
               {resultEntry?.dataset ? (
-                <div className="flex items-center justify-between">
+                <div className="flex min-w-0 items-center justify-between gap-2">
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Dataset</span>
-                  <span className="text-xs text-zinc-600 dark:text-zinc-300">{resultEntry.dataset}</span>
+                  <span className="max-w-[70%] truncate text-right text-xs text-zinc-600 dark:text-zinc-300" title={resultEntry.dataset}>
+                    {resultEntry.dataset}
+                  </span>
                 </div>
               ) : null}
               {resultEntry?.labels?.length ? (
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Labels</span>
-                  <div className="flex gap-1">
+                  <div className="flex max-w-[70%] flex-wrap justify-end gap-1">
                     {resultEntry.labels.map((label) => (
-                      <span key={label} className="rounded bg-zinc-200 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">{label}</span>
+                      <span
+                        key={label}
+                        className="max-w-[140px] truncate rounded bg-zinc-200 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300"
+                        title={label}
+                      >
+                        {label}
+                      </span>
                     ))}
                   </div>
                 </div>

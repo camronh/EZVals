@@ -5,6 +5,10 @@ description: "All notable changes to EZVals"
 
 ## Unreleased
 
+- Fixed: Dataset and label chips now truncate long text with ellipsis and expose the full value via hover tooltip in results rows, comparison rows, and filter pills.
+- Fixed: Detail sidebar dataset/label chips now truncate long values so long names do not stretch metadata layout.
+- Changed: Example eval labels now include intentionally long three-word values so chip truncation behavior is easier to verify in the UI.
+- Tests: Added E2E coverage for long dataset/label chip truncation and tooltip behavior.
 - Added: Dashboard now includes a slim overflow menu action to reload the EZVals server from the UI when state gets stuck or eval files change.
 - Changed: In-app reload now performs a full `ezvals serve` process restart with the same serve arguments and preserves the active bound port.
 - Tests: Added unit and E2E coverage for restart re-exec flow, restart API signaling, and overflow-menu restart interaction.

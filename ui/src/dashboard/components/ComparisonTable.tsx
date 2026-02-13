@@ -51,7 +51,13 @@ export default function ComparisonTable({ sortedRows, normalizedComparisonRuns, 
             <>
               <span className="text-zinc-700">.</span>
               {meta.labels.map((la) => (
-                <span key={la} className="rounded bg-theme-bg-elevated px-1 py-0.5 text-[9px] text-theme-text-muted">{la}</span>
+                <span
+                  key={la}
+                  className="label-chip max-w-[140px] truncate rounded bg-theme-bg-elevated px-1 py-0.5 text-[9px] text-theme-text-muted"
+                  title={la}
+                >
+                  {la}
+                </span>
               ))}
             </>
           ) : null
@@ -70,7 +76,15 @@ export default function ComparisonTable({ sortedRows, normalizedComparisonRuns, 
                   ) : (
                     <span className="font-mono text-[12px] font-medium text-theme-text">{meta.function}</span>
                   )}
-                  <div className="flex items-center gap-1.5 text-[10px] text-zinc-500"><span>{meta.dataset || ''}</span>{labelsHtml}</div>
+                  <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-zinc-500">
+                    <span
+                      className="dataset-chip max-w-[160px] truncate"
+                      title={meta.dataset || undefined}
+                    >
+                      {meta.dataset || ''}
+                    </span>
+                    {labelsHtml}
+                  </div>
                 </div>
               </td>
               <td data-col="input" className="px-3 py-3 align-middle">

@@ -51,7 +51,7 @@ def fetch_ground_truth(prompt):
 # Pattern 1: Simple Context Usage
 # ============================================================================
 
-@eval(dataset="customer_service", labels=["production"])
+@eval(dataset="customer_service", labels=["production observability hardening"])
 async def test_simple_context(ctx: EvalContext):
     """Simplest pattern - just use ctx directly"""
     ctx.input = "I want a refund"
