@@ -6,7 +6,13 @@ from pathlib import Path
 
 import click
 
-from ezvals.cli import cli, _resolve_run_name_in_session, _parse_compare_run_names, _build_serve_query_params
+from ezvals.cli import (
+    cli,
+    _resolve_run_name_in_session,
+    _parse_compare_run_names,
+    _build_serve_query_params,
+    _is_port_available,
+)
 from ezvals.storage import ResultsStore
 
 
@@ -444,6 +450,35 @@ def test_failing():
         assert ("has_error", "1") in params
         assert ("has_url", "0") in params
         assert ("annotation", "yes") in params
+
+    def test_is_port_available_uses_reuseaddr(self, monkeypatch):
+        """port probe should treat quick-restart sockets as reusable."""
+        class FakeSocket:
+            def __init__(self, *args, **kwargs):
+                self.reuse_set = False
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def setsockopt(self, level, optname, value):
+                import socket as _socket
+                if (
+                    level == _socket.SOL_SOCKET
+                    and optname == _socket.SO_REUSEADDR
+                    and value == 1
+                ):
+                    self.reuse_set = True
+
+            def bind(self, addr):
+                if not self.reuse_set:
+                    raise OSError("address in use")
+
+        import socket
+        monkeypatch.setattr(socket, "socket", lambda *args, **kwargs: FakeSocket())
+        assert _is_port_available(8000) is True
 
     def test_resolve_run_name_in_session(self):
         """run-name resolver finds exact run name within session"""

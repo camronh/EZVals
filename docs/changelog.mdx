@@ -17,6 +17,8 @@ description: "All notable changes to EZVals"
 - Tests: Added E2E coverage for the unsaved-active + existing-session-run dropdown scenario to prevent regression.
 - Fixed: Expanded table rows no longer force all cells to top-align, preventing the visual jump when clicking rows with short content.
 - Tests: Added E2E coverage to verify row clicks keep cell vertical alignment stable for rows with non-overflowing content.
+- Fixed: `ezvals serve` now reuses the requested port more reliably on rapid stop/start cycles by probing availability with socket reuse enabled.
+- Tests: Added unit coverage to prevent regressions in serve port probing during quick restarts.
 
 ## 0.1.5 - 2026-02-07
 
