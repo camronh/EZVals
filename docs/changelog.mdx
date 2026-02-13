@@ -10,6 +10,11 @@ description: "All notable changes to EZVals"
 - Tests: Added CLI unit coverage to verify `--no-open` is exposed in help and propagated for both eval-path and JSON-path serve flows.
 - Changed: Run metadata on `EvalContext` (`ctx.run_id`, `ctx.session_name`, `ctx.run_name`, `ctx.eval_path`) is now read-only after context initialization.
 - Tests: Added unit coverage to verify run metadata fields on `EvalContext` cannot be reassigned.
+- Added: Dashboard now keeps shareable URL query state in sync for search, filters, compare selection, and table sort (`sort=<col>,<dir>,<type>`).
+- Changed: Canonical comparison links now use repeated `compare_run_id` params without `run_id` in compare mode.
+- Changed: Evals skill URL-sharing guidance now shows compare-mode links using `compare_run_id`-only format.
+- Fixed: Launch URLs shaped like `run_id=<id>&compare_run_id=<id>` now reliably hydrate two-run comparison mode.
+- Tests: Added E2E coverage for single-compare query hydration, live filter/search URL sync, and sort query hydration/sync.
 - Added: Evals skill `running.md` now documents the per-result `EvalResult` output schema (`results[*].result`) with concrete JSON examples.
 - Added: Evals skill includes parsing recipes for common agent tasks like finding failing evals, filtering by error text, and extracting/aggregating score values.
 - Added: Up/down controls on comparison chips so runs can be reordered directly in compare mode without exiting.

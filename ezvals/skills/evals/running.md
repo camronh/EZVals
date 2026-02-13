@@ -181,8 +181,8 @@ Use the user’s existing serve URL, e.g.:
 
 ### Query Parameters
 
-- `run_id=<id>` active run to open
-- `compare_run_id=<id>` repeat to compare multiple runs
+- `run_id=<id>` active run to open for single-run views
+- `compare_run_id=<id>` repeat to compare multiple runs (preferred for compare mode links)
 - `search=<text>` search query
 - `annotation=any|yes|no`
 - `has_error=1|0`
@@ -199,7 +199,7 @@ Use the user’s existing serve URL, e.g.:
 
 ```text
 You can see the two final runs side-by-side here:
-http://127.0.0.1:8000/?run_id=1826bc4c&compare_run_id=1826bc4c&compare_run_id=58741756
+http://127.0.0.1:8000/?compare_run_id=1826bc4c&compare_run_id=58741756
 ```
 
 ```text

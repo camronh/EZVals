@@ -330,6 +330,38 @@ def test_comparison_mode_from_query_params(tmp_path):
             page.wait_for_selector("#results-table")
             page.wait_for_selector(".comparison-chips")
             expect(page.locator(".comparison-chip")).to_have_count(2)
+            page.wait_for_function("() => !new URLSearchParams(window.location.search).has('run_id')")
+            params = urllib.parse.parse_qs(urllib.parse.urlparse(page.url).query)
+            assert "run_id" not in params
+            browser.close()
+
+
+def test_comparison_mode_from_single_compare_query_param(tmp_path):
+    """run_id + single compare_run_id should hydrate two-run comparison mode."""
+    store = ResultsStore(tmp_path / "runs")
+
+    run1_id = store.save_run(make_run_summary("baseline"), session_name="test-session", run_name="baseline")
+    run2_id = store.save_run(make_run_summary("final"), session_name="test-session", run_name="final")
+
+    app = create_app(
+        results_dir=str(tmp_path / "runs"),
+        active_run_id=run1_id,
+        session_name="test-session",
+        run_name="baseline",
+    )
+
+    query = f"run_id={run1_id}&compare_run_id={run2_id}"
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(f"{url}?{query}")
+            page.wait_for_selector("#results-table")
+            page.wait_for_selector(".comparison-chips")
+            expect(page.locator(".comparison-chip")).to_have_count(2)
+            first_chip_name = page.locator(".comparison-chip .comparison-chip-name").first.inner_text().strip()
+            assert first_chip_name == "baseline"
             browser.close()
 
 

@@ -2,6 +2,7 @@
 
 import re
 import time
+import urllib.parse
 
 from playwright.sync_api import sync_playwright, expect
 
@@ -378,6 +379,47 @@ class TestScoresSorting:
                     "tbody tr[data-row='main'] td[data-col='function'] a"
                 ).first
                 expect(first_func).to_contain_text("test_high")
+
+                browser.close()
+
+    def test_sort_from_query_descending(self, tmp_path):
+        store = ResultsStore(tmp_path / "runs")
+        run_id = store.save_run(make_summary_for_sorting(), "2024-01-01T00-00-00Z")
+        app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+        with run_server(app) as url:
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page()
+                page.goto(f"{url}?sort=scores,desc,number")
+                page.wait_for_selector("#results-table")
+
+                first_func = page.locator(
+                    "tbody tr[data-row='main'] td[data-col='function'] a"
+                ).first
+                expect(first_func).to_contain_text("test_high")
+
+                browser.close()
+
+    def test_sort_updates_url_query(self, tmp_path):
+        store = ResultsStore(tmp_path / "runs")
+        run_id = store.save_run(make_summary_for_sorting(), "2024-01-01T00-00-00Z")
+        app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+        with run_server(app) as url:
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page()
+                page.goto(url)
+                page.wait_for_selector("#results-table")
+
+                page.locator("thead th[data-col='scores']").click()
+                page.wait_for_function(
+                    "() => new URLSearchParams(window.location.search).getAll('sort').includes('scores,asc,number')"
+                )
+
+                params = urllib.parse.parse_qs(urllib.parse.urlparse(page.url).query)
+                assert "scores,asc,number" in params.get("sort", [])
 
                 browser.close()
 

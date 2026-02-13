@@ -1,5 +1,6 @@
 import json
 import sys
+import urllib.parse
 from pathlib import Path
 from playwright.sync_api import sync_playwright, expect
 
@@ -158,4 +159,35 @@ def test_filters_from_launch_query(tmp_path):
             rows = page.locator("tbody tr[data-row='main']")
             expect(rows).to_have_count(1)
             expect(rows.first).to_contain_text("f3")
+            browser.close()
+
+
+def test_filters_update_url_query_live(tmp_path):
+    """Live filter/search changes should be reflected in readable query params."""
+    store = ResultsStore(tmp_path / "runs")
+    run_id = store.save_run(make_summary_with_scores(), "2024-01-01T00-00-00Z")
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(url)
+            page.wait_for_selector("#results-table")
+
+            page.fill("#search-input", "f1")
+            page.click("#filters-toggle")
+            page.wait_for_selector("#filters-menu.active")
+            page.click("#filter-has-annotation")
+            page.locator("#dataset-pills button", has_text="ds").first.click()
+
+            page.wait_for_function(
+                "() => new URLSearchParams(window.location.search).get('search') === 'f1'"
+            )
+
+            params = urllib.parse.parse_qs(urllib.parse.urlparse(page.url).query)
+            assert params.get("search") == ["f1"]
+            assert params.get("annotation") == ["yes"]
+            assert params.get("dataset_in") == ["ds"]
+            assert params.get("run_id") == [run_id]
             browser.close()

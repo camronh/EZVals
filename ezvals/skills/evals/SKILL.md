@@ -233,7 +233,7 @@ When the user is already serving the UI, prefer sharing a focused URL instead of
 
 Use the running base URL (for example `http://127.0.0.1:8000`) plus query params to open exactly what they should see:
 
-- `run_id=<id>`
+- `run_id=<id>` (single-run views)
 - `compare_run_id=<id>` (repeatable)
 - `search=<text>`
 - `annotation=any|yes|no`
@@ -247,7 +247,7 @@ Example response to user:
 
 ```text
 You can see the passing results for the two final runs here:
-http://127.0.0.1:8000/?run_id=1826bc4c&compare_run_id=1826bc4c&compare_run_id=58741756&score_passed=correctness,true
+http://127.0.0.1:8000/?compare_run_id=1826bc4c&compare_run_id=58741756&score_passed=correctness,true
 ```
 
 See [running.md](running.md) for session management and URL construction examples.
