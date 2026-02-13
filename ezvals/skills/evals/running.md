@@ -147,7 +147,7 @@ After running evals, serve them for the user to review in the browser.
 ezvals serve evals/ --session my-experiment
 ```
 
-This opens `http://localhost:8000` where the user can:
+This opens `http://localhost:8000` by default (use `--no-open` to skip auto-opening a browser) where the user can:
 - View all eval results in a table
 - Click into individual results for details
 - Filter by dataset, label, or status
@@ -163,6 +163,11 @@ ezvals serve evals/ --session my-experiment --run
 ```
 
 The `--run` flag automatically runs all evals when the server starts.
+
+```bash
+# Start server without opening browser
+ezvals serve evals/ --session my-experiment --no-open
+```
 
 ## Sharing Focused Views by URL
 

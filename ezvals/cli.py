@@ -240,6 +240,7 @@ def cli():
 @click.option('--has-messages/--no-has-messages', default=None, help='Initial trace messages filter')
 @click.option('--annotation', type=click.Choice(['any', 'yes', 'no']), default='any', help='Initial annotation filter')
 @click.option('--run', 'auto_run', is_flag=True, help='Automatically run all evals on startup')
+@click.option('--open/--no-open', 'open_browser', default=True, help='Open the UI in your browser on startup')
 def serve_cmd(
     path: str,
     dataset: Optional[str],
@@ -255,6 +256,7 @@ def serve_cmd(
     has_messages: Optional[bool],
     annotation: str,
     auto_run: bool,
+    open_browser: bool,
 ):
     """Start the web UI to browse and run evaluations."""
     from pathlib import Path as PathLib
@@ -294,7 +296,13 @@ def serve_cmd(
             has_messages=has_messages,
             annotation=annotation,
         )
-        _serve_from_json(json_path=path, results_dir=results_dir, port=port, query_params=query_params)
+        _serve_from_json(
+            json_path=path,
+            results_dir=results_dir,
+            port=port,
+            query_params=query_params,
+            open_browser=open_browser,
+        )
         return
 
     labels = list(label) if label else None
@@ -368,6 +376,7 @@ def serve_cmd(
         active_run_id=active_run_id,
         query_params=query_params,
         auto_run=auto_run,
+        open_browser=open_browser,
     )
 
 
@@ -565,6 +574,7 @@ def _serve(
     active_run_id: Optional[str] = None,
     query_params: Optional[List[tuple[str, str]]] = None,
     auto_run: bool = False,
+    open_browser: bool = True,
 ):
     """Serve a web UI to browse and run evaluations."""
     try:
@@ -622,7 +632,8 @@ def _serve(
         console.print(f"[cyan]Found {len(functions)} evaluation(s). Click Run to start.[/cyan]")
     console.print("Press Esc to stop (or Ctrl+C)\n")
 
-    Thread(target=lambda: (time.sleep(0.5), webbrowser.open(url)), daemon=True).start()
+    if open_browser:
+        Thread(target=lambda: (time.sleep(0.5), webbrowser.open(url)), daemon=True).start()
 
     config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning", access_log=False)
     server = uvicorn.Server(config)
@@ -697,6 +708,7 @@ def _serve_from_json(
     results_dir: str,
     port: int,
     query_params: Optional[List[tuple[str, str]]] = None,
+    open_browser: bool = True,
 ):
     """Serve web UI loading an existing run JSON file."""
     try:
@@ -765,7 +777,8 @@ def _serve_from_json(
     console.print(f"[cyan]Loaded run: {run_name} ({len(run_data.get('results', []))} results)[/cyan]")
     console.print("Press Esc to stop (or Ctrl+C)\n")
 
-    Thread(target=lambda: (time.sleep(0.5), webbrowser.open(url)), daemon=True).start()
+    if open_browser:
+        Thread(target=lambda: (time.sleep(0.5), webbrowser.open(url)), daemon=True).start()
 
     config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning", access_log=False)
     server = uvicorn.Server(config)

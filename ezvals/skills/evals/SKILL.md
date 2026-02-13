@@ -222,6 +222,9 @@ ezvals run evals/ --session my-experiment --run-name baseline
 
 # Serve results for user to review in browser
 ezvals serve evals/ --session my-experiment
+
+# Start serve without launching a browser window
+ezvals serve evals/ --session my-experiment --no-open
 ```
 
 ## Sharing Results via URL (Agent Guidance)

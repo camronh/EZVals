@@ -421,6 +421,7 @@ def test_failing():
         assert '--has-url' in result.output
         assert '--has-messages' in result.output
         assert '--annotation' in result.output
+        assert '--no-open' in result.output
 
     def test_parse_compare_run_names_validation(self):
         """compare-runs parser validates count and duplicates"""
@@ -573,6 +574,37 @@ def test_failing():
             assert captured["active_run_id"] is None
             assert captured["run_name"] == "next-attempt"
             assert captured["query_params"] == []
+
+    def test_serve_no_open_passes_false_to_serve(self, monkeypatch):
+        """serve --no-open disables browser launch for eval paths"""
+        captured = {}
+
+        def fake_serve(**kwargs):
+            captured.update(kwargs)
+
+        monkeypatch.setattr('ezvals.cli._serve', fake_serve)
+
+        with self.runner.isolated_filesystem():
+            Path('evals.py').write_text('def x():\n    return 1\n')
+            result = self.runner.invoke(cli, ['serve', 'evals.py', '--no-open'])
+            assert result.exit_code == 0
+            assert captured["open_browser"] is False
+
+    def test_serve_json_no_open_passes_false_to_json_serve(self, monkeypatch):
+        """serve --no-open disables browser launch for JSON run paths"""
+        captured = {}
+
+        def fake_serve_from_json(**kwargs):
+            captured.update(kwargs)
+
+        monkeypatch.setattr('ezvals.cli._serve_from_json', fake_serve_from_json)
+
+        with self.runner.isolated_filesystem():
+            run_file = Path('run.json')
+            run_file.write_text('{"run_id":"r1","results":[]}')
+            result = self.runner.invoke(cli, ['serve', str(run_file), '--no-open'])
+            assert result.exit_code == 0
+            assert captured["open_browser"] is False
 
     def test_serve_compare_runs_requires_two_names(self):
         """serve --compare-runs validates minimum names"""

@@ -10,7 +10,7 @@ This document specifies the web interface experience for EZVals.
 ezvals serve evals/
 ```
 
-Opens browser to `http://127.0.0.1:8000`. Evaluations are discovered but not auto-run.
+Starts at `http://127.0.0.1:8000` (browser opens by default unless `--no-open` is used). Evaluations are discovered but not auto-run.
 
 ---
 
