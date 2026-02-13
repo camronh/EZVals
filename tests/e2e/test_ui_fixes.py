@@ -188,6 +188,69 @@ def make_summary_with_message_array_tool_schemas():
     }
 
 
+def make_summary_with_message_rendering_across_panels():
+    """Summary where input/output/reference all use message arrays."""
+    return {
+        "total_evaluations": 1,
+        "total_functions": 1,
+        "total_errors": 0,
+        "total_passed": 1,
+        "total_with_scores": 1,
+        "average_latency": 0.4,
+        "results": [
+            {
+                "function": "test_message_rendering",
+                "dataset": "ds",
+                "labels": [],
+                "result": {
+                    "input": [
+                        {"role": "system", "content": "You are a concise assistant."},
+                        {"role": "user", "content": "Summarize this paragraph."},
+                    ],
+                    "output": [
+                        {
+                            "role": "assistant",
+                            "content": [
+                                {"type": "text", "text": "Short summary line 1."},
+                                {"type": "text", "text": "Short summary line 2."},
+                            ],
+                        }
+                    ],
+                    "reference": [
+                        {"role": "assistant", "message": "Expected concise summary."},
+                    ],
+                    "scores": [{"key": "correct", "passed": True}],
+                    "error": None,
+                    "latency": 0.4,
+                    "metadata": None,
+                    "status": "completed",
+                    "trace_data": {
+                        "messages": [
+                            {"role": "user", "content": "Find docs about scoring."},
+                            {
+                                "role": "assistant",
+                                "content": "Searching docs now.",
+                                "tool_calls": [
+                                    {
+                                        "id": "call_docs_1",
+                                        "name": "search_docs",
+                                        "args": {"query": "scoring"},
+                                    }
+                                ],
+                            },
+                            {
+                                "role": "tool",
+                                "tool_call_id": "call_docs_1",
+                                "content": '{"matches": 3}',
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    }
+
+
 def make_summary_for_sorting():
     """Summary with multiple scores for sorting tests."""
     return {
@@ -430,6 +493,61 @@ class TestMessagesPane:
 
                 # Pane should now be closed (has translate-x-full)
                 expect(pane).to_have_class(re.compile(r"translate-x-full"))
+
+                browser.close()
+
+
+class TestMessageRenderingNormalization:
+    """#27: Message-like data renders pretty with a raw toggle everywhere."""
+
+    def test_input_output_reference_render_pretty_by_default(self, tmp_path):
+        store = ResultsStore(tmp_path / "runs")
+        run_id = store.save_run(make_summary_with_message_rendering_across_panels(), "2024-01-01T00-00-00Z")
+        app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+        with run_server(app) as url:
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page()
+                page.goto(f"{url}/runs/{run_id}/results/0")
+                page.wait_for_selector("#input-panel")
+                page.wait_for_selector("#output-panel")
+                page.wait_for_selector("#ref-panel")
+
+                expect(page.locator("#input-panel .msg-box").first).to_be_visible()
+                expect(page.locator("#output-panel .msg-box").first).to_be_visible()
+                expect(page.locator("#ref-panel .msg-box").first).to_be_visible()
+                expect(page.locator("#input-panel button:has-text('Pretty')")).to_be_visible()
+                expect(page.locator("#output-panel button:has-text('Pretty')")).to_be_visible()
+                expect(page.locator("#ref-panel button:has-text('Pretty')")).to_be_visible()
+
+                browser.close()
+
+    def test_message_view_toggle_switches_between_pretty_and_raw(self, tmp_path):
+        store = ResultsStore(tmp_path / "runs")
+        run_id = store.save_run(make_summary_with_message_rendering_across_panels(), "2024-01-01T00-00-00Z")
+        app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+        with run_server(app) as url:
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page()
+                page.goto(f"{url}/runs/{run_id}/results/0")
+                page.wait_for_selector("#input-panel")
+
+                input_panel = page.locator("#input-panel")
+                input_panel.locator("button:has-text('Raw')").click()
+                expect(input_panel.locator("pre.data-pre")).to_contain_text('"role": "user"')
+                input_panel.locator("button:has-text('Pretty')").click()
+                expect(input_panel.locator(".msg-box").first).to_be_visible()
+
+                page.click("button:has-text('Messages')")
+                page.wait_for_selector("#messages-pane:not(.translate-x-full)")
+                pane = page.locator("#messages-pane")
+                pane.locator("button:has-text('Raw')").click()
+                expect(pane.locator("pre.data-pre")).to_contain_text('"role": "assistant"')
+                pane.locator("button:has-text('Pretty')").click()
+                expect(pane.locator(".msg-box").first).to_be_visible()
 
                 browser.close()
 

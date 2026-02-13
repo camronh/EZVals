@@ -60,6 +60,8 @@ Each run file includes session metadata:
 
 Click a function name to open the full-page detail view with its own URL (`/runs/{run_id}/results/{index}`). Navigate between results with arrow keys (↑/↓) or press Escape to return to the table.
 
+When `input`, `output`, `reference`, or trace `messages` contain chat-style message arrays (OpenAI, Anthropic, or similar `{role, content}` variants), the detail view auto-renders them in a chat-style layout. Use the **Pretty**/**Raw** toggle in each section to switch between formatted message boxes and raw JSON.
+
 ## Inline Editing
 
 In the detail page, you can edit:

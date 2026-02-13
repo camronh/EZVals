@@ -225,13 +225,25 @@ async def test_spread_agent_result(ctx: EvalContext):
 
 @eval
 def test_direct_trace_data(ctx: EvalContext):
-    """Set trace_data fields via store()"""
+    """Set message-array input/output/reference and trace_data via store()"""
+    input_messages = [
+        {"role": "system", "content": "You are a concise support assistant."},
+        {"role": "user", "content": "What is your refund window?"},
+    ]
+    output_messages = [
+        {"role": "assistant", "content": "You can request a refund within 30 days."},
+    ]
+    reference_messages = [
+        {"role": "assistant", "content": "Refunds are accepted within 30 days of purchase."},
+    ]
+
     ctx.store(
-        input="Direct input",
-        output="Direct output",
+        input=input_messages,
+        output=output_messages,
+        reference=reference_messages,
         messages=[
-            {"role": "user", "content": "Direct input"},
-            {"role": "assistant", "content": "Direct output"},
+            {"role": "user", "content": input_messages[-1]["content"]},
+            {"role": "assistant", "content": output_messages[-1]["content"]},
         ],
         trace_url="https://trace.example.com/abc",
         trace_data={"custom_field": "any value"},

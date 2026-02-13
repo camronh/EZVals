@@ -109,6 +109,9 @@ body.resizing * { cursor: inherit !important; user-select: none !important; }
   max-height: 300px;
   overflow-y: auto;
 }
+.message-view-msg-content {
+  max-height: none;
+}
 .msg-user .msg-box-header { background: rgb(59 130 246 / 0.2); color: rgb(37 99 235); }
 .msg-user .msg-box-content { background: rgb(59 130 246 / 0.05); }
 .msg-assistant .msg-box-header { background: rgb(34 197 94 / 0.2); color: rgb(22 163 74); }

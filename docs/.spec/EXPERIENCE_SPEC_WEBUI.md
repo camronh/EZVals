@@ -157,6 +157,14 @@ Scenario: Detail view contents
     - Tools used (unique tool names from trace_data.messages tool calls, if present)
     - Latency
     - Error message (if any)
+
+Scenario: Message-format data rendering
+  Given the detail view is open
+  And input, output, reference, or trace messages contain chat-style message arrays
+  When the UI detects common message schemas (OpenAI, Anthropic, or text/message variants)
+  Then those sections default to a pretty chat-style rendering
+  And each section provides a Pretty/Raw toggle
+  And Raw shows the underlying JSON payload without transformation
 ```
 
 ### Navigation

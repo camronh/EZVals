@@ -2,6 +2,7 @@ import type { MouseEvent as ReactMouseEvent } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ComparisonRun, NormalizedComparisonRun, RunResultRow, Score, TraceData } from '../types'
 import { getResultKey, normalizeComparisonRuns } from '../dashboard/utils'
+import { DataViewer, extractToolNamesFromMessages, getRawText } from '../components/DataViewer'
 
 const DETAIL_BODY_CLASS = 'min-h-screen bg-blue-50/40 font-sans text-zinc-800 dark:bg-neutral-950 dark:text-zinc-100'
 const COMPARISON_STORAGE_KEY = 'ezvals:comparisonRuns'
@@ -46,41 +47,6 @@ type ResizeState = {
   container: HTMLDivElement
 }
 
-type MessageItem = {
-  key: string
-  role: string
-  title: string
-  content: string
-}
-
-type MessageSchema = {
-  role?: string
-  type?: string
-  name?: string
-  tool_call_id?: string
-  tool_use_id?: string
-  content?: unknown
-  text?: unknown
-  message?: unknown
-  tool_calls?: Array<{
-    id?: string
-    function?: { name?: string; arguments?: unknown }
-    name?: string
-    args?: unknown
-    input?: unknown
-  } | Record<string, unknown>>
-}
-
-type ToolCallInfo = {
-  id?: string
-  name: string
-  args: unknown
-}
-
-type MarkedLike = { parse: (input: string) => string }
-type DomPurifyLike = { sanitize: (input: string) => string }
-type HljsLike = { highlight: (input: string, opts: { language: string }) => { value: string } }
-
 function useBodyClass(bodyClass: string, title?: string) {
   useEffect(() => {
     if (title) document.title = title
@@ -89,20 +55,6 @@ function useBodyClass(bodyClass: string, title?: string) {
       document.body.className = ''
     }
   }, [bodyClass, title])
-}
-
-function escapeHtml(str: unknown) {
-  if (str == null) return ''
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-}
-
-function looksLikeMarkdown(text: string) {
-  if (!text) return false
-  return [/^#{1,6}\s+\S/m, /^\s*[-*+]\s+\S/m, /^\s*\d+\.\s+\S/m, /^>+\s+\S/m, /`{3,}[\s\S]*?`{3,}/m, /\[.+?\]\(.+?\)/m]
-    .some((re) => re.test(text))
 }
 
 function buildRunCommand(path: string | null | undefined, name: string | null | undefined) {
@@ -116,17 +68,6 @@ function getLatencyColor(latency?: number | null) {
   return 'text-amber-600 dark:text-amber-400'
 }
 
-function getRawText(content: unknown) {
-  if (content == null) return ''
-  if (typeof content === 'string') return content
-  if (typeof content === 'number' || typeof content === 'boolean') return String(content)
-  try {
-    return JSON.stringify(content, null, 2)
-  } catch {
-    return String(content)
-  }
-}
-
 function formatMetadataLabel(key: string) {
   return key
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
@@ -134,55 +75,6 @@ function formatMetadataLabel(key: string) {
     .replace(/\s+/g, ' ')
     .trim()
     .replace(/\b\w/g, (ch) => ch.toUpperCase())
-}
-
-function buildViewer(content: unknown, placeholder = '—') {
-  if (content == null || content === '') {
-    return {
-      raw: '',
-      html: `<div class="data-surface text-xs text-zinc-400">${escapeHtml(placeholder)}</div>`,
-    }
-  }
-
-  let rawText = getRawText(content)
-  let mode = 'text'
-  if (typeof content === 'object' && content !== null) {
-    mode = 'json'
-  } else if (typeof content === 'string') {
-    try {
-      const parsed = JSON.parse(rawText)
-      rawText = JSON.stringify(parsed, null, 2)
-      mode = 'json'
-    } catch {
-      if (looksLikeMarkdown(rawText.trim())) mode = 'markdown'
-    }
-  }
-
-  if (mode === 'markdown') {
-    const marked = typeof window !== 'undefined' ? (window as unknown as { marked?: MarkedLike }).marked : undefined
-    const purifier = typeof window !== 'undefined' ? (window as unknown as { DOMPurify?: DomPurifyLike }).DOMPurify : undefined
-    let html = marked ? marked.parse(rawText) : `<pre class="data-pre">${escapeHtml(rawText)}</pre>`
-    if (purifier) html = purifier.sanitize(html)
-    return { raw: rawText, html: `<div class="data-surface markdown-body">${html}</div>` }
-  }
-
-  if (mode === 'json') {
-    const hljs = typeof window !== 'undefined' ? (window as unknown as { hljs?: HljsLike }).hljs : undefined
-    let highlighted = escapeHtml(rawText)
-    if (hljs) {
-      try {
-        highlighted = hljs.highlight(rawText, { language: 'json' }).value
-      } catch {
-        highlighted = escapeHtml(rawText)
-      }
-    }
-    return {
-      raw: rawText,
-      html: `<div class="data-surface"><pre class="data-pre"><code class="hljs language-json">${highlighted}</code></pre></div>`,
-    }
-  }
-
-  return { raw: rawText, html: `<div class="data-surface"><pre class="data-pre">${escapeHtml(rawText)}</pre></div>` }
 }
 
 type CopyButtonProps = {
@@ -216,22 +108,6 @@ function CopyButton({ getText, className = '', title = 'Copy' }: CopyButtonProps
         <path d="M20 6L9 17l-5-5" />
       </svg>
     </button>
-  )
-}
-
-type DataViewerProps = {
-  content: unknown
-  placeholder?: string
-}
-
-function DataViewer({ content, placeholder }: DataViewerProps) {
-  const { html, raw } = useMemo(() => buildViewer(content, placeholder), [content, placeholder])
-  return (
-    <div
-      className="data-viewer"
-      data-raw={raw}
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
   )
 }
 
@@ -302,156 +178,6 @@ function InlineScoreBadges({ scores, latency }: InlineScoreBadgesProps) {
       ) : null}
     </div>
   )
-}
-
-function extractToolCalls(msg: MessageSchema): ToolCallInfo[] {
-  const rawCalls: unknown[] = []
-  if (Array.isArray(msg.tool_calls)) rawCalls.push(...msg.tool_calls)
-
-  if (Array.isArray(msg.content)) {
-    for (const block of msg.content) {
-      if (!block || typeof block !== 'object') continue
-      const typedBlock = block as Record<string, unknown>
-      const type = String(typedBlock.type || '').toLowerCase()
-      if (type === 'tool_use' || type === 'tool_call' || type === 'function_call') {
-        rawCalls.push(typedBlock)
-      }
-    }
-  }
-
-  const calls: ToolCallInfo[] = []
-  for (const call of rawCalls) {
-    if (!call || typeof call !== 'object') continue
-    const typed = call as Record<string, unknown>
-    const fn = typed.function && typeof typed.function === 'object' ? typed.function as Record<string, unknown> : null
-    const name = fn?.name || typed.name
-    if (typeof name !== 'string' || !name) continue
-    const id = fn?.id || typed.id || typed.call_id || typed.tool_call_id || typed.tool_use_id
-    const args = fn?.arguments ?? typed.arguments ?? typed.args ?? typed.input ?? {}
-    calls.push({ id: typeof id === 'string' ? id : undefined, name, args })
-  }
-
-  return calls
-}
-
-function extractToolNames(messages: MessageSchema[] | unknown) {
-  if (!Array.isArray(messages) || messages.length === 0) return []
-  const names = new Set<string>()
-  for (const msg of messages as MessageSchema[]) {
-    for (const call of extractToolCalls(msg)) names.add(call.name)
-  }
-  return Array.from(names)
-}
-
-function buildMessageItems(messages: MessageSchema[] | unknown) {
-  if (!Array.isArray(messages) || messages.length === 0) return { raw: '', items: [] }
-  const typedMessages = messages as MessageSchema[]
-  const isKnownSchema = typedMessages.every(
-    (msg) => (msg.role || msg.type) && (msg.content !== undefined || msg.text !== undefined || msg.message !== undefined || msg.tool_calls),
-  )
-
-  if (!isKnownSchema) {
-    return { raw: JSON.stringify(messages, null, 2), items: null }
-  }
-
-  const items: MessageItem[] = []
-  const toolCallsById = new Map<string, ToolCallInfo>()
-  for (const msg of typedMessages) {
-    for (const call of extractToolCalls(msg)) {
-      if (call.id) toolCallsById.set(call.id, call)
-    }
-  }
-
-  for (const msg of typedMessages) {
-    const role = (msg.role || msg.type || 'unknown').toLowerCase()
-    const toolCalls = extractToolCalls(msg)
-    if (toolCalls.length > 0) {
-      const toolCallsContent = toolCalls.map((call) => {
-        const args = call.args
-        let argsStr
-        if (typeof args === 'string') {
-          try {
-            argsStr = JSON.stringify(JSON.parse(args), null, 2)
-          } catch {
-            argsStr = args
-          }
-        } else {
-          argsStr = JSON.stringify(args, null, 2)
-        }
-        return `${call.name}(${argsStr})`
-      }).join('\n\n')
-      items.push({
-        key: `tool-calls-${items.length}`,
-        role: 'tool_calls',
-        title: 'Tool Calls',
-        content: toolCallsContent,
-      })
-      continue
-    }
-
-    if (role === 'tool' || role === 'tool_result' || role === 'function') {
-      let toolName = msg.name
-      const callRef = msg.tool_call_id || msg.tool_use_id
-      if (!toolName && callRef) {
-        toolName = toolCallsById.get(callRef)?.name
-      }
-      toolName = toolName || 'tool'
-      let content = msg.content || msg.text || msg.message || ''
-      if (typeof content === 'object' && content !== null) {
-        content = JSON.stringify(content, null, 2)
-      } else if (typeof content === 'string') {
-        try {
-          content = JSON.stringify(JSON.parse(content), null, 2)
-        } catch {
-          try {
-            const jsonified = String(content)
-              .replace(/'/g, '"')
-              .replace(/True/g, 'true')
-              .replace(/False/g, 'false')
-              .replace(/None/g, 'null')
-              .replace(/datetime\.date\([^)]+\)/g, '"[date]"')
-              .replace(/datetime\.datetime\([^)]+\)/g, '"[datetime]"')
-            content = JSON.stringify(JSON.parse(jsonified), null, 2)
-          } catch {
-            // keep original
-          }
-        }
-      }
-      items.push({
-        key: `tool-result-${items.length}`,
-        role: 'tool_result',
-        title: `${toolName} Result`,
-        content: String(content),
-      })
-      continue
-    }
-
-    let content = msg.content || msg.text || msg.message || ''
-    if (Array.isArray(content)) {
-      content = content.map((c) => {
-        if (typeof c === 'string') return c
-        if (typeof c === 'object' && c !== null) {
-          const typed = c as { text?: string; content?: string }
-          return typed.text || typed.content || JSON.stringify(c)
-        }
-        return String(c)
-      }).join('\n')
-    }
-    if (typeof content === 'object' && content !== null) {
-      content = JSON.stringify(content, null, 2)
-    }
-
-    const normalizedRole = role === 'human' ? 'user' : role === 'ai' ? 'assistant' : role
-    const displayRole = normalizedRole.charAt(0).toUpperCase() + normalizedRole.slice(1)
-    items.push({
-      key: `msg-${items.length}`,
-      role: normalizedRole,
-      title: displayRole,
-      content: String(content),
-    })
-  }
-
-  return { raw: JSON.stringify(messages, null, 2), items }
 }
 
 export default function DetailPage() {
@@ -768,8 +494,7 @@ export default function DetailPage() {
   const filteredTrace = traceData
     ? Object.fromEntries(Object.entries(traceData).filter(([k]) => k !== 'messages' && k !== 'trace_url'))
     : null
-  const messageData = buildMessageItems(messages)
-  const toolNames = extractToolNames(messages)
+  const toolNames = extractToolNamesFromMessages(messages)
   const runCommand = buildRunCommand(data.eval_path, resultEntry?.function)
 
   const baseForCompare = comparison?.baseResult || resultEntry
@@ -1235,7 +960,7 @@ export default function DetailPage() {
             style={{ width: '700px' }}
           >
             <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-2 dark:border-zinc-700">
-              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Messages <span className="text-zinc-400">({traceData.messages.length})</span></span>
+              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Messages <span className="text-zinc-400">({messages.length})</span></span>
               <button
                 onClick={() => setMessagesOpen(false)}
                 className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800"
@@ -1244,17 +969,8 @@ export default function DetailPage() {
               </button>
             </div>
             <div className="h-[calc(100%-41px)] overflow-auto">
-              <div className="space-y-1 p-2">
-                {messageData.items ? (
-                  messageData.items.map((item) => (
-                    <div key={item.key} className={`msg-box msg-${item.role}`}>
-                      <div className="msg-box-header">{item.title}</div>
-                      <div className="msg-box-content">{item.content}</div>
-                    </div>
-                  ))
-                ) : (
-                  <pre className="data-pre text-zinc-300 text-xs p-2">{messageData.raw}</pre>
-                )}
+              <div className="p-2">
+                <DataViewer content={messages} placeholder="—" />
               </div>
             </div>
           </div>

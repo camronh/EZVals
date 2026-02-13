@@ -8,6 +8,10 @@ description: "All notable changes to EZVals"
 - Added: Dashboard now includes a slim overflow menu action to reload the EZVals server from the UI when state gets stuck or eval files change.
 - Changed: In-app reload now performs a full `ezvals serve` process restart with the same serve arguments and preserves the active bound port.
 - Tests: Added unit and E2E coverage for restart re-exec flow, restart API signaling, and overflow-menu restart interaction.
+- Added: Detail view now auto-detects chat-style message arrays in `input`, `output`, and `reference`, rendering them in a chat-like "Pretty" mode with a "Raw" JSON toggle.
+- Changed: Message normalization/rendering now lives in a reusable UI component (`DataViewer`) used across detail panels and the trace messages drawer.
+- Changed: `examples/demo_trace_data.py::test_direct_trace_data` now includes message-array examples for `input`, `output`, and `reference`.
+- Tests: Added E2E coverage to verify pretty/raw message rendering and toggling across input/output/reference and the messages pane.
 - Changed: Detail view metadata now renders as a readable key-value list instead of raw JSON, with human-friendly key labels.
 - Fixed: URL metadata values in detail view are now clickable links.
 - Tests: Added E2E coverage for metadata label formatting and clickable metadata URLs in detail view.
