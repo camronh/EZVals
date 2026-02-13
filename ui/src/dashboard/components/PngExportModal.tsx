@@ -20,10 +20,6 @@ type PngExportModalProps = {
   sessionName: string
 }
 
-function buildDefaultTitle(sessionName: string) {
-  return sessionName || ''
-}
-
 function slugifyFilename(value: string) {
   return value
     .toLowerCase()
@@ -71,7 +67,7 @@ export default function PngExportModal({
     }
 
     setConfigOpen(false)
-    setTitle(buildDefaultTitle(sessionName))
+    setTitle(sessionName || '')
     setScoreColors(DEFAULT_SCORE_COLORS)
     setShowTests(true)
     setShowLatency(true)

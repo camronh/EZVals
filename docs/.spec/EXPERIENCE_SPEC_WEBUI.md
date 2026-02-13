@@ -238,20 +238,11 @@ Scenario: Keyboard navigation disabled while editing
 - **Edit mode**: Shows textarea with Save/Cancel buttons and Cmd+Enter hint
 - **Saving**: Shows spinner on Save button, buttons disabled
 
-### Score Editing
-
-```gherkin
-Scenario: Edit scores
-  Given the detail view is open
-  When the user modifies a score's value, passed, or notes
-  Then the change saves to the JSON file immediately
-```
-
 **Editable Fields:**
 - Annotations (via textarea with explicit save)
-- Scores (value, passed, notes)
 
 **Read-Only Fields:**
+- Scores
 - Input
 - Output
 - Reference
@@ -338,9 +329,6 @@ Scenario: Export as PNG in comparison mode
 
 | Key | Action | Context |
 |-----|--------|---------|
-| `r` | Refresh results | Table view |
-| `e` | Open export menu | Table view |
-| `f` | Focus filter input | Table view |
 | `↑` | Previous result | Detail view |
 | `↓` | Next result | Detail view |
 | `Esc` | Back to table | Detail view |
@@ -761,8 +749,8 @@ Response format: Same as `/results` endpoint (includes `score_chips`).
 | Result streaming | Tested |
 | JSON export | Tested |
 | CSV export | Partially tested |
-| Inline editing | Annotation editing tested, others minimal |
-| Keyboard shortcuts | Tested |
+| Inline editing | Annotation editing tested |
+| Keyboard shortcuts | Detail view arrows/Esc tested |
 | Stats bar | Tested |
 | Three-state filtering | Not tested |
 | Filter persistence | Not tested |

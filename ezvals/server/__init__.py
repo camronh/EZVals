@@ -562,13 +562,9 @@ def create_app(
             return {"ok": True, "run_id": run_id}
 
         # Full rerun: create new run
-        app.state.selected_total = None  # Clear selective count
+        app.state.selected_total = None
         run_id = store.generate_run_id()
         app.state.active_run_id = run_id
-        # Ensure run_name is set (belt and suspenders - should already be set in _serve)
-        if not app.state.run_name:
-            from ezvals.storage import _generate_friendly_name
-            app.state.run_name = _generate_friendly_name()
         start_run(all_functions, run_id)
         return {"ok": True, "run_id": run_id}
 

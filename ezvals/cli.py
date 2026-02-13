@@ -242,8 +242,6 @@ class ProgressReporter:
         if not self.failures:
             return
 
-        # console.print("\n")  # No extra newline needed as we added one above
-
         for i, failure in enumerate(self.failures, 1):
             func = failure["func"]
             result_dict = failure["result_dict"]
@@ -631,6 +629,66 @@ def export_cmd(run_path: str, fmt: str, output: Optional[str]):
         console.print(f"Exported to {output}")
 
 
+def _wait_for_stop_signal(app, server_thread):
+    """Wait for Esc or Ctrl+C while preserving log output formatting."""
+    try:
+        if not sys.stdin.isatty():
+            while server_thread.is_alive():
+                if app.state.restart_requested:
+                    return "restart"
+                time.sleep(0.2)
+            return None
+
+        import termios
+        import select
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            mode = termios.tcgetattr(fd)
+            mode[3] = mode[3] & ~(termios.ICANON | termios.ECHO)
+            termios.tcsetattr(fd, termios.TCSADRAIN, mode)
+
+            while server_thread.is_alive():
+                if app.state.restart_requested:
+                    return "restart"
+                if select.select([sys.stdin], [], [], 0.5)[0]:
+                    ch = sys.stdin.read(1)
+                    if not ch:
+                        return None
+                    if ch == '\x1b' or ch == '\x03':
+                        return "stop"
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    except (ImportError, AttributeError, OSError):
+        try:
+            while server_thread.is_alive():
+                if app.state.restart_requested:
+                    return "restart"
+                ch = click.getchar()
+                if ch == '\x1b' or ch == '\x03':
+                    return "stop"
+        except (EOFError, KeyboardInterrupt):
+            return "stop"
+    return None
+
+
+def _run_server_until_stop(app, server, server_thread) -> bool:
+    """Run the server and wait for stop signal. Returns True if restart was requested."""
+    server_thread.start()
+    try:
+        signal = _wait_for_stop_signal(app, server_thread)
+        if signal in ("stop", "restart"):
+            console.print("\nStopping server...")
+            server.should_exit = True
+        restart_requested = signal == "restart"
+    except (KeyboardInterrupt, SystemExit):
+        console.print("\nStopping server...")
+        server.should_exit = True
+        restart_requested = False
+    server_thread.join()
+    return restart_requested
+
+
 def _serve(
     path: Optional[str],
     dataset: Optional[str],
@@ -707,10 +765,7 @@ def _serve(
 
     config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning", access_log=False)
     server = uvicorn.Server(config)
-
     server_thread = Thread(target=server.run)
-    server_thread.start()
-    restart_requested = False
 
     # Auto-run evals if --run flag was passed
     if auto_run:
@@ -728,59 +783,7 @@ def _serve(
                 pass  # Server not ready, user can click Run manually
         Thread(target=do_auto_run, daemon=True).start()
 
-    def wait_for_stop_signal():
-        """Wait for Esc or Ctrl+C while preserving log output formatting."""
-        try:
-            if not sys.stdin.isatty():
-                while server_thread.is_alive():
-                    if app.state.restart_requested:
-                        return "restart"
-                    time.sleep(0.2)
-                return None
-
-            import termios
-            import select
-            fd = sys.stdin.fileno()
-            old_settings = termios.tcgetattr(fd)
-            try:
-                mode = termios.tcgetattr(fd)
-                mode[3] = mode[3] & ~(termios.ICANON | termios.ECHO)
-                termios.tcsetattr(fd, termios.TCSADRAIN, mode)
-
-                while server_thread.is_alive():
-                    if app.state.restart_requested:
-                        return "restart"
-                    if select.select([sys.stdin], [], [], 0.5)[0]:
-                        ch = sys.stdin.read(1)
-                        if not ch:
-                            return None
-                        if ch == '\x1b' or ch == '\x03':
-                            return "stop"
-            finally:
-                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-        except (ImportError, AttributeError, OSError):
-            try:
-                while server_thread.is_alive():
-                    if app.state.restart_requested:
-                        return "restart"
-                    ch = click.getchar()
-                    if ch == '\x1b' or ch == '\x03':
-                        return "stop"
-            except (EOFError, KeyboardInterrupt):
-                return "stop"
-        return None
-
-    try:
-        signal = wait_for_stop_signal()
-        restart_requested = signal == "restart"
-        if signal in ("stop", "restart"):
-            console.print("\nStopping server...")
-            server.should_exit = True
-    except (KeyboardInterrupt, SystemExit):
-        console.print("\nStopping server...")
-        server.should_exit = True
-
-    server_thread.join()
+    restart_requested = _run_server_until_stop(app, server, server_thread)
     return port if restart_requested else None
 
 
@@ -822,7 +825,6 @@ def _serve_from_json(
     try:
         store.load_run(run_id)
     except FileNotFoundError:
-        # Run not in store - save it there
         store.save_run(run_data, run_id=run_id, session_name=session_name, run_name=run_name)
 
     # Discover functions if source exists (for rerun capability)
@@ -864,64 +866,9 @@ def _serve_from_json(
 
     config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning", access_log=False)
     server = uvicorn.Server(config)
-
     server_thread = Thread(target=server.run)
-    server_thread.start()
-    restart_requested = False
 
-    def wait_for_stop_signal():
-        """Wait for Esc or Ctrl+C while preserving log output formatting."""
-        try:
-            if not sys.stdin.isatty():
-                while server_thread.is_alive():
-                    if app.state.restart_requested:
-                        return "restart"
-                    time.sleep(0.2)
-                return None
-
-            import termios
-            import select
-            fd = sys.stdin.fileno()
-            old_settings = termios.tcgetattr(fd)
-            try:
-                mode = termios.tcgetattr(fd)
-                mode[3] = mode[3] & ~(termios.ICANON | termios.ECHO)
-                termios.tcsetattr(fd, termios.TCSADRAIN, mode)
-
-                while server_thread.is_alive():
-                    if app.state.restart_requested:
-                        return "restart"
-                    if select.select([sys.stdin], [], [], 0.5)[0]:
-                        ch = sys.stdin.read(1)
-                        if not ch:
-                            return None
-                        if ch == '\x1b' or ch == '\x03':
-                            return "stop"
-            finally:
-                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-        except (ImportError, AttributeError, OSError):
-            try:
-                while server_thread.is_alive():
-                    if app.state.restart_requested:
-                        return "restart"
-                    ch = click.getchar()
-                    if ch == '\x1b' or ch == '\x03':
-                        return "stop"
-            except (EOFError, KeyboardInterrupt):
-                return "stop"
-        return None
-
-    try:
-        signal = wait_for_stop_signal()
-        restart_requested = signal == "restart"
-        if signal in ("stop", "restart"):
-            console.print("\nStopping server...")
-            server.should_exit = True
-    except (KeyboardInterrupt, SystemExit):
-        console.print("\nStopping server...")
-        server.should_exit = True
-
-    server_thread.join()
+    restart_requested = _run_server_until_stop(app, server, server_thread)
     return port if restart_requested else None
 
 

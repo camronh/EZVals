@@ -67,7 +67,7 @@ function resolveRuns(data: PngExportData, options: PngExportOptions) {
 
   if (!overrides.length) return baseRuns
 
-  const ordered = overrides
+  return overrides
     .map((override, idx) => {
       const base = baseById.get(override.runId)
       if (!base) return null
@@ -78,17 +78,6 @@ function resolveRuns(data: PngExportData, options: PngExportOptions) {
       }
     })
     .filter((run): run is NonNullable<typeof run> => !!run)
-
-  baseRuns.forEach((base, idx) => {
-    if (ordered.some((run) => run.runId === base.runId)) return
-    ordered.push({
-      runId: base.runId,
-      runName: base.runName,
-      color: base.color || COMPARISON_COLORS[idx % COMPARISON_COLORS.length],
-    })
-  })
-
-  return ordered
 }
 
 function buildFooterLines(data: PngExportData, options: PngExportOptions) {
