@@ -14,9 +14,64 @@ description: Unit Testing for LLMs and Agents
   alt="EZVals Hero"
 />
 
-EZVals is a lightweight, code-first evaluation framework for testing AI agents and LLM applications. Inspired by Pytest and LangSmith, EZVals lets you
-write evaluations like you write unit tests!
+EZVals is a lightweight evaluation framework for testing AI agents and LLM applications. Write evals as Python functions, run them from a web dashboard or the CLI, and let your coding agent handle the implementation details.
 
+<CardGroup cols={2}>
+  <Card title="For You" icon="user">
+    A visual dashboard to run evals, analyze results, compare runs, and track progress over time.
+  </Card>
+  <Card title="For Your Agent" icon="robot">
+    A compact CLI and SDK that your coding agent uses to write, run, and iterate on evals autonomously.
+  </Card>
+</CardGroup>
+
+## How It Works
+
+EZVals is designed around a simple loop:
+
+```
+You describe what to evaluate
+        ↓
+Your coding agent writes the eval code
+        ↓
+You run evals from the Web UI (or the agent runs them via CLI)
+        ↓
+Review results, compare runs, iterate
+```
+
+You focus on **what** to test and **whether results look right**. Your agent focuses on **how** to write the eval code.
+
+### The Web UI
+
+Run evals, review results, and do deep analysis — all from a local dashboard:
+
+<img
+  className="block dark:hidden"
+  src="/assets/ui-screenshot-light.png"
+  alt="EZVals Web UI"
+/>
+<img
+  className="hidden dark:block"
+  src="/assets/ui-screenshot-dark.png"
+  alt="EZVals Web UI"
+/>
+
+Filter by dataset or label, run individual evals or entire suites, compare runs side-by-side, and export results. All data stays local as JSON files.
+
+### Agent Mode
+
+Your coding agent can run evals headlessly and analyze the results:
+
+```bash
+ezvals run evals.py --session my-experiment --verbose
+```
+
+<img
+  src="/assets/terminal-output.svg"
+  alt="Terminal output showing eval results"
+/>
+
+The agent reads the JSON output, identifies failures, fixes the underlying code, and reruns — without you writing a single eval function by hand.
 
 ## Install
 
@@ -34,135 +89,47 @@ pip install ezvals
 poetry add ezvals --group dev
 ```
 
-<CardGroup cols={2}>
-  <Card title="Version-Control" icon="code-branch">
-    Aligned with your local env. Branch to experiment!
-  </Card>
-  <Card title="Pytest-Inspired" icon="flask-vial">
-    Use `assert`, `cases`, and simple decorators.
-  </Card>
-  <Card title="Full Flexibility" icon="sliders">
-    Use the same evaluator across a dataset or case-by-case
-  </Card>
-  <Card title="Agent-Friendly" icon="robot">
-    Powerful and compact CLI and SDK for your coding agent to use
-  </Card>
-</CardGroup>
-
-
 </CodeGroup>
 
-## Quick Example
-
-Evaluating a simple sentiment analyzer against a ground truth dataset:
-
-```python
-from ezvals import eval, EvalContext
-
-@eval(
-  input="I love this product!",  # Prompt
-  reference="positive",          # Ground Truth
-  dataset="sentiment"            # Label for filtering
-)
-async def test_sentiment_analysis(ctx: EvalContext):
-    # Run test and store output in context
-    ctx.output = await analyze_sentiment(ctx.input)
-
-    # Evaluate!
-    assert ctx.output == ctx.reference, f"Expected {ctx.reference}, got {ctx.output}"
-```
-
-Or use `cases=` to apply eval to a dataset:
-
-```python
-@eval(
-  dataset="sentiment",
-  cases=[
-      {"input": "I love this product!", "reference": "positive"},
-      {"input": "This is terrible", "reference": "negative"},
-      {"input": "It's okay I guess", "reference": "neutral"},
-  ],
-)
-async def test_sentiment_batch(ctx: EvalContext):
-    # Case data is injected into the ctx
-    ctx.output = await analyze_sentiment(ctx.input)
-
-    assert ctx.output == ctx.reference, f"Expected {ctx.reference}, got {ctx.output}"
-```
-
-Start the web UI to run evals and review results:
-
-```bash
-ezvals serve sentiment_evals.py
-
-# Or run all in a dir
-ezvals serve evals/
-```
-
-### Web UI
-
-EZVals spins up a local Web UI that makes it easy to filter, run, and rerun evals. Do deep analysis on the results
-
-<img
-  className="block dark:hidden"
-  src="/assets/ui-screenshot-light.png"
-  alt="EZVals Web UI"
-/>
-<img
-  className="hidden dark:block"
-  src="/assets/ui-screenshot-dark.png"
-  alt="EZVals Web UI"
-/>
-
-All results are stored locally in a `.json` file for further analysis.
-
-## Agent Mode
-
-The CLI and SDK make it easy for your coding agent to run, analyze, and iterate on the evals!
-
-> Can you run `test_sentiment_batch` evals and tell me why the scores are so low?
-
-Your coding agent would run:
-
-```bash
-ezvals run sentiment_evals.py::test_sentiment_batch --session sentiment-failed-results
-
-// Eval results saved to ./ezvals/cool-cloud-2025.json
-```
-
-The agent could review the json results before presenting a solution to you. It could even implement that solution and rerun the evals to compare
-before and after!
-
-### Skills Setup
-
-Install the EZVals skill so your coding agent has eval-specific guidance:
+Then install the agent skill so your coding agent knows how to work with EZVals:
 
 ```bash
 ezvals skills add
 ```
 
-For everything else (verification, updates, global install, and marketplace install), see the [Agent Skill guide](/guides/agent-skill).
+This gives your agent (Claude Code, Cursor, Codex, etc.) eval-specific guidance and best practices. See the [Agent Skill guide](/guides/agent-skill) for details.
 
-## Existing eval frameworks are frustrating:
+## What Makes EZVals Different
 
 <CardGroup cols={3}>
-  <Card title="Too Opinionated" icon="lock" color="#9ca3af">
-    One function per dataset, rigid patterns. No way to run different logic per
-    test case.
+  <Card title="Code-First" icon="code">
+    Evals are Python functions in your repo. Version-controlled, branch-able, diff-able.
   </Card>
-  <Card title="Cloud-Based" icon="cloud" color="#9ca3af">
-    Datasets in the cloud. No version control. Code and data live in different
-    places.
+  <Card title="Agent-Friendly" icon="terminal">
+    A CLI and SDK designed for coding agents to run evals, parse results, and iterate autonomously.
   </Card>
-  <Card title="UI-Based" icon="display" color="#9ca3af">
-    Your coding agent can't run evals, analyze results, or iterate on datasets.
+  <Card title="Flexible Scoring" icon="chart-simple">
+    Use simple assertions, numeric scores, or custom evaluators. Mix and match per eval.
   </Card>
 </CardGroup>
 
-**Pytest isn't the answer either.** Tests are pass/fail—evals are for _analysis_. You want to see all results, latency, cost, comparisons over time. Pytest doesn't do that.
+### Why not existing frameworks?
 
-**EZVals is different:** minimal, flexible, agent-friendly. Everything lives locally as code and JSON.
+<AccordionGroup>
+  <Accordion title="Too opinionated">
+    Many frameworks force one function per dataset with rigid patterns. EZVals lets you run different logic per test case, share targets across evals, and structure things however makes sense.
+  </Accordion>
+  <Accordion title="Cloud-based">
+    Datasets in the cloud means no version control, and code and data live in different places. EZVals keeps everything local — evals are code, results are JSON files.
+  </Accordion>
+  <Accordion title="UI-only">
+    If your eval framework lives behind a web UI, your coding agent can't run evals, analyze results, or iterate on datasets. EZVals has both a Web UI for you and a CLI for your agent.
+  </Accordion>
+  <Accordion title="What about pytest?">
+    Tests are pass/fail — evals are for analysis. You want to see all results, latency, comparisons over time. Pytest doesn't store results, doesn't give you a dashboard, and doesn't do run comparison.
+  </Accordion>
+</AccordionGroup>
 
 <Card title="Ready to start?" icon="play" href="/quickstart">
-  Follow our quickstart guide to set up EZVals in under 5 minutes.
+  Install EZVals and run your first evaluation.
 </Card>

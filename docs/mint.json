@@ -38,39 +38,58 @@
       "pages": ["introduction", "quickstart"]
     },
     {
-      "group": "Examples",
+      "group": "Concepts",
       "pages": [
-        "examples/granular-evals",
-        "examples/rag-agent"
-      ]
-    },
-    {
-      "group": "Core Concepts",
-      "pages": [
-        "core-concepts/eval-context",
-        "core-concepts/decorators",
-        "core-concepts/scoring",
-        "core-concepts/parametrize"
+        "concepts/architecture",
+        "concepts/workflow",
+        "concepts/evaluation-best-practices"
       ]
     },
     {
       "group": "Guides",
       "pages": [
-        "guides/file-defaults",
-        "guides/patterns",
         "guides/web-ui",
         "guides/sessions",
-        "guides/evaluators",
+        "guides/working-with-your-agent",
         "guides/agent-skill"
       ]
     },
     {
-      "group": "API Reference",
+      "group": "Use Cases",
       "pages": [
-        "api-reference/cli",
-        "api-reference/http-api",
-        "api-reference/eval-result",
-        "api-reference/score"
+        "examples/rag-agent",
+        "examples/granular-evals"
+      ]
+    },
+    {
+      "group": "Technical Reference",
+      "pages": [
+        {
+          "group": "Core Concepts",
+          "pages": [
+            "core-concepts/eval-context",
+            "core-concepts/decorators",
+            "core-concepts/scoring",
+            "core-concepts/parametrize"
+          ]
+        },
+        {
+          "group": "Patterns & Guides",
+          "pages": [
+            "guides/patterns",
+            "guides/file-defaults",
+            "guides/evaluators"
+          ]
+        },
+        {
+          "group": "API Reference",
+          "pages": [
+            "api-reference/cli",
+            "api-reference/http-api",
+            "api-reference/eval-result",
+            "api-reference/score"
+          ]
+        }
       ]
     },
     {

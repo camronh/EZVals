@@ -1,0 +1,159 @@
+---
+title: The Evaluation Loop
+description: The evaluate → analyze → iterate workflow
+---
+
+EZVals is built around a continuous loop: write evals, run them, analyze results, make changes, and run again. This page explains that workflow and how the different pieces of EZVals support each stage.
+
+## The Loop
+
+```
+    ┌─────────────────────────────────────────┐
+    │                                         │
+    ▼                                         │
+┌────────┐    ┌────────┐    ┌─────────┐    ┌──┴───┐
+│ Define │───▶│  Run   │───▶│ Analyze │───▶│Iterate│
+└────────┘    └────────┘    └─────────┘    └───────┘
+```
+
+### 1. Define
+
+Decide what you want to evaluate and write (or have your agent write) the eval code.
+
+**Who does this:** You define what to test. Your coding agent writes the eval functions.
+
+```
+You: "Write evals for my customer support agent — test that it correctly
+      handles refund requests, billing questions, and escalation to humans"
+
+Agent: Creates evals.py with @eval-decorated functions, test cases, and assertions
+```
+
+The eval file lives in your repo alongside your application code. Your agent uses the EZVals skill to understand the framework's API and patterns.
+
+### 2. Run
+
+Execute the evals to get results.
+
+**From the Web UI** (you):
+```bash
+ezvals serve evals.py
+```
+Click "Run All" or run individual evals from the dashboard. See results populate in real time.
+
+**From the CLI** (your agent):
+```bash
+ezvals run evals.py --session refund-testing --run-name v1
+```
+Results go to stdout and are saved as JSON for analysis.
+
+### 3. Analyze
+
+Review the results to understand what's working and what isn't.
+
+**In the Web UI:** Browse the results table, click into individual results to see full input/output/scores, use filters to focus on failures, and compare runs side-by-side.
+
+**With your agent:** The agent reads the JSON results and provides analysis:
+
+```
+You: "Run the refund evals and tell me what's failing"
+
+Agent: Runs the evals, reads the results JSON, and reports:
+       "3 of 8 refund evals failed. The agent isn't mentioning the
+        7-day return window in cases where the purchase is recent.
+        The billing evals all pass."
+```
+
+### 4. Iterate
+
+Make changes based on the analysis and run again.
+
+This is where the loop closes. Based on what you learned:
+
+- **Improve your agent** — Update prompts, fix retrieval, adjust system messages
+- **Improve your evals** — Add edge cases you discovered, refine scoring criteria
+- **Compare before/after** — Use sessions to track whether changes helped
+
+```
+You: "Fix the refund response to mention the 7-day window, then rerun"
+
+Agent: Updates the prompt, reruns evals:
+       "All 8 refund evals now pass. The billing evals still pass too —
+        no regressions."
+```
+
+## Session Workflow
+
+Sessions make the iteration loop concrete by grouping related runs:
+
+```bash
+# Baseline
+ezvals run evals.py --session prompt-tuning --run-name baseline
+
+# After prompt changes
+ezvals run evals.py --session prompt-tuning --run-name v2-with-examples
+
+# After model swap
+ezvals run evals.py --session prompt-tuning --run-name v3-claude-sonnet
+```
+
+Open the Web UI to compare all three runs side-by-side and see exactly which evals improved, regressed, or stayed the same.
+
+## Who Does What
+
+The division of labor between you and your coding agent:
+
+| Task | You | Your Agent |
+|---|---|---|
+| Decide what to evaluate | Describe the behaviors that matter | |
+| Write eval code | | Writes `@eval` functions, cases, assertions |
+| Run evals (interactive) | Click "Run" in Web UI | |
+| Run evals (programmatic) | | `ezvals run` from CLI |
+| Review results visually | Browse the dashboard | |
+| Analyze failures | | Reads JSON, identifies patterns |
+| Fix issues | Approve changes | Modifies code, prompts, configs |
+| Compare runs | View side-by-side in Web UI | |
+| Track progress | Review session history | |
+
+This division lets you stay focused on the high-level questions — "Is my agent behaving correctly?" — while your coding agent handles the mechanical work of writing eval code, running tests, and diagnosing failures.
+
+## Workflow Examples
+
+### Prompt Iteration
+
+```
+You: "My support agent is too verbose. Write evals that check response length
+      and conciseness, then help me iterate on the system prompt."
+
+Agent: 1. Writes evals with length assertions and brevity scoring
+       2. Runs baseline evals
+       3. Reports: "Average response is 450 words. 6/10 exceed 300 words."
+       4. Suggests prompt changes
+       5. Reruns evals after changes
+       6. Reports: "Average response is now 180 words. All pass brevity check."
+```
+
+### Model Comparison
+
+```
+You: "I want to compare GPT-4o and Claude Sonnet on our customer service evals"
+
+Agent: 1. Writes evals with cases parameterized by model
+       2. Runs with --session model-comparison --run-name gpt4o
+       3. Runs with --session model-comparison --run-name claude-sonnet
+       4. Reports comparison results
+
+You: Open Web UI → compare runs side-by-side
+```
+
+### Regression Testing
+
+```
+You: "I'm about to change the retrieval pipeline. Run the full eval suite
+      before and after so we can compare."
+
+Agent: 1. Runs ezvals run evals/ --session retrieval-change --run-name before
+       2. You make the pipeline changes
+       3. Runs ezvals run evals/ --session retrieval-change --run-name after
+       4. Reports: "2 regressions in RAG evals, 1 improvement in latency"
+```

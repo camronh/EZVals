@@ -1,0 +1,154 @@
+---
+title: Working with Your Agent
+description: How to collaborate with your coding agent on evaluations
+---
+
+EZVals is designed so that your coding agent does most of the implementation work. This guide covers how to set up that workflow and get the most out of it.
+
+## Setup
+
+### 1. Install EZVals
+
+```bash
+pip install ezvals
+```
+
+### 2. Install the Agent Skill
+
+```bash
+ezvals skills add
+```
+
+This installs eval-specific guidance into your agent's skill directory. The skill teaches your agent:
+
+- EZVals API and patterns
+- Best practices for eval design
+- Grading strategies (code vs model vs human)
+- Patterns for different agent types (coding, conversational, research)
+
+Your agent will reference this skill automatically when you ask about evals.
+
+### 3. Verify
+
+```bash
+ezvals skills doctor
+```
+
+Confirms the skill is installed and your agent can find it.
+
+## Prompting Your Agent
+
+Here are effective ways to ask your agent for eval work:
+
+### Starting from Scratch
+
+```
+"I have a customer support agent in support_agent.py. Write evals that test:
+ - Correct identification of customer issues
+ - Following our refund policy (7-day window, receipt required)
+ - Appropriate escalation to human agents for complex issues"
+```
+
+Your agent will create an eval file with `@eval`-decorated functions, test cases, and assertions based on your requirements.
+
+### Adding to Existing Evals
+
+```
+"Add edge cases to the refund evals — test what happens when the customer
+ doesn't have a receipt, when the item is past the return window, and when
+ they request a partial refund"
+```
+
+### Running and Analyzing
+
+```
+"Run the support evals and tell me what's failing"
+```
+
+```
+"Run the evals with --session v2-testing and compare to the previous run"
+```
+
+```
+"The tone evals are failing — look at the results and suggest prompt changes"
+```
+
+### Iterating
+
+```
+"Fix the issues you found and rerun the evals to confirm"
+```
+
+```
+"The hallucination scores are too low. Look at the failing cases and
+ improve the retrieval pipeline"
+```
+
+## The Agent's Workflow
+
+When your agent works with EZVals, it typically follows this pattern:
+
+```
+1. Read the eval file to understand existing evals
+2. Write or modify eval functions
+3. Run: ezvals run evals.py --verbose
+4. Read the JSON results
+5. Analyze failures and suggest/implement fixes
+6. Rerun to verify
+```
+
+The key insight is that your agent reads the same JSON result files that the Web UI displays. It can parse inputs, outputs, scores, error messages, and latency data programmatically.
+
+## Agent + Web UI Workflow
+
+The most effective workflow combines both interfaces:
+
+1. **Agent writes evals** based on your description
+2. **Agent runs evals** via CLI and reports initial results
+3. **You review in the Web UI** — browse results visually, check specific cases, compare runs
+4. **You give feedback** — "The tone scoring is too lenient" or "Add more edge cases for X"
+5. **Agent iterates** — fixes scoring, adds cases, reruns
+6. **You confirm in the Web UI** — final review of improved results
+
+This loop lets you stay in the driver's seat on quality decisions while your agent handles the implementation.
+
+## Tips
+
+### Be Specific About Criteria
+
+Instead of "test my agent," describe the specific behaviors you care about:
+
+```
+# Vague — agent has to guess what matters
+"Write evals for my agent"
+
+# Specific — agent knows exactly what to test
+"Write evals for my RAG agent that check:
+ 1. Retrieved documents are relevant to the query
+ 2. The response doesn't hallucinate facts not in the documents
+ 3. The response cites specific documents when making claims"
+```
+
+### Let the Agent Handle Technical Decisions
+
+You don't need to specify whether to use assertions vs `store()`, or how to structure the eval file. Your agent has the skill and knows EZVals patterns. Focus on **what** to test, not **how** to write the code.
+
+### Use Sessions for Tracking
+
+When you're iterating, always use session names so you can compare:
+
+```
+"Run the evals with --session rag-improvement --run-name v1"
+```
+
+This makes it easy to track progress across multiple iterations in the Web UI.
+
+### Review Before Trusting
+
+Your agent's analysis is useful but not infallible. Use the Web UI to spot-check results, especially early on. Look at the actual inputs and outputs to make sure:
+
+- The evals are testing what you intended
+- The scoring criteria make sense
+- Edge cases aren't being missed
+
+As your eval suite matures, you can rely more heavily on automated results and agent analysis.

@@ -1,0 +1,157 @@
+---
+title: Architecture
+description: How EZVals is structured and how the pieces fit together
+---
+
+EZVals has a small number of components that work together. Understanding the architecture helps you reason about what's happening when evals run, and helps you communicate more effectively with your coding agent about what you want.
+
+## System Overview
+
+```
+┌─────────────────────────────────────────────────────┐
+│                   Your Project                       │
+│                                                      │
+│  ┌──────────┐    ┌──────────┐    ┌──────────────┐   │
+│  │ evals.py │    │ evals/   │    │ ezvals.json  │   │
+│  │          │    │  ├ qa.py  │    │ (config)     │   │
+│  │ @eval()  │    │  ├ rag.py │    └──────────────┘   │
+│  └────┬─────┘    └────┬─────┘                        │
+│       └───────┬───────┘                              │
+│               ▼                                      │
+│  ┌─────────────────────────────────────────────┐     │
+│  │            EZVals Runtime                    │     │
+│  │                                             │     │
+│  │  Discovery → Execution → Scoring → Storage  │     │
+│  └──────────┬──────────────────────┬───────────┘     │
+│             │                      │                 │
+│    ┌────────▼────────┐   ┌────────▼────────┐        │
+│    │   Web UI (:8000)│   │  CLI (stdout)   │        │
+│    │   ezvals serve  │   │  ezvals run     │        │
+│    │                 │   │                 │        │
+│    │  For humans     │   │  For agents     │        │
+│    └─────────────────┘   └─────────────────┘        │
+│                                                      │
+│  ┌─────────────────────────────────────────────┐     │
+│  │  .ezvals/runs/                              │     │
+│  │  └ results stored as JSON                   │     │
+│  └─────────────────────────────────────────────┘     │
+└─────────────────────────────────────────────────────┘
+```
+
+## Components
+
+### Eval Files
+
+Eval files are regular Python files that contain functions decorated with `@eval`. Each decorated function is one evaluation. These files live in your project alongside your application code — they're version-controlled, branch-able, and diff-able.
+
+You can organize evals however you want: a single file, a directory of files grouped by feature, or any structure that makes sense for your project.
+
+### The Runtime
+
+When you run `ezvals serve` or `ezvals run`, EZVals:
+
+1. **Discovers** all `@eval`-decorated functions in the specified files
+2. **Executes** each eval function (with optional concurrency)
+3. **Scores** the results using assertions, `store()` calls, or evaluator functions
+4. **Stores** the results as JSON in `.ezvals/runs/`
+
+The runtime handles error catching, latency tracking, timeout enforcement, and result serialization automatically.
+
+### Two Interfaces
+
+EZVals provides two ways to interact with the same underlying system:
+
+| | Web UI (`serve`) | CLI (`run`) |
+|---|---|---|
+| **Audience** | You (the developer) | Your coding agent |
+| **Interaction** | Visual dashboard in browser | Structured output to stdout |
+| **Best for** | Reviewing results, comparing runs, deep analysis | Running evals programmatically, CI/CD |
+| **Run control** | Click to run, filter, rerun individual evals | Command flags for filtering and execution |
+
+Both interfaces read from and write to the same result files, so you can run evals with your agent via CLI and then review the results in the Web UI.
+
+### Results Storage
+
+All results are stored as JSON files in `.ezvals/runs/`. Each run produces a file like:
+
+```
+.ezvals/runs/cool-cloud-2025-01-15T10-30-00.json
+```
+
+These files contain everything: inputs, outputs, scores, latency, metadata, and errors. Because they're just JSON files in your repo, you can:
+
+- Compare runs over time
+- Track them in version control (or gitignore them)
+- Parse them with any tool
+- Share them with your team
+
+### Sessions
+
+Sessions group related runs together. When you're iterating on something — comparing models, tuning prompts, or testing different approaches — sessions let you track the progression:
+
+```bash
+# First run
+ezvals serve evals.py --session prompt-tuning --run-name v1
+
+# After making changes
+ezvals serve evals.py --session prompt-tuning --run-name v2
+```
+
+The Web UI shows all runs in a session together, making it easy to compare results side-by-side.
+
+## The Agent Skill
+
+The agent skill is a set of markdown files installed into your project that teach your coding agent how to work with EZVals. It includes:
+
+- API reference and patterns
+- Best practices for eval design
+- Grading strategies
+- Agent-specific eval patterns
+
+When the skill is installed, your agent doesn't need to read these docs — it has everything it needs to write, run, and iterate on evals autonomously.
+
+```bash
+ezvals skills add
+```
+
+This creates skill files in agent-specific directories (`.claude/skills/`, `.cursor/skills/`, etc.) that your agent picks up automatically.
+
+## Data Flow
+
+Here's what happens when an eval runs:
+
+```
+@eval decorator
+  │
+  ├─ Reads: input, reference, dataset, labels, cases
+  │
+  ▼
+Target function (optional)
+  │
+  ├─ Calls your agent/LLM/API
+  ├─ Sets ctx.output
+  │
+  ▼
+Eval function
+  │
+  ├─ Runs assertions → scores
+  ├─ Calls ctx.store() → scores
+  │
+  ▼
+Evaluators (optional, post-processing)
+  │
+  ├─ Runs each evaluator on the result
+  ├─ Adds additional scores
+  │
+  ▼
+EvalResult
+  │
+  ├─ input, output, reference
+  ├─ scores[], error, latency
+  ├─ metadata
+  │
+  ▼
+JSON file in .ezvals/runs/
+```
+
+Each step is optional except the eval function itself. A minimal eval is just a decorated function with an assertion. A full eval might include a shared target, multiple scoring approaches, and post-processing evaluators.

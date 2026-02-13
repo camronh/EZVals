@@ -1,13 +1,18 @@
 ---
 title: Web UI
-description: Run evals and review results in your browser
+description: Your dashboard for running evals and analyzing results
 ---
 
-Start the web UI with `ezvals serve`:
+The Web UI is your primary interface for interacting with evaluations. Start it with:
 
 ```bash
 ezvals serve evals.py
+
+# Or serve an entire directory
+ezvals serve evals/
 ```
+
+This opens a browser at `http://127.0.0.1:8000` with a dashboard for running, reviewing, and comparing evaluations.
 
 <img
   className="block dark:hidden"
@@ -20,129 +25,109 @@ ezvals serve evals.py
   alt="EZVals Web UI"
 />
 
-## How It Works
+## Running Evals
 
-The UI discovers all `@eval` decorated functions in your file but doesn't run them until you click **Run**. Results stream in real-time as each evaluation completes.
+The UI discovers all `@eval`-decorated functions in your files but doesn't run them until you click **Run**. Results stream in real-time as each evaluation completes.
 
-Results are saved to `.ezvals/runs/` as JSON files. The UI loads from `latest.json` by default, which is a copy of the most recent run.
+| Action | How |
+|---|---|
+| **Run All** | Click play with nothing selected |
+| **Run Selected** | Check specific rows, then click play |
+| **Stop** | Cancel pending and running evals mid-run |
 
-## Results Storage
+## Reviewing Results
 
-```
-.ezvals/
-├── runs/
-│   ├── gpt5-baseline_2024-01-15T10-30-00Z.json
-│   ├── swift-falcon_2024-01-15T14-45-00Z.json
-│   └── latest.json
-└── ezvals.json  # Configuration
-```
+Click any function name to open the detail view. Here you can see:
 
-Each run file includes session metadata:
+- **Input/Output/Reference** — The full data for each evaluation
+- **Scores** — All scoring metrics with pass/fail and numeric values
+- **Latency** — How long the evaluation took
+- **Error details** — Full error messages for failed evals
+- **Chat rendering** — If your input/output contains message arrays (OpenAI, Anthropic format), they auto-render as a chat conversation. Toggle between Pretty and Raw views.
 
-```json
-{
-  "session_name": "model-upgrade",
-  "run_name": "gpt5-baseline",
-  "run_id": "2024-01-15T10-30-00Z",
-  "total_evaluations": 50,
-  "total_passed": 45,
-  "results": [...]
-}
-```
-
-## Run Controls
-
-- **Run Selected**: Check rows, then click play to rerun only those evaluations
-- **Run All**: With nothing selected, click play to rerun everything
-- **Stop**: Cancel pending and running evaluations mid-run
-
-## Detail Page
-
-Click a function name to open the full-page detail view with its own URL (`/runs/{run_id}/results/{index}`). Navigate between results with arrow keys (↑/↓) or press Escape to return to the table.
-
-When `input`, `output`, `reference`, or trace `messages` contain chat-style message arrays (OpenAI, Anthropic, or similar `{role, content}` variants), the detail view auto-renders them in a chat-style layout. Use the **Pretty**/**Raw** toggle in each section to switch between formatted message boxes and raw JSON.
+Navigate between results with **arrow keys** (up/down) or press **Escape** to return to the table.
 
 ## Inline Editing
 
-In the detail page, you can edit:
-- **Dataset**: Reassign to different dataset
-- **Labels**: Add or remove labels
-- **Scores**: Adjust scores or add new ones
-- **Annotations**: Add notes for review
+From the detail view, you can edit results directly:
 
-Changes are saved to the results file.
+- **Dataset** — Reassign to a different dataset
+- **Labels** — Add or remove labels
+- **Scores** — Adjust scores or add new ones
+- **Annotations** — Add notes for review or team discussion
 
-## Export
+Changes save automatically to the results JSON file.
 
-Click the download icon in the header to open the export menu:
+## Filtering
 
-| Format | Type | Description |
-|--------|------|-------------|
-| JSON | Raw | Full results file as-is |
-| CSV | Raw | All results in flat CSV format |
-| Markdown | Filtered | ASCII bar charts + table with current filters applied |
-| PNG | Visual | Chart image with stats bars, metrics, and branding |
-
-**Filtered exports** respect:
-- Active search and filters (only visible rows are exported)
-- Column visibility (hidden columns are excluded)
-- Computed stats from filtered results
-
-PNG export opens a preview modal where you can save or copy the image. Use the options button to edit the title, tune score colors, toggle footer metrics, and in comparison mode rename/reorder runs before exporting.
-
-Markdown uses ASCII progress bars with color indicators:
-
-```
-| Metric | Progress | Score |
-|--------|----------|-------|
-| **accuracy** | ████████████████░░░░ 🟢 | 82% (41/50) |
-| **quality** | ██████████████░░░░░░ 🟡 | 70% (avg: 0.70) |
-```
-
-## Keyboard Shortcuts
-
-| Key | Action |
-|-----|--------|
-| `r` | Refresh results |
-| `e` | Export menu |
-| `f` | Focus filter |
-| `↑/↓` | Navigate results (detail page) |
-| `Esc` | Back to table |
-
-## Custom Port
+Focus on what matters:
 
 ```bash
-ezvals serve evals.py --port 3000
+# Start with filters from the CLI
+ezvals serve evals.py --dataset sentiment --label production
+
+# Or filter interactively in the UI
 ```
 
-## Loading Previous Runs
+Press **f** to focus the filter bar. Filter by dataset, labels, pass/fail status, or search across function names and results.
 
-To view or continue a previous run, pass the run JSON file directly:
+## Comparing Runs
 
-```bash
-ezvals serve .ezvals/sessions/default/sleek-wolf_1705312200.json
-```
-
-The UI loads with that run's results. If the original eval file still exists, you can rerun evaluations normally. If the source file was moved or deleted, the UI shows a warning and works in view-only mode.
-
-This is useful for:
-- Reviewing historical results
-- Continuing an interrupted session
-- Sharing runs between machines (copy the JSON file)
-
-## Comparison Mode
-
-Compare results across multiple runs side-by-side. When you have 2+ runs in a session:
+When you have multiple runs (from different sessions or iterations), compare them side-by-side:
 
 1. Click **+ Compare** in the stats bar
 2. Select runs from the dropdown (up to 4)
 3. View grouped bar charts showing metrics across runs
 4. Compare outputs in a table with per-run columns
 
-Each run gets a color-coded chip. The chart shows pass rates and latency for each run. The table aligns results by function name and dataset, making it easy to spot regressions or improvements.
+Each run gets a color-coded chip. The chart shows pass rates and latency across runs. Results are aligned by function name and dataset so you can spot regressions and improvements at a glance.
 
-To exit comparison mode, click the × on run chips until only one remains.
+## Exporting Results
 
-## Run Selector
+Click the download icon to export:
 
-When multiple runs exist in a session, the run name becomes a dropdown. Select past runs to view their results. The dropdown shows run names with timestamps.
+| Format | What You Get |
+|---|---|
+| **JSON** | Full results file — all data, no filtering |
+| **CSV** | Flat table of all results |
+| **Markdown** | ASCII bar charts and table with current filters applied |
+| **PNG** | Chart image with stats, metrics, and branding |
+
+Markdown and PNG exports respect your current filters and column visibility. PNG opens a preview where you can customize the title, score colors, and footer metrics before saving.
+
+## Loading Previous Runs
+
+View historical results by passing a run file directly:
+
+```bash
+ezvals serve .ezvals/runs/gpt5-baseline_2024-01-15T10-30-00Z.json
+```
+
+If the original eval file still exists, you can rerun evaluations. Otherwise the UI works in view-only mode.
+
+## Sessions in the UI
+
+When multiple runs exist in a session, the run name becomes a dropdown. Select past runs to browse their results and use comparison mode to see them side-by-side. See [Sessions & Runs](/guides/sessions) for details on organizing runs.
+
+## Keyboard Shortcuts
+
+| Key | Action |
+|---|---|
+| `r` | Refresh results |
+| `e` | Export menu |
+| `f` | Focus filter bar |
+| `Up/Down` | Navigate results (detail view) |
+| `Esc` | Back to table |
+
+## Configuration
+
+```bash
+# Custom port
+ezvals serve evals.py --port 3000
+
+# Start with auto-run
+ezvals serve evals.py --run
+
+# Disable auto-open browser
+ezvals serve evals.py --no-open
+```

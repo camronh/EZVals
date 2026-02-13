@@ -1,0 +1,132 @@
+---
+title: Evaluation Best Practices
+description: How to think about evaluating LLMs and AI agents
+---
+
+Evaluating LLMs and agents is fundamentally different from testing traditional software. Functions are deterministic — LLMs are not. This page covers the mental models and strategies that lead to effective evaluations.
+
+## Why Evaluate?
+
+Without evals, you're relying on vibes. You make a change to a prompt or model, manually test a few inputs, and hope for the best. Evals give you:
+
+- **Confidence that changes don't break things** — Regression detection across a dataset of inputs
+- **Measurable progress** — Track scores over time as you iterate on prompts, models, or architectures
+- **Objective comparison** — Compare models, prompts, or approaches side-by-side with data instead of gut feel
+
+## Key Principles
+
+### 1. Eval What Matters to Users
+
+Start with the behaviors your users care about. If you're building a customer support agent, the evals that matter are:
+
+- Does it correctly identify the customer's issue?
+- Does it follow your company's policies?
+- Is the response helpful and empathetic?
+
+These are more useful than generic "is the output grammatically correct?" checks. Work backwards from user experience to eval criteria.
+
+### 2. Start Simple, Add Complexity Later
+
+Your first eval should be a simple assertion:
+
+```python
+assert "refund" in ctx.output.lower(), "Should mention refund process"
+```
+
+Don't start with LLM-as-judge, semantic similarity, or complex scoring rubrics. Simple checks catch a surprising number of regressions and give you a baseline to improve from.
+
+### 3. Use a Mix of Scoring Approaches
+
+Different aspects of quality need different measurement tools:
+
+| What you're checking | Approach |
+|---|---|
+| Output contains required information | Assertions (`assert "X" in output`) |
+| Output matches expected format | Code-based validation (JSON parsing, regex) |
+| Output is semantically similar to reference | Embedding similarity scores |
+| Output quality is subjective | LLM-as-judge evaluators |
+| Output correctness requires domain expertise | Human review (via the Web UI) |
+
+Most eval suites end up using a combination. Start with assertions and code checks, then layer in model-based and human evaluation as needed.
+
+### 4. Build a Representative Dataset
+
+Your test cases should cover:
+
+- **Happy paths** — Common, well-formed inputs
+- **Edge cases** — Unusual inputs, ambiguous queries, adversarial prompts
+- **Failure modes** — Inputs that previously caused problems
+- **Distribution** — A mix that roughly matches real-world usage
+
+You don't need hundreds of cases upfront. Start with 5-10 good examples and grow your dataset as you find new failure modes.
+
+### 5. Track Runs Over Time
+
+A single eval run tells you where you are. Multiple runs tell you if you're improving. Use sessions to track iterations:
+
+```bash
+ezvals serve evals.py --session prompt-v2 --run-name before-changes
+# ... make changes ...
+ezvals serve evals.py --session prompt-v2 --run-name after-changes
+```
+
+The Web UI's comparison mode makes it easy to see exactly what changed between runs.
+
+## Grading Strategies
+
+### Code-Based Grading
+
+Use code to check things that have objectively correct answers:
+
+- String matching and containment
+- JSON structure validation
+- Numeric range checks
+- Regex pattern matching
+- API response format verification
+
+Code graders are fast, deterministic, and free. Use them whenever possible.
+
+### Model-Based Grading (LLM-as-Judge)
+
+Use another LLM to evaluate the output when the quality criteria are subjective or complex:
+
+- Is the explanation clear and accurate?
+- Does the response follow the specified tone?
+- Is the summary faithful to the source material?
+
+Model-based grading introduces its own variability, so use it for criteria that genuinely require judgment rather than for things you could check with code.
+
+### Human Review
+
+Use the Web UI for manual review when:
+
+- You're bootstrapping a new eval and don't know what "good" looks like yet
+- The quality criteria are too nuanced for automated grading
+- You want to annotate results to build a training dataset for model-based graders
+
+EZVals makes this easy with inline editing, annotation support, and export to JSON/CSV.
+
+## Common Pitfalls
+
+<AccordionGroup>
+  <Accordion title="Testing the model instead of your system">
+    Your eval should test your agent/application behavior, not the underlying LLM's raw capability. If you swap models and scores drop, that's useful signal. But write evals that test the full pipeline — prompts, retrieval, processing, and output formatting included.
+  </Accordion>
+  <Accordion title="Overfitting evals to current behavior">
+    If your evals are so specific that any change to the model or prompt breaks them, they're too brittle. Test for the criteria that matter (correctness, helpfulness, safety) rather than exact output matches.
+  </Accordion>
+  <Accordion title="Ignoring latency and cost">
+    EZVals tracks latency automatically. If your agent takes 30 seconds to respond, that's relevant even if the output is perfect. Consider adding latency-based scoring to your evals.
+  </Accordion>
+  <Accordion title="Not testing failure modes">
+    LLMs fail in predictable ways — hallucination, instruction ignoring, safety refusals, format violations. Include test cases that specifically probe these failure modes.
+  </Accordion>
+</AccordionGroup>
+
+## Recommended Reading
+
+These resources informed EZVals' design and are useful for building an eval mindset:
+
+- **Anthropic's guide to evals** — Practical guidance on evaluation design from the Claude team
+- **OpenAI's eval framework philosophy** — How to think about testing LLM applications at scale
+- **Hamel Husain's "Your AI Product Needs Evals"** — A practical framework for product-oriented evaluation
