@@ -11,6 +11,12 @@ description: "All notable changes to EZVals"
 - Added: Detail sidebar now shows a subtle "Tools" row with unique tool names detected from `trace_data.messages` tool calls.
 - Changed: Detail message parsing now supports common message-array tool-call schemas (`tool_calls`, `tool_use`, `tool_call`, and `function_call`) so tool usage is extracted more reliably.
 - Tests: Added E2E coverage for mixed message-array tool-call schemas to verify tool name extraction and deduplication in the detail sidebar.
+- Added: Run controls now include Pause/Resume in addition to Stop. Pause lets in-flight evaluations finish while holding queued work; Resume continues pending evaluations from the same run.
+- Added: `ezvals serve` now auto-builds frontend assets when `ui/src` is newer than `ezvals/static`, reducing stale-UI surprises during local development.
+- Changed: Running-state controls are now an icon-only connected cluster (pause/play + stop) with theme-matched styling.
+- Fixed: Quick pause/resume interactions no longer spawn overlapping runner loops; resume now unpauses the active run thread instead of starting a duplicate execution path.
+- Fixed: Stopped runs now remain immediate-cancel behavior, while paused runs continue polling until in-flight rows finish so statuses update without manual refresh.
+- Tests: Added integration coverage for pause/resume API behavior and E2E coverage for pause/resume UI and run control state transitions.
 - Added: `ezvals serve` now supports `--open/--no-open` to control whether the browser opens automatically on startup.
 - Changed: CLI and web UI docs now describe browser auto-open as default behavior and document `--no-open` for terminal-only startup flows.
 - Tests: Added CLI unit coverage to verify `--no-open` is exposed in help and propagated for both eval-path and JSON-path serve flows.

@@ -103,8 +103,17 @@ Scenario: Run selected evaluations
 Scenario: Stop running evaluations
   Given evaluations are currently running
   When the user clicks Stop
-  Then pending evaluations are marked "cancelled"
-  And running evaluations complete but no new ones start
+  Then pending and running evaluations are marked "cancelled" immediately
+
+Scenario: Pause and resume running evaluations
+  Given evaluations are currently running
+  When the user clicks Pause
+  Then currently running evaluations complete
+  And no new evaluations start
+  And remaining queued evaluations stay pending
+
+  When the user clicks Resume
+  Then pending evaluations continue running from where the run paused
 ```
 
 ### Result Status Indicators
@@ -473,6 +482,8 @@ The UI is backed by these REST endpoints, also available programmatically.
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/runs/rerun` | POST | Start new run or rerun selected |
+| `/api/runs/pause` | POST | Pause queued execution after in-flight evals finish |
+| `/api/runs/resume` | POST | Resume pending evals on a paused run |
 | `/api/runs/stop` | POST | Cancel pending/running evals |
 
 **Rerun Request Body:**

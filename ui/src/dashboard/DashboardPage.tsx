@@ -276,7 +276,16 @@ function writeDashboardQuery(args: {
 }
 
 function hasRunningResults(data: RunSummary | null) {
+  if (!data || data.is_paused) return false
+  return (data.results || []).some((r) => ['pending', 'running'].includes(r.result?.status))
+}
+
+function hasActiveResults(data: RunSummary | null) {
   return (data?.results || []).some((r) => ['pending', 'running'].includes(r.result?.status))
+}
+
+function hasRunningRows(data: RunSummary | null) {
+  return (data?.results || []).some((r) => r.result?.status === 'running')
 }
 
 function buildRowSearchText(row: RunResultRow) {
@@ -506,7 +515,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!data || isComparisonMode) return undefined
-    if (!hasRunningResults(data)) return undefined
+    const shouldRefresh = hasRunningRows(data) || (!data.is_paused && hasActiveResults(data))
+    if (!shouldRefresh) return undefined
     const timer = setTimeout(() => {
       loadResults(true)
     }, 500)
@@ -785,13 +795,15 @@ export default function DashboardPage() {
   const displayFilteredCount = filteredStats ? filteredStats.filtered : null
 
   const runButtonState = useMemo<RunButtonState>(() => {
+    const isPaused = !!data?.is_paused
     const isRunning = isRunningOverride || hasRunningResults(data)
+    const isActive = isPaused || isRunning
     const hasSelections = selectedIndices.size > 0
     if (isComparisonMode) {
       return { hidden: true, text: 'Run', showDropdown: false, isRunning }
     }
-    if (isRunning) {
-      return { hidden: false, text: 'Stop', showDropdown: false, isRunning }
+    if (isActive) {
+      return { hidden: false, text: 'Stop', showDropdown: false, isRunning: true }
     }
     if (!hasRunBefore) {
       return { hidden: false, text: 'Run', showDropdown: false, isRunning }
@@ -801,6 +813,13 @@ export default function DashboardPage() {
     }
     return { hidden: false, text: runMode === 'new' ? 'New Run' : 'Rerun', showDropdown: true, isRunning }
   }, [data, hasRunBefore, isComparisonMode, runMode, selectedIndices.size, isRunningOverride])
+
+  const showPauseButton = useMemo(() => {
+    if (isComparisonMode) return false
+    return hasActiveResults(data)
+  }, [data, isComparisonMode])
+
+  const pauseButtonText = useMemo<'Pause' | 'Resume'>(() => (data?.is_paused ? 'Resume' : 'Pause'), [data])
 
   const handleToggleSort = useCallback((col: string, type: string, multi: boolean) => {
     setSortState((prev) => {
@@ -951,8 +970,8 @@ export default function DashboardPage() {
   }, [comparisonDataCount, comparisonRuns.length, normalizedComparisonRuns.length, setComparisonRuns])
 
   const handleRunExecute = useCallback(async (mode: string) => {
-    const isRunning = isRunningOverride || hasRunningResults(data)
-    if (isRunning) {
+    const isActive = !!data?.is_paused || isRunningOverride || hasRunningResults(data)
+    if (isActive) {
       try {
         await fetch('/api/runs/stop', { method: 'POST' })
       } catch {
@@ -996,6 +1015,23 @@ export default function DashboardPage() {
       alert(`Run failed: ${message}`)
     }
   }, [data, isRunningOverride, loadResults, selectedIndices])
+
+  const handlePauseToggle = useCallback(async () => {
+    if (!hasActiveResults(data)) return
+    const endpoint = data?.is_paused ? '/api/runs/resume' : '/api/runs/pause'
+    try {
+      const resp = await fetch(endpoint, { method: 'POST' })
+      if (!resp.ok) {
+        const text = await resp.text()
+        throw new Error(text || `HTTP ${resp.status}`)
+      }
+      if (data?.is_paused) setIsRunningOverride(true)
+      await loadResults(true)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      alert(`Run control failed: ${message}`)
+    }
+  }, [data, loadResults])
 
   const handleThemeToggle = useCallback(() => {
     const html = document.documentElement
@@ -1223,6 +1259,9 @@ export default function DashboardPage() {
         setRunMenuOpen={setRunMenuOpen}
         isComparisonMode={isComparisonMode}
         onRunExecute={handleRunExecute}
+        showPauseButton={showPauseButton}
+        pauseButtonText={pauseButtonText}
+        onPauseToggle={handlePauseToggle}
       />
 
       <main className="flex-1 overflow-auto px-4 py-4">

@@ -38,6 +38,9 @@ type DashboardHeaderProps = {
   setRunMenuOpen: (value: boolean | ((prev: boolean) => boolean)) => void
   isComparisonMode: boolean
   onRunExecute: (mode: string) => void
+  showPauseButton: boolean
+  pauseButtonText: 'Pause' | 'Resume'
+  onPauseToggle: () => void
 }
 
 export default function DashboardHeader({
@@ -76,6 +79,9 @@ export default function DashboardHeader({
   setRunMenuOpen,
   isComparisonMode,
   onRunExecute,
+  showPauseButton,
+  pauseButtonText,
+  onPauseToggle,
 }: DashboardHeaderProps) {
   return (
     <header className="sticky top-0 z-40 border-b border-theme-border bg-theme-bg/95 backdrop-blur-sm">
@@ -467,19 +473,63 @@ export default function DashboardHeader({
             <span id="compare-mode-label" className={`h-7 items-center px-3 text-xs font-medium text-theme-text-muted select-none cursor-default border border-transparent ${isComparisonMode ? 'flex' : 'hidden'}`}>
               Compare Mode
             </span>
-            <button
-              id="play-btn"
-              className={`flex h-7 items-center gap-1.5 ${runButtonState.showDropdown ? 'rounded-l' : 'rounded'} bg-emerald-600 px-3 text-xs font-medium text-white hover:bg-emerald-500 ${runButtonState.hidden ? 'hidden' : ''}`}
-              onClick={() => onRunExecute(runMode)}
-            >
-              <svg className={`play-icon h-3 w-3 ${runButtonState.isRunning ? 'hidden' : ''}`} viewBox="0 0 24 24" fill="currentColor">
-                <use href="#icon-play"></use>
-              </svg>
-              <svg className={`stop-icon h-3 w-3 ${runButtonState.isRunning ? '' : 'hidden'}`} viewBox="0 0 24 24" fill="currentColor">
-                <use href="#icon-stop"></use>
-              </svg>
-              <span id="play-btn-text">{runButtonState.text}</span>
-            </button>
+            {showPauseButton ? (
+              <div className="ml-2 flex items-center overflow-hidden rounded border border-theme-btn-border bg-theme-btn-bg shadow-sm">
+                <button
+                  id="pause-btn"
+                  className={`flex h-7 w-8 items-center justify-center transition-colors ${
+                    pauseButtonText === 'Pause'
+                      ? 'text-amber-500 hover:bg-amber-500/10'
+                      : 'text-emerald-500 hover:bg-emerald-500/10'
+                  }`}
+                  onClick={onPauseToggle}
+                  aria-label={pauseButtonText}
+                  title={pauseButtonText}
+                >
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+                    {pauseButtonText === 'Pause' ? (
+                      <>
+                        <rect x="6" y="5" width="4" height="14"></rect>
+                        <rect x="14" y="5" width="4" height="14"></rect>
+                      </>
+                    ) : (
+                      <use href="#icon-play"></use>
+                    )}
+                  </svg>
+                </button>
+                <button
+                  id="play-btn"
+                  className={`flex h-7 w-8 items-center justify-center border-l border-theme-btn-border text-rose-500 hover:bg-rose-500/10 ${runButtonState.hidden ? 'hidden' : ''}`}
+                  onClick={() => onRunExecute(runMode)}
+                  aria-label={runButtonState.text}
+                  title={runButtonState.text}
+                >
+                  <svg className="stop-icon h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+                    <use href="#icon-stop"></use>
+                  </svg>
+                  <svg className="play-icon hidden h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+                    <use href="#icon-play"></use>
+                  </svg>
+                  <span id="play-btn-text" className="sr-only">{runButtonState.text}</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                id="play-btn"
+                className={`ml-2 flex h-7 items-center gap-1.5 ${
+                  runButtonState.showDropdown ? 'rounded-l' : 'rounded'
+                } bg-emerald-600 px-3 text-xs font-medium text-white hover:bg-emerald-500 ${runButtonState.hidden ? 'hidden' : ''}`}
+                onClick={() => onRunExecute(runMode)}
+              >
+                <svg className="play-icon h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
+                  <use href="#icon-play"></use>
+                </svg>
+                <svg className="stop-icon hidden h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
+                  <use href="#icon-stop"></use>
+                </svg>
+                <span id="play-btn-text">{runButtonState.text}</span>
+              </button>
+            )}
             <div className="dropdown relative">
               <button
                 id="run-dropdown-toggle"

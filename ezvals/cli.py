@@ -6,6 +6,7 @@ import traceback
 import time
 import webbrowser
 import json
+import subprocess
 import urllib.request
 import urllib.error
 import urllib.parse
@@ -44,6 +45,54 @@ def _find_available_port(start_port: int, max_attempts: int = 10) -> int:
         if _is_port_available(port):
             return port
     raise click.ClickException(f"No available ports found in range {start_port}-{start_port + max_attempts - 1}")
+
+
+def _latest_mtime(path: Path) -> float:
+    """Return latest file mtime under path (or 0 if missing)."""
+    if not path.exists():
+        return 0.0
+    if path.is_file():
+        return path.stat().st_mtime
+    latest = path.stat().st_mtime
+    for child in path.rglob("*"):
+        if child.is_file():
+            child_mtime = child.stat().st_mtime
+            if child_mtime > latest:
+                latest = child_mtime
+    return latest
+
+
+def _ensure_ui_assets_fresh():
+    """Build UI assets when ui/src is newer than ezvals/static."""
+    repo_root = Path(__file__).resolve().parent.parent
+    ui_dir = repo_root / "ui"
+    if not (ui_dir / "package.json").exists():
+        return  # Installed package environment; no local UI source to build
+
+    static_dir = repo_root / "ezvals" / "static"
+    static_index = static_dir / "index.html"
+
+    source_latest = max(
+        _latest_mtime(ui_dir / "src"),
+        _latest_mtime(ui_dir / "index.html"),
+        _latest_mtime(ui_dir / "package.json"),
+    )
+    static_latest = _latest_mtime(static_dir)
+
+    if static_index.exists() and source_latest <= static_latest:
+        return
+
+    console.print("[cyan]Detected stale UI assets. Building frontend...[/cyan]")
+    try:
+        subprocess.run(["npm", "run", "build"], cwd=ui_dir, check=True)
+    except FileNotFoundError:
+        raise click.ClickException(
+            "npm is required to build UI assets but was not found. Install npm, then run: npm --prefix ui run build"
+        )
+    except subprocess.CalledProcessError as exc:
+        raise click.ClickException(
+            f"UI build failed (exit {exc.returncode}). Run `npm --prefix ui run build` and fix errors."
+        )
 
 
 def _build_serve_query_params(
@@ -585,6 +634,7 @@ def _serve(
         raise
 
     from ezvals.storage import ResultsStore, _generate_friendly_name
+    _ensure_ui_assets_fresh()
 
     # Discover functions (for display, not running)
     functions = []
@@ -719,6 +769,7 @@ def _serve_from_json(
         raise
 
     from ezvals.storage import ResultsStore
+    _ensure_ui_assets_fresh()
 
     # Load the run JSON
     with open(json_path, "r") as f:

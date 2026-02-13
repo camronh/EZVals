@@ -174,13 +174,20 @@ class EvalRunner:
         on_start: Optional[Callable[[EvalFunction], None]] = None,
         on_complete: Optional[Callable[[EvalFunction, Dict], None]] = None,
         cancel_event: Optional[object] = None,
+        pause_event: Optional[object] = None,
     ) -> List[Dict]:
         all_results = []
         is_cancelled = cancel_event.is_set if cancel_event else (lambda: False)
+        is_paused = pause_event.is_set if pause_event else (lambda: False)
+
+        async def wait_while_paused():
+            while is_paused() and not is_cancelled():
+                await asyncio.sleep(0.05)
         
         if self.concurrency == 1:
             # Sequential execution
             for func in functions:
+                await wait_while_paused()
                 if is_cancelled():
                     break
 
@@ -201,6 +208,7 @@ class EvalRunner:
                         continue
 
                     for expanded_func in expanded_funcs:
+                        await wait_while_paused()
                         if is_cancelled():
                             break
                         if self.timeout is not None:
@@ -267,6 +275,7 @@ class EvalRunner:
             semaphore = asyncio.Semaphore(self.concurrency)
 
             async def run_single(func: EvalFunction):
+                await wait_while_paused()
                 if is_cancelled():
                     return []
 
@@ -287,6 +296,7 @@ class EvalRunner:
 
                     all_completed = []
                     for expanded_func in expanded_funcs:
+                        await wait_while_paused()
                         if is_cancelled():
                             break
                         if self.timeout is not None:
@@ -321,6 +331,7 @@ class EvalRunner:
                 if self.timeout is not None:
                     func.timeout = self.timeout
 
+                await wait_while_paused()
                 async with semaphore:
                     if is_cancelled():
                         return []
@@ -368,6 +379,7 @@ class EvalRunner:
                 return True
 
             for _ in range(self.concurrency):
+                await wait_while_paused()
                 if not launch_next():
                     break
 
@@ -388,9 +400,11 @@ class EvalRunner:
                     await asyncio.gather(*pending, return_exceptions=True)
                     break
                 tasks = list(pending)
-                while len(tasks) < self.concurrency and launch_next():
-                    pass
-        
+                while len(tasks) < self.concurrency:
+                    await wait_while_paused()
+                    if not launch_next():
+                        break
+
         return all_results
     
     def run(
