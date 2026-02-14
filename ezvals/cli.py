@@ -891,15 +891,6 @@ def _get_skill_source_path() -> Path:
         return Path(pkg_resources.resource_filename('ezvals', 'skills/evals'))
 
 
-def _find_canonical_agent_dir(base_path: Path, agents: list) -> tuple[str | None, Path | None]:
-    """Find first existing agent dir, or return None for fallback to .agents/."""
-    for agent in agents:
-        agent_dir = base_path / f'.{agent}'
-        if agent_dir.exists():
-            return agent, agent_dir / 'skills' / 'evals'
-    return None, None
-
-
 def _copy_skill_files(src: Path, dst: Path):
     """Copy skill files from source to destination."""
     import shutil
@@ -953,8 +944,14 @@ def skills_group():
 
 @skills_group.command('add')
 @click.option('--global', '-g', 'global_', is_flag=True, help='Install globally (to home directory)')
-@click.option('--agents', '-a', multiple=True, help='Specific agents to link (claude, codex, cursor, etc.)')
-def skills_add(global_: bool, agents: tuple):
+@click.option('--agents', is_flag=True, help='Install canonical source to .agents/')
+@click.option('--claude', is_flag=True, help='Install for Claude Code (.claude/)')
+@click.option('--codex', is_flag=True, help='Install for OpenAI Codex (.codex/)')
+@click.option('--cursor', is_flag=True, help='Install for Cursor (.cursor/)')
+@click.option('--windsurf', is_flag=True, help='Install for Windsurf (.windsurf/)')
+@click.option('--kiro', is_flag=True, help='Install for Kiro (.kiro/)')
+@click.option('--roo', is_flag=True, help='Install for Roo (.roo/)')
+def skills_add(global_: bool, agents: bool, claude: bool, codex: bool, cursor: bool, windsurf: bool, kiro: bool, roo: bool):
     """Install evals skill for AI coding agents. Overwrites existing."""
     import ezvals
 
@@ -966,44 +963,53 @@ def skills_add(global_: bool, agents: tuple):
         sys.exit(1)
 
     base_path = Path.home() if global_ else Path.cwd()
-    target_agents = list(agents) if agents else SUPPORTED_AGENTS
+    target_agent_flags = {
+        'claude': claude,
+        'codex': codex,
+        'cursor': cursor,
+        'windsurf': windsurf,
+        'kiro': kiro,
+        'roo': roo,
+    }
+    target_agents = [agent for agent in SUPPORTED_AGENTS if target_agent_flags[agent]]
 
-    # Find canonical location
-    canonical_agent, canonical_path = _find_canonical_agent_dir(base_path, target_agents)
+    if not agents and not target_agents:
+        console.print('Error: Please specify at least one agent target flag (e.g. --claude, --codex, --agents).')
+        sys.exit(1)
 
-    if canonical_agent is None:
-        # No existing agent dirs - use .agents/ as fallback
+    if agents:
+        canonical_agent = 'agents'
         canonical_path = base_path / '.agents' / 'skills' / 'evals'
-        created_agents_dir = True
     else:
-        created_agents_dir = False
+        canonical_agent = target_agents[0]
+        canonical_path = base_path / f'.{canonical_agent}' / 'skills' / 'evals'
 
     # Copy skill files to canonical location
     _copy_skill_files(source, canonical_path)
 
     # Create symlinks from other agents to canonical
-    linked_agents = []
+    linked_targets = []
     for agent in target_agents:
         agent_skill_path = base_path / f'.{agent}' / 'skills' / 'evals'
         if agent_skill_path != canonical_path:
             _create_symlink(canonical_path, agent_skill_path)
-            linked_agents.append(agent)
+            linked_targets.append(f'.{agent}')
 
-    # Add .agents/ to git exclude if we created it
-    if created_agents_dir and not global_:
+    # Keep .agents/ local installations out of git status noise.
+    if canonical_agent == 'agents' and not global_:
         _add_to_git_exclude(base_path, '.agents/')
 
     # Output
     console.print(f'[green]Evals skill v{version} installed:[/green]')
-    if created_agents_dir:
-        console.print(f'  Source: .agents/skills/evals/ (created)')
+    if canonical_agent == 'agents':
+        console.print('  Source: .agents/skills/evals/')
     else:
         console.print(f'  Source: .{canonical_agent}/skills/evals/')
 
-    if linked_agents:
-        console.print(f'  Linked: {", ".join(f".{a}" for a in linked_agents)}')
+    if linked_targets:
+        console.print(f'  Linked: {", ".join(linked_targets)}')
 
-    if created_agents_dir and not global_:
+    if canonical_agent == 'agents' and not global_:
         console.print('\n[dim]Note: Added .agents/ to .git/info/exclude[/dim]')
 
     console.print('\n[cyan]Invoke with /evals in your agent.[/cyan]')

@@ -11,6 +11,10 @@ description: "All notable changes to EZVals"
 - Tests: Added E2E coverage for detail score editing, including type-specific controls and persisted updates after page reload.
 - Fixed: `ezvals skills add` now installs the full bundled skill directory, including nested `use-cases/` and `ezvals-docs/` folders.
 - Tests: Added CLI unit assertions that `skills add` installs nested skill content for both canonical and `.agents/` fallback installs.
+- Changed: `ezvals skills add` now uses explicit target flags (`--agents`, `--claude`, `--codex`, `--cursor`, `--windsurf`, `--kiro`, `--roo`) instead of `--agents <name>`.
+- Changed: `ezvals skills add` now fails fast when no target flag is provided.
+- Changed: When `--agents` is selected, `.agents` is always treated as canonical source (including combined targets like `--agents --claude`).
+- Tests: Added CLI unit coverage for required target flags and `.agents` canonical-priority behavior.
 - Added: Agent skill now prompts users to file GitHub issues when they mention EZVals friction, bugs, or feature ideas.
 - Changed: Docs navigation reorders examples to show RAG Agent before Granular Evals.
 

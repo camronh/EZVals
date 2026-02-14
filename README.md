@@ -361,7 +361,7 @@ EZVals includes a skill that teaches AI coding agents how to write and analyze e
 ### Install from package (version-matched)
 
 ```bash
-ezvals skills add
+ezvals skills add --claude
 ```
 
 ### Install from marketplace (latest)
@@ -376,7 +376,7 @@ npx skills add camronh/evals-skill
 ezvals skills doctor
 ```
 
-The skill installs to `.claude/skills/evals/`, `.cursor/skills/evals/`, etc., with symlinks ensuring all agents share the same source. Invoke with `/evals` in your AI coding agent.
+At least one target flag is required (`--agents`, `--claude`, `--codex`, `--cursor`, `--windsurf`, `--kiro`, `--roo`). EZVals installs to selected target directories and symlinks additional selected targets to a canonical source. If `--agents` is selected, `.agents/skills/evals/` is canonical. Invoke with `/evals` in your AI coding agent.
 
 ## Contributing
 
