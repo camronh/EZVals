@@ -254,6 +254,52 @@ def test_detail_page_navigation(tmp_path):
             browser.close()
 
 
+def test_detail_page_score_editing_persists(tmp_path):
+    store = ResultsStore(tmp_path / "runs")
+    run_id = store.save_run(make_scored_summary(), "2024-01-01T00-00-00Z")
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+
+            page.goto(f"{url}/runs/{run_id}/results/0")
+            page.wait_for_selector("text=Scores")
+            page.locator("button[title='Edit score']").first.click()
+
+            expect(page.locator("input[placeholder='Value (number or text)']")).to_have_count(0)
+            page.locator("select").select_option("false")
+            page.locator("textarea[placeholder='Notes...']").fill("manual override")
+            page.locator("button:has-text('Save')").click()
+            page.wait_for_selector("button[title='Edit score']")
+
+            page.locator("button[title='Edit score']").nth(1).click()
+            expect(page.locator("select")).to_have_count(0)
+            page.locator("input[placeholder='Value (number or text)']").fill("0.93")
+            page.locator("textarea[placeholder='Notes...']").fill("manual override value")
+            page.locator("button:has-text('Save')").click()
+
+            expect(page.locator("text=0.93")).to_be_visible()
+            expect(page.locator("text=manual override value")).to_be_visible()
+            page.reload()
+            page.wait_for_selector("text=Scores")
+            expect(page.locator("text=0.93")).to_be_visible()
+            expect(page.locator("text=manual override value")).to_be_visible()
+
+            browser.close()
+
+    persisted = store.load_run(run_id)
+    score_bool = persisted["results"][0]["result"]["scores"][0]
+    score_value = persisted["results"][0]["result"]["scores"][1]
+    assert score_bool["passed"] is False
+    assert "value" not in score_bool
+    assert score_bool["notes"] == "manual override"
+    assert score_value["value"] == 0.93
+    assert "passed" not in score_value
+    assert score_value["notes"] == "manual override value"
+
+
 def test_row_click_no_expand_when_content_fits(tmp_path):
     store = ResultsStore(tmp_path / "runs")
     run_id = store.save_run(

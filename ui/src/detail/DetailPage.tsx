@@ -113,9 +113,10 @@ function CopyButton({ getText, className = '', title = 'Copy' }: CopyButtonProps
 
 type ScoreCardProps = {
   score: Score
+  onEdit: () => void
 }
 
-function ScoreCard({ score }: ScoreCardProps) {
+function ScoreCard({ score, onEdit }: ScoreCardProps) {
   let cls = 'border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-800/50'
   let textCls = 'text-zinc-700 dark:text-zinc-300'
   let valueCls = 'text-zinc-500'
@@ -130,10 +131,20 @@ function ScoreCard({ score }: ScoreCardProps) {
   }
 
   return (
-    <div className={`rounded border px-2.5 py-1.5 ${cls}`}>
+    <div className={`group rounded border px-2.5 py-1.5 ${cls}`}>
       <div className="flex items-center justify-between gap-2">
         <span className={`font-mono text-xs font-medium ${textCls}`}>{score.key}</span>
         <div className="flex items-center gap-1.5">
+          <button
+            className="flex h-5 w-5 items-center justify-center rounded text-zinc-400 opacity-0 transition-opacity hover:bg-zinc-200 hover:text-zinc-600 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-zinc-700 dark:hover:text-zinc-300"
+            title="Edit score"
+            onClick={onEdit}
+          >
+            <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+              <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+          </button>
           {score.value != null ? <span className={`font-mono text-xs ${valueCls}`}>{score.value}</span> : null}
           {score.passed === true ? (
             <span className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-white">
@@ -202,6 +213,14 @@ export default function DetailPage() {
   const [annotationDraft, setAnnotationDraft] = useState('')
   const [annotationSaving, setAnnotationSaving] = useState(false)
   const [annotationError, setAnnotationError] = useState<string | null>(null)
+  const [editingScoreIndex, setEditingScoreIndex] = useState<number | null>(null)
+  const [scoreDraftKind, setScoreDraftKind] = useState<'bool' | 'value'>('value')
+  const [scoreBoolUsesValue, setScoreBoolUsesValue] = useState(false)
+  const [scoreDraftValue, setScoreDraftValue] = useState('')
+  const [scoreDraftPassed, setScoreDraftPassed] = useState('unset')
+  const [scoreDraftNotes, setScoreDraftNotes] = useState('')
+  const [scoreSaving, setScoreSaving] = useState(false)
+  const [scoreError, setScoreError] = useState<string | null>(null)
   const [inputWidth, setInputWidth] = useState(() => (window.innerWidth < 1100 ? 55 : 50))
   const [refHeight, setRefHeight] = useState(() => {
     const availableHeight = Math.max(200, window.innerHeight - DETAIL_HEADER_HEIGHT)
@@ -324,7 +343,7 @@ export default function DetailPage() {
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
-      if (editingAnnotation) return
+      if (editingAnnotation || editingScoreIndex != null) return
       if (event.key === 'Escape') {
         window.location.href = '/'
       } else if (event.key === 'ArrowUp') {
@@ -335,7 +354,7 @@ export default function DetailPage() {
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [data, runId, editingAnnotation])
+  }, [data, runId, editingAnnotation, editingScoreIndex])
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -460,6 +479,87 @@ export default function DetailPage() {
       setAnnotationSaving(false)
     }
   }, [annotationDraft, data?.result?.result?.annotation, index, runId])
+
+  const handleScoreSave = useCallback(async () => {
+    if (editingScoreIndex == null) return
+    const currentScores = Array.isArray(data?.result?.result?.scores) ? data?.result?.result?.scores : []
+    if (!currentScores[editingScoreIndex]) return
+
+    const nextNotes = scoreDraftNotes.trim() || null
+    const currentScore = currentScores[editingScoreIndex]
+    let nextScore: Score
+    if (scoreDraftKind === 'bool') {
+      const nextBool = scoreDraftPassed === 'true'
+      if (scoreBoolUsesValue) {
+        const { passed, ...rest } = currentScore
+        nextScore = {
+          ...rest,
+          value: nextBool,
+          notes: nextNotes,
+        }
+      } else {
+        const { value, ...rest } = currentScore
+        nextScore = {
+          ...rest,
+          passed: nextBool,
+          notes: nextNotes,
+        }
+      }
+    } else {
+      const rawValue = scoreDraftValue.trim()
+      const nextValue: Score['value'] = !rawValue
+        ? null
+        : (/^-?\d+(\.\d+)?$/.test(rawValue) ? Number(rawValue) : rawValue)
+      const { passed, ...rest } = currentScore
+      nextScore = {
+        ...rest,
+        value: nextValue,
+        notes: nextNotes,
+      }
+    }
+    const nextScores = currentScores.map((score, idx) => (idx === editingScoreIndex ? nextScore : score))
+    if (JSON.stringify(nextScores) === JSON.stringify(currentScores)) {
+      setEditingScoreIndex(null)
+      setScoreError(null)
+      return
+    }
+
+    setScoreSaving(true)
+    setScoreError(null)
+
+    try {
+      const resp = await fetch(`/api/runs/${encodeURIComponent(runId)}/results/${index}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ result: { scores: nextScores } }),
+      })
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}))
+        throw new Error(err.detail || 'Failed to save score')
+      }
+
+      setData((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          result: {
+            ...prev.result,
+            result: {
+              ...prev.result.result,
+              scores: nextScores,
+            },
+          },
+        }
+      })
+      setEditingScoreIndex(null)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Save failed'
+      setScoreError(message)
+    } finally {
+      setScoreSaving(false)
+    }
+  }, [data?.result?.result?.scores, editingScoreIndex, index, runId, scoreBoolUsesValue, scoreDraftKind, scoreDraftNotes, scoreDraftPassed, scoreDraftValue])
 
   if (loading && !data) {
     return (
@@ -786,9 +886,107 @@ export default function DetailPage() {
               <div className="border-b border-blue-200/60 dark:border-zinc-800">
                 <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 bg-zinc-100/50 dark:bg-zinc-800/30">Scores</div>
                 <div className="p-2 space-y-1.5">
-                  {scores.map((score, idx) => (
-                    <ScoreCard key={`${score.key}-${idx}`} score={score} />
-                  ))}
+                  {scores.map((score, idx) => {
+                    if (editingScoreIndex !== idx) {
+                      return (
+                        <ScoreCard
+                          key={`${score.key}-${idx}`}
+                          score={score}
+                          onEdit={() => {
+                            const isBoolScore = typeof score.value === 'boolean' || (score.value == null && (score.passed === true || score.passed === false))
+                            const usesValueForBool = typeof score.value === 'boolean' && score.passed == null
+                            setEditingScoreIndex(idx)
+                            setScoreDraftKind(isBoolScore ? 'bool' : 'value')
+                            setScoreBoolUsesValue(usesValueForBool)
+                            setScoreDraftValue(!isBoolScore && score.value != null ? String(score.value) : '')
+                            if (isBoolScore) {
+                              const boolValue = usesValueForBool ? score.value : score.passed
+                              setScoreDraftPassed(boolValue === true ? 'true' : 'false')
+                            } else {
+                              setScoreDraftPassed('unset')
+                            }
+                            setScoreDraftNotes(score.notes || '')
+                            setScoreError(null)
+                          }}
+                        />
+                      )
+                    }
+                    return (
+                      <div key={`${score.key}-${idx}`} className="rounded border border-zinc-200 bg-white p-2.5 dark:border-zinc-700 dark:bg-zinc-800/50">
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className="font-mono text-xs font-medium text-zinc-700 dark:text-zinc-300">{score.key}</span>
+                        </div>
+                        <div className="space-y-2">
+                          {scoreDraftKind === 'value' ? (
+                            <input
+                              className="w-full rounded border border-zinc-300 bg-white px-2 py-1.5 font-mono text-xs text-zinc-700 placeholder-zinc-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:placeholder-zinc-500 dark:focus:border-blue-500"
+                              value={scoreDraftValue}
+                              onChange={(e) => setScoreDraftValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Escape') {
+                                  setEditingScoreIndex(null)
+                                  setScoreError(null)
+                                }
+                              }}
+                              placeholder="Value (number or text)"
+                              autoFocus
+                              disabled={scoreSaving}
+                            />
+                          ) : (
+                            <select
+                              className="w-full rounded border border-zinc-300 bg-white px-2 py-1.5 text-xs text-zinc-700 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:focus:border-blue-500"
+                              value={scoreDraftPassed}
+                              onChange={(e) => setScoreDraftPassed(e.target.value)}
+                              disabled={scoreSaving}
+                              autoFocus
+                            >
+                              <option value="true">Passed: true</option>
+                              <option value="false">Passed: false</option>
+                            </select>
+                          )}
+                          <textarea
+                            className="w-full min-h-[60px] rounded border border-zinc-300 bg-white px-2 py-1.5 text-xs text-zinc-700 placeholder-zinc-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:placeholder-zinc-500 dark:focus:border-blue-500"
+                            value={scoreDraftNotes}
+                            onChange={(e) => setScoreDraftNotes(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') {
+                                setEditingScoreIndex(null)
+                                setScoreError(null)
+                              }
+                            }}
+                            placeholder="Notes..."
+                            disabled={scoreSaving}
+                          />
+                          {scoreError ? <div className="text-[11px] text-rose-500">{scoreError}</div> : null}
+                          <div className="flex justify-end gap-2">
+                            <button
+                              className="rounded border border-zinc-300 bg-white px-2 py-1 text-[11px] text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600"
+                              onClick={() => {
+                                setEditingScoreIndex(null)
+                                setScoreError(null)
+                              }}
+                              disabled={scoreSaving}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              className="flex items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-600 hover:bg-emerald-500/20 disabled:opacity-50 dark:text-emerald-400"
+                              onClick={handleScoreSave}
+                              disabled={scoreSaving}
+                            >
+                              {scoreSaving ? (
+                                <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                </svg>
+                              ) : null}
+                              Save
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             ) : null}
@@ -859,11 +1057,11 @@ export default function DetailPage() {
             ) : null}
 
             <div className="flex-1">
-              <div className="flex items-center justify-between px-3 py-2 bg-zinc-100/50 dark:bg-zinc-800/30">
+              <div className="group flex items-center justify-between px-3 py-2 bg-zinc-100/50 dark:bg-zinc-800/30">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Annotation</span>
                 {!editingAnnotation && (
                   <button
-                    className="flex h-5 w-5 items-center justify-center rounded text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-300"
+                    className="flex h-5 w-5 items-center justify-center rounded text-zinc-400 opacity-0 transition-opacity hover:bg-zinc-200 hover:text-zinc-600 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-zinc-700 dark:hover:text-zinc-300"
                     title="Edit annotation"
                     onClick={() => {
                       setAnnotationDraft(result.annotation || '')
@@ -891,9 +1089,6 @@ export default function DetailPage() {
                           setEditingAnnotation(false)
                           setAnnotationError(null)
                         }
-                        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-                          handleAnnotationSave()
-                        }
                       }}
                       placeholder="Add annotation..."
                       autoFocus
@@ -904,10 +1099,7 @@ export default function DetailPage() {
                       <div className="text-[11px] text-rose-500">{annotationError}</div>
                     )}
 
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] text-zinc-400">
-                        <kbd className="rounded border border-zinc-300 bg-white px-1 font-mono dark:border-zinc-600 dark:bg-zinc-800">Cmd+Enter</kbd> save
-                      </span>
+                    <div className="flex items-center justify-end">
                       <div className="flex gap-2">
                         <button
                           className="rounded border border-zinc-300 bg-white px-2 py-1 text-[11px] text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600"
@@ -955,7 +1147,7 @@ export default function DetailPage() {
             <div className="flex-shrink-0 px-3 py-2 border-t border-blue-200/60 bg-zinc-100/30 dark:border-zinc-800 dark:bg-zinc-800/20">
               <div className="flex items-center gap-4 text-[10px] text-zinc-400">
                 <span><kbd className="rounded border border-zinc-300 bg-white px-1 font-mono dark:border-zinc-600 dark:bg-zinc-800">↑↓</kbd> nav</span>
-                <span><kbd className="rounded border border-zinc-300 bg-white px-1 font-mono dark:border-zinc-600 dark:bg-zinc-800">Esc</kbd> {editingAnnotation ? 'cancel' : 'back'}</span>
+                <span><kbd className="rounded border border-zinc-300 bg-white px-1 font-mono dark:border-zinc-600 dark:bg-zinc-800">Esc</kbd> {(editingAnnotation || editingScoreIndex != null) ? 'cancel' : 'back'}</span>
               </div>
             </div>
           </div>

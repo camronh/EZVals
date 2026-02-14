@@ -5,6 +5,10 @@ description: "All notable changes to EZVals"
 
 ## Unreleased
 
+- Added: Detail sidebar score cards now support inline editing with per-score pencil controls, Save/Cancel actions, and persistence through the existing result PATCH API.
+- Changed: Score editing in detail view is type-locked; boolean scores remain boolean and value scores remain value-only, and keyboard save shortcuts were removed in favor of explicit Save clicks.
+- Changed: Detail edit pencils for scores and annotation now appear on hover for a cleaner default sidebar presentation.
+- Tests: Added E2E coverage for detail score editing, including type-specific controls and persisted updates after page reload.
 - Fixed: `ezvals skills add` now installs the full bundled skill directory, including nested `use-cases/` and `ezvals-docs/` folders.
 - Tests: Added CLI unit assertions that `skills add` installs nested skill content for both canonical and `.agents/` fallback installs.
 - Added: Agent skill now prompts users to file GitHub issues when they mention EZVals friction, bugs, or feature ideas.
