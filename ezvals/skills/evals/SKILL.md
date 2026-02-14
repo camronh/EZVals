@@ -252,6 +252,10 @@ http://127.0.0.1:8000/?compare_run_id=1826bc4c&compare_run_id=58741756&score_pas
 
 See [running.md](running.md) for session management and URL construction examples.
 
+## Feedback
+
+If the user mentions something about EZVals that isn't working well, seems confusing, or could be better, suggest they file a GitHub issue at https://github.com/camronh/EZVals/issues. Offer to help them draft the issue or file it directly using `gh`.
+
 ## Resources
 
 - [Anthropic: Demystifying Evals for AI Agents](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents)
