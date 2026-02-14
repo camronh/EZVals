@@ -706,6 +706,8 @@ class TestSkillsCommands:
             canonical = Path('.claude/skills/evals/SKILL.md')
             assert canonical.exists()
             assert 'evals' in canonical.read_text()
+            assert Path('.claude/skills/evals/use-cases/rag-agents.md').exists()
+            assert Path('.claude/skills/evals/ezvals-docs/quickstart.mdx').exists()
 
             # Verify symlinks created
             for agent in ['codex', 'cursor', 'windsurf', 'kiro', 'roo']:
@@ -721,6 +723,8 @@ class TestSkillsCommands:
 
             # Verify .agents/ was created
             assert Path('.agents/skills/evals/SKILL.md').exists()
+            assert Path('.agents/skills/evals/use-cases/rag-agents.md').exists()
+            assert Path('.agents/skills/evals/ezvals-docs/quickstart.mdx').exists()
 
     def test_skills_add_with_specific_agents(self):
         """skills add --agents only links specified agents"""

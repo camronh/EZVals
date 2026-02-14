@@ -903,10 +903,12 @@ def _find_canonical_agent_dir(base_path: Path, agents: list) -> tuple[str | None
 def _copy_skill_files(src: Path, dst: Path):
     """Copy skill files from source to destination."""
     import shutil
-    dst.mkdir(parents=True, exist_ok=True)
-    for f in src.iterdir():
-        if f.is_file():
-            shutil.copy2(f, dst / f.name)
+    if dst.exists() or dst.is_symlink():
+        if dst.is_symlink() or dst.is_file():
+            dst.unlink()
+        else:
+            shutil.rmtree(dst)
+    shutil.copytree(src, dst)
 
 
 def _create_symlink(target: Path, link: Path):
