@@ -24,7 +24,7 @@ Install the skill that matches your installed EZVals version:
 
 ```bash
 pip install ezvals
-ezvals skills add
+ezvals skills add --claude
 ```
 
 This installs to your current project directory.
@@ -34,8 +34,17 @@ This installs to your current project directory.
 Install globally for all projects:
 
 ```bash
-ezvals skills add --global
+ezvals skills add --global --claude
 ```
+
+### Target Flags
+
+`ezvals skills add` requires at least one explicit target flag.
+
+- `--agents` installs canonical source to `.agents/skills/evals/`
+- `--claude`, `--codex`, `--cursor`, `--windsurf`, `--kiro`, `--roo` install/link those agent directories
+- You can combine flags, like `ezvals skills add --claude --codex`
+- If `--agents` is included with other targets, `.agents` is canonical and selected agent targets link to it
 
 ### From Marketplace (Latest)
 
@@ -111,29 +120,29 @@ ezvals skills remove
 ### Reinstall
 
 ```bash
-ezvals skills add
+ezvals skills add --claude
 ```
 
 Overwrites existing installation with fresh files.
 
 ## How It Works
 
-The skill is installed to agent-specific directories:
+The skill is installed only to the selected target directories:
 
 ```
-.claude/skills/evals/     # For Claude Code
-.cursor/skills/evals/     # For Cursor
-.codex/skills/evals/      # For Codex
+.claude/skills/evals/     # Selected with --claude
+.cursor/skills/evals/     # Selected with --cursor
+.codex/skills/evals/      # Selected with --codex
 ...
 ```
 
-If no agent directories exist, it creates `.agents/skills/evals/` as a fallback and creates symlinks to it.
+If `--agents` is selected, `.agents/skills/evals/` is the canonical source and other selected targets symlink to it.
 
 ## Keeping Updated
 
-When you upgrade EZVals, run `ezvals skills add` again to get the latest skill content:
+When you upgrade EZVals, run `ezvals skills add --claude` again (or your chosen target flags) to get the latest skill content:
 
 ```bash
 pip install --upgrade ezvals
-ezvals skills add
+ezvals skills add --claude
 ```

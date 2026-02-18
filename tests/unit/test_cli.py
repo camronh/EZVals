@@ -1,6 +1,5 @@
 import pytest
 from click.testing import CliRunner
-import tempfile
 import json
 from pathlib import Path
 
@@ -13,6 +12,7 @@ from ezvals.cli import (
     _build_serve_query_params,
     _is_port_available,
 )
+from ezvals import run as run_sdk
 from ezvals.storage import ResultsStore
 
 
@@ -36,6 +36,77 @@ class TestCLI:
         assert '--concurrency' in result.output
         assert '--verbose' in result.output
         assert '--visual' in result.output
+
+    def test_run_command_uses_sdk(self, monkeypatch):
+        captured = {}
+
+        def fake_run_sdk(**kwargs):
+            captured.update(kwargs)
+            return {
+                "summary": {
+                    "total_evaluations": 0,
+                    "total_functions": 0,
+                    "total_errors": 0,
+                    "total_with_scores": 0,
+                    "total_passed": 0,
+                    "average_latency": 0,
+                    "results": [],
+                },
+                "saved_path": "fake.json",
+            }
+
+        monkeypatch.setattr("ezvals.cli.run_sdk", fake_run_sdk)
+        result = self.runner.invoke(cli, ['run', 'evals.py::test_one', '--dataset', 'qa'])
+        assert result.exit_code == 0
+        assert captured["path"] == "evals.py::test_one"
+        assert captured["dataset"] == "qa"
+        assert captured["use_config"] is True
+
+    def test_run_sdk_programmatic_with_flags(self):
+        with self.runner.isolated_filesystem():
+            with open('test_programmatic.py', 'w') as f:
+                f.write("""
+from ezvals import eval, EvalResult
+
+@eval(dataset="ds1")
+def test_ds1():
+    return EvalResult(input="a", output="a")
+
+@eval(dataset="ds2")
+def test_ds2():
+    return EvalResult(input="b", output="b")
+""")
+
+            result = run_sdk(
+                path='test_programmatic.py',
+                dataset='ds1',
+                limit=1,
+                output='programmatic-results.json',
+            )
+            assert Path('programmatic-results.json').exists()
+            with open('programmatic-results.json') as f:
+                data = json.load(f)
+            assert result['saved_path'] == 'programmatic-results.json'
+            assert data['total_functions'] == 1
+            assert data['total_evaluations'] == 1
+
+    def test_run_sdk_programmatic_error(self):
+        with pytest.raises(ValueError):
+            run_sdk(path='definitely_missing_evals.py')
+
+    def test_run_sdk_programmatic_does_not_create_config_by_default(self):
+        with self.runner.isolated_filesystem():
+            with open('test_programmatic_cfg.py', 'w') as f:
+                f.write("""
+from ezvals import eval, EvalResult
+
+@eval()
+def test_cfg():
+    return EvalResult(input="x", output="y")
+""")
+
+            run_sdk(path='test_programmatic_cfg.py', no_save=True)
+            assert not Path('ezvals.json').exists()
     
     def test_run_with_file(self):
         with self.runner.isolated_filesystem():
@@ -689,56 +760,73 @@ class TestSkillsCommands:
         result = self.runner.invoke(cli, ['skills', 'add', '--help'])
         assert result.exit_code == 0
         assert '--global' in result.output
+        assert '--claude' in result.output
         assert '--agents' in result.output
 
-    def test_skills_add_creates_canonical_and_symlinks(self):
-        """skills add should create canonical copy and symlinks"""
+    def test_skills_add_requires_target_flag(self):
+        """skills add should fail without any target flag"""
         with self.runner.isolated_filesystem():
-            # Create a .claude directory to be detected as canonical
-            Path('.claude').mkdir()
-
             result = self.runner.invoke(cli, ['skills', 'add'])
+            assert result.exit_code == 1
+            assert 'Please specify at least one agent target flag' in result.output
+
+    def test_skills_add_global_requires_target_flag(self):
+        """skills add --global should fail without any target flag"""
+        with self.runner.isolated_filesystem():
+            result = self.runner.invoke(cli, ['skills', 'add', '--global'])
+            assert result.exit_code == 1
+            assert 'Please specify at least one agent target flag' in result.output
+
+    def test_skills_add_installs_claude_canonical(self):
+        """skills add --claude installs into .claude/skills/evals/"""
+        with self.runner.isolated_filesystem():
+            result = self.runner.invoke(cli, ['skills', 'add', '--claude'])
             assert result.exit_code == 0
-            assert 'installed' in result.output
             assert '.claude/skills/evals/' in result.output
+            assert Path('.claude/skills/evals/SKILL.md').exists()
+            assert Path('.claude/skills/evals/use-cases/rag-agents.md').exists()
 
-            # Verify canonical location exists
-            canonical = Path('.claude/skills/evals/SKILL.md')
-            assert canonical.exists()
-            assert 'evals' in canonical.read_text()
-
-            # Verify symlinks created
-            for agent in ['codex', 'cursor', 'windsurf', 'kiro', 'roo']:
-                symlink = Path(f'.{agent}/skills/evals')
-                assert symlink.exists() or symlink.is_symlink()
-
-    def test_skills_add_creates_agents_fallback(self):
-        """skills add creates .agents/ when no agent dirs exist"""
+    def test_skills_add_installs_agents_canonical(self):
+        """skills add --agents installs into .agents/skills/evals/"""
         with self.runner.isolated_filesystem():
-            result = self.runner.invoke(cli, ['skills', 'add'])
+            result = self.runner.invoke(cli, ['skills', 'add', '--agents'])
             assert result.exit_code == 0
             assert '.agents/skills/evals/' in result.output
-
-            # Verify .agents/ was created
             assert Path('.agents/skills/evals/SKILL.md').exists()
+            assert Path('.agents/skills/evals/use-cases/rag-agents.md').exists()
 
-    def test_skills_add_with_specific_agents(self):
-        """skills add --agents only links specified agents"""
+    def test_skills_add_multi_target_links_to_first_selected(self):
+        """skills add --claude --codex links codex to claude canonical"""
         with self.runner.isolated_filesystem():
-            result = self.runner.invoke(cli, ['skills', 'add', '--agents', 'claude', '--agents', 'cursor'])
+            result = self.runner.invoke(cli, ['skills', 'add', '--claude', '--codex'])
             assert result.exit_code == 0
+            assert '.claude/skills/evals/' in result.output
+            assert 'Linked: .codex' in result.output
+            assert Path('.claude/skills/evals/SKILL.md').exists()
+            codex_path = Path('.codex/skills/evals')
+            assert codex_path.exists() or codex_path.is_symlink()
 
-            # Should only create specified agents
-            assert Path('.claude/skills/evals').exists() or Path('.agents/skills/evals').exists()
-            assert Path('.cursor/skills/evals').exists()
-            # Should not create others
-            assert not Path('.codex/skills/evals').exists()
+    def test_skills_add_global_agents_canonical_priority(self):
+        """skills add --global --agents --claude makes .agents canonical in HOME"""
+        with self.runner.isolated_filesystem() as temp_dir:
+            from unittest.mock import patch
+
+            home_dir = Path(temp_dir) / 'home'
+            home_dir.mkdir()
+            with patch('pathlib.Path.home', return_value=home_dir):
+                result = self.runner.invoke(cli, ['skills', 'add', '--global', '--agents', '--claude'])
+            assert result.exit_code == 0
+            assert '.agents/skills/evals/' in result.output
+            assert 'Linked: .claude' in result.output
+            assert (home_dir / '.agents/skills/evals/SKILL.md').exists()
+            claude_path = home_dir / '.claude/skills/evals'
+            assert claude_path.exists() or claude_path.is_symlink()
 
     def test_skills_remove_cleans_up(self):
         """skills remove should remove skill from all agents"""
         with self.runner.isolated_filesystem():
             # First add
-            self.runner.invoke(cli, ['skills', 'add'])
+            self.runner.invoke(cli, ['skills', 'add', '--claude'])
 
             # Then remove
             result = self.runner.invoke(cli, ['skills', 'remove'])
@@ -765,18 +853,18 @@ class TestSkillsCommands:
             assert 'No evals skill found' in result.output
 
             # Install
-            self.runner.invoke(cli, ['skills', 'add'])
+            self.runner.invoke(cli, ['skills', 'add', '--agents'])
 
             # Now should show installed
             result = self.runner.invoke(cli, ['skills', 'doctor'])
             assert result.exit_code == 0
             assert 'skills/evals/' in result.output
-            assert 'linked' in result.output
+            assert '.agents/skills/evals/' in result.output
 
     def test_skills_doctor_shows_version(self):
         """skills doctor should show skill version"""
         with self.runner.isolated_filesystem():
-            self.runner.invoke(cli, ['skills', 'add'])
+            self.runner.invoke(cli, ['skills', 'add', '--claude'])
 
             result = self.runner.invoke(cli, ['skills', 'doctor'])
             assert result.exit_code == 0
@@ -787,7 +875,7 @@ class TestSkillsCommands:
         """skills add should overwrite existing installation"""
         with self.runner.isolated_filesystem():
             # First install
-            self.runner.invoke(cli, ['skills', 'add'])
+            self.runner.invoke(cli, ['skills', 'add', '--claude'])
 
             # Modify the skill file
             skill_path = None
@@ -799,7 +887,7 @@ class TestSkillsCommands:
             skill_path.write_text('modified content')
 
             # Reinstall
-            result = self.runner.invoke(cli, ['skills', 'add'])
+            result = self.runner.invoke(cli, ['skills', 'add', '--claude'])
             assert result.exit_code == 0
 
             # Should be restored

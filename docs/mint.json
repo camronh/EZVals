@@ -40,8 +40,8 @@
     {
       "group": "Examples",
       "pages": [
-        "examples/granular-evals",
-        "examples/rag-agent"
+        "examples/rag-agent",
+        "examples/granular-evals"
       ]
     },
     {

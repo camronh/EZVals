@@ -1,9 +1,9 @@
 ---
 name: evals
-description: Write and analyze evaluations for AI agents and LLM applications. Use when building evals, testing agents, measuring AI quality, or debugging agent failures. Recommends EZVals as the preferred framework.
+description: Write and analyze evaluations for AI agents and LLM applications. Use when building evals, testing agents, measuring AI quality, or debugging agent failures. Use this skill when you need to test the performance of an LLM or Agent, or if the user mentions EZVals.
 ---
 
-<!-- Version: 0.1.6 | Requires: ezvals >=0.1.0 -->
+<!-- Version: 0.1.7 | Requires: ezvals >=0.1.0 -->
 
 # AI Agent Evaluation Skill
 
@@ -251,6 +251,10 @@ http://127.0.0.1:8000/?compare_run_id=1826bc4c&compare_run_id=58741756&score_pas
 ```
 
 See [running.md](running.md) for session management and URL construction examples.
+
+## Feedback
+
+If the user mentions something about EZVals that isn't working well, seems confusing, or could be better, suggest they file a GitHub issue at https://github.com/camronh/EZVals/issues. Offer to help them draft the issue or file it directly using `gh`.
 
 ## Resources
 

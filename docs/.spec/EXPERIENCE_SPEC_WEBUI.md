@@ -197,7 +197,6 @@ Scenario: Add annotation via pencil icon
   When the user clicks the pencil icon next to "Annotation"
   Then a textarea appears with placeholder "Add annotation..."
   And Save/Cancel buttons appear
-  And keyboard hint shows "Cmd+Enter save"
 
 Scenario: Add annotation via placeholder link
   Given the detail view is open
@@ -207,7 +206,7 @@ Scenario: Add annotation via placeholder link
 
 Scenario: Save annotation
   Given the user is editing an annotation
-  When the user types text and clicks Save (or presses Cmd+Enter)
+  When the user types text and clicks Save
   Then the annotation saves to the JSON file via PATCH API
   And the view returns to read-only mode showing the annotation text
   And the annotation persists across page reloads
@@ -235,14 +234,14 @@ Scenario: Keyboard navigation disabled while editing
 **Annotation UI States:**
 - **View mode (no annotation)**: Shows clickable "+ Add annotation" link
 - **View mode (has annotation)**: Shows annotation text with pencil edit icon in header
-- **Edit mode**: Shows textarea with Save/Cancel buttons and Cmd+Enter hint
+- **Edit mode**: Shows textarea with Save/Cancel buttons
 - **Saving**: Shows spinner on Save button, buttons disabled
 
 **Editable Fields:**
 - Annotations (via textarea with explicit save)
+- Scores (via per-score inline edit controls in detail sidebar)
 
 **Read-Only Fields:**
-- Scores
 - Input
 - Output
 - Reference
@@ -252,6 +251,35 @@ Scenario: Keyboard navigation disabled while editing
 - Run Data
 - Latency
 - Error
+
+### Score Editing
+
+The scores section in the detail view sidebar allows editing each score entry inline.
+
+```gherkin
+Scenario: Edit score from score card
+  Given the detail view is open
+  And one or more scores are shown in the sidebar
+  When the user clicks the pencil icon on a score card
+  Then inline edit controls appear for that score
+  And boolean scores only show boolean controls
+  And value scores only show value controls
+  And Save/Cancel buttons appear
+
+Scenario: Save score edits
+  Given the user is editing a score
+  When the user updates fields and clicks Save
+  Then the scores save to the JSON file via PATCH API
+  And the score card returns to read-only mode
+  And the edits persist across page reloads
+  And score type does not change (boolean stays boolean, value stays value)
+
+Scenario: Cancel score edit
+  Given the user is editing a score
+  When the user clicks Cancel (or presses Escape)
+  Then changes are discarded
+  And the score card returns to read-only mode
+```
 
 ---
 

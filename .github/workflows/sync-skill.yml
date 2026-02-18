@@ -23,9 +23,6 @@ jobs:
           cp docs/guides/*.mdx ezvals/skills/evals/ezvals-docs/
           cp docs/api-reference/*.mdx ezvals/skills/evals/ezvals-docs/
 
-          # Remove agent-skill.mdx (meta/circular reference)
-          rm -f ezvals/skills/evals/ezvals-docs/agent-skill.mdx
-
           echo "Assembled $(ls ezvals/skills/evals/ezvals-docs | wc -l) docs"
 
       - name: Validate skill version matches tag

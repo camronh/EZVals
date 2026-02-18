@@ -3,6 +3,26 @@ title: "Changelog"
 description: "All notable changes to EZVals"
 ---
 
+## 0.1.7 - 2026-02-17
+
+- Added: SDK `run(...)` API for programmatic eval execution with `ezvals run` option parity; CLI `ezvals run` now calls this shared core path.
+- Changed: SDK `run(...)` now defaults to built-in runtime settings without creating `ezvals.json`; CLI continues to honor config by explicitly opting into config loading.
+- Changed: Runner internals now share one execution path for sequential and concurrent result shaping, reducing duplicated callback/loader/result mapping code.
+- Changed: Serve startup for eval-path and JSON-path flows now uses a shared server boot helper (port/url/browser/server lifecycle) to reduce duplication.
+- Tests: Stabilized the full-rerun E2E control test by asserting new-run artifacts in storage, removing flaky UI timing dependence under `pytest -n auto`.
+- Added: Detail sidebar score cards now support inline editing with per-score pencil controls, Save/Cancel actions, and persistence through the existing result PATCH API.
+- Changed: Score editing in detail view is type-locked; boolean scores remain boolean and value scores remain value-only, and keyboard save shortcuts were removed in favor of explicit Save clicks.
+- Changed: Detail edit pencils for scores and annotation now appear on hover for a cleaner default sidebar presentation.
+- Tests: Added E2E coverage for detail score editing, including type-specific controls and persisted updates after page reload.
+- Fixed: `ezvals skills add` now installs the full bundled skill directory, including nested `use-cases/` and `ezvals-docs/` folders.
+- Tests: Added CLI unit assertions that `skills add` installs nested skill content for both canonical and `.agents/` fallback installs.
+- Changed: `ezvals skills add` now uses explicit target flags (`--agents`, `--claude`, `--codex`, `--cursor`, `--windsurf`, `--kiro`, `--roo`) instead of `--agents <name>`.
+- Changed: `ezvals skills add` now fails fast when no target flag is provided.
+- Changed: When `--agents` is selected, `.agents` is always treated as canonical source (including combined targets like `--agents --claude`).
+- Tests: Added CLI unit coverage for required target flags and `.agents` canonical-priority behavior.
+- Added: Agent skill now prompts users to file GitHub issues when they mention EZVals friction, bugs, or feature ideas.
+- Changed: Docs navigation reorders examples to show RAG Agent before Granular Evals.
+
 ## 0.1.6 - 2026-02-13
 
 - Fixed: Dataset and label chips now truncate long text with ellipsis and expose the full value via hover tooltip in results rows, comparison rows, and filter pills.

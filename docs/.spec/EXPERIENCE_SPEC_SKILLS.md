@@ -17,32 +17,47 @@ Install the evals skill to teach AI coding agents how to write and analyze evalu
 
 ### Behavior
 
+**Target Selection:**
+1. Users must select at least one target flag: `--agents`, `--claude`, `--codex`, `--cursor`, `--windsurf`, `--kiro`, `--roo`
+2. If no target flags are provided, the command fails immediately with an error
+
 **Canonical Location Selection:**
-1. Scan for existing agent directories in order: `.claude`, `.codex`, `.cursor`, `.windsurf`, `.kiro`, `.roo`
-2. If an agent directory exists, use it as the canonical location
-3. If no agent directories exist, create `.agents/` as the canonical location
+1. If `--agents` is selected, `.agents/` is the canonical source
+2. Otherwise, canonical source is the first selected agent in supported-order: `.claude`, `.codex`, `.cursor`, `.windsurf`, `.kiro`, `.roo`
 
 **Installation:**
 1. Copy skill files to canonical location at `<canonical>/skills/evals/`
-2. Create symlinks from other agent directories to canonical location
+2. Create symlinks from all other selected targets to canonical location
 3. If symlinks fail (e.g., Windows without admin), fall back to copying files
 
 **Git Exclusion:**
-- If `.agents/` is created, add it to `.git/info/exclude`
+- If canonical is `.agents/` and install is local, add `.agents/` to `.git/info/exclude`
 
 ### Options
 
 | Option | Description |
 |--------|-------------|
 | `--global`, `-g` | Install to home directory (~/) instead of current directory |
-| `--agents`, `-a` | Specific agents to link (can be repeated) |
+| `--agents` | Install canonical source to `.agents/` |
+| `--claude` | Install/link `.claude/skills/evals/` |
+| `--codex` | Install/link `.codex/skills/evals/` |
+| `--cursor` | Install/link `.cursor/skills/evals/` |
+| `--windsurf` | Install/link `.windsurf/skills/evals/` |
+| `--kiro` | Install/link `.kiro/skills/evals/` |
+| `--roo` | Install/link `.roo/skills/evals/` |
 
 ### Output
 
+**When no target selected:**
+```
+Error: Please specify at least one agent target flag (e.g. --claude, --codex, --agents).
+```
+
+**When installed:**
 ```
 Evals skill v{version} installed:
-  Source: .{agent}/skills/evals/
-  Linked: .codex, .cursor, .windsurf, .kiro, .roo
+  Source: .agents/skills/evals/
+  Linked: .claude, .codex
 
 Invoke with /evals in your agent.
 ```
@@ -112,7 +127,7 @@ Project (evalkit/)
     .cursor/skills/evals    ✗ not installed
     ...
 
-Run 'ezvals skills add' to install or fix.
+Run 'ezvals skills add --claude' (or your chosen target flags) to install or fix.
 ```
 
 ### Status Indicators
@@ -169,4 +184,4 @@ This is used by:
 | Windsurf | `.windsurf/` | |
 | Kiro | `.kiro/` | |
 | Roo | `.roo/` | |
-| Fallback | `.agents/` | Created if no others exist |
+| Shared canonical | `.agents/` | Used when `--agents` is selected |

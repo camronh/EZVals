@@ -6,11 +6,12 @@ import traceback
 from contextlib import redirect_stdout, nullcontext
 from pathlib import Path
 from threading import Thread
-from typing import Any, Dict, List, Optional, Union, Callable
+from typing import Any, Dict, List, Optional, Union, Callable, TypedDict
 
-from ezvals.decorators import EvalFunction
+from ezvals.config import load_config, DEFAULT_CONFIG
+from ezvals.decorators import EvalFunction, run_metadata_var
 from ezvals.discovery import EvalDiscovery
-from ezvals.schemas import EvalResult, Score
+from ezvals.schemas import EvalResult
 
 
 def _run_async_with_loop_handling(coro_fn):
@@ -41,6 +42,14 @@ def _run_async_with_loop_handling(coro_fn):
     if "err" in error_holder:
         raise error_holder["err"]
     return result_holder.get("res")
+
+
+class RunResult(TypedDict):
+    summary: Dict[str, Any]
+    saved_path: Optional[str]
+    run_id: str
+    session_name: str
+    run_name: Optional[str]
 
 
 class EvalRunner:
@@ -145,6 +154,63 @@ class EvalRunner:
             error=f"Error running {func.func.__name__}: {e}\n{traceback.format_exc()}"
         )]
 
+    def _make_loader_error_result_dict(self, func: EvalFunction, e: Exception) -> Dict[str, Any]:
+        return {
+            "function": func.func.__name__,
+            "dataset": func.dataset,
+            "labels": func.labels,
+            "result": EvalResult(
+                input=None,
+                output=None,
+                error=f"input_loader failed: {e}\n{traceback.format_exc()}",
+            ).model_dump(),
+        }
+
+    def _to_result_dict(self, func: EvalFunction, result: EvalResult) -> Dict[str, Any]:
+        return {
+            "function": func.func.__name__,
+            "dataset": func.dataset,
+            "labels": func.labels,
+            "result": result.model_dump(),
+        }
+
+    async def _run_single_eval(
+        self,
+        func: EvalFunction,
+        on_start: Optional[Callable[[EvalFunction], None]],
+        on_complete: Optional[Callable[[EvalFunction, Dict], None]],
+        is_cancelled: Callable[[], bool],
+        run_sync_in_thread: bool,
+    ) -> List[Dict[str, Any]]:
+        if self.timeout is not None:
+            func.timeout = self.timeout
+
+        if on_start:
+            on_start(func)
+
+        if is_cancelled():
+            return []
+
+        if func.is_async:
+            results = await self.run_async_eval(func)
+        elif run_sync_in_thread:
+            results = await asyncio.to_thread(self.run_sync_eval, func)
+        else:
+            results = self.run_sync_eval(func)
+
+        if is_cancelled():
+            return []
+
+        completed: List[Dict[str, Any]] = []
+        for result in results:
+            if is_cancelled():
+                break
+            result_dict = self._to_result_dict(func, result)
+            completed.append(result_dict)
+            if on_complete and not is_cancelled():
+                on_complete(func, result_dict)
+        return completed
+
     async def run_async_eval(self, func: EvalFunction) -> List[EvalResult]:
         # Capture stdout when not in verbose mode and running sequentially (concurrency == 1)
         # Note: redirect_stdout doesn't work reliably with concurrent execution (>1)
@@ -183,187 +249,62 @@ class EvalRunner:
         async def wait_while_paused():
             while is_paused() and not is_cancelled():
                 await asyncio.sleep(0.05)
-        
-        if self.concurrency == 1:
-            # Sequential execution
-            for func in functions:
+
+        async def run_single(
+            func: EvalFunction,
+            semaphore: Optional[asyncio.Semaphore],
+            run_sync_in_thread: bool,
+        ) -> List[Dict[str, Any]]:
+            await wait_while_paused()
+            if is_cancelled():
+                return []
+
+            if func.input_loader:
+                try:
+                    eval_funcs = await self._expand_with_loader(func)
+                except Exception as e:
+                    return [self._make_loader_error_result_dict(func, e)]
+            else:
+                eval_funcs = [func]
+
+            completed: List[Dict[str, Any]] = []
+            for eval_func in eval_funcs:
                 await wait_while_paused()
                 if is_cancelled():
                     break
 
-                # Expand input_loader functions
-                if func.input_loader:
-                    try:
-                        expanded_funcs = await self._expand_with_loader(func)
-                    except Exception as e:
-                        all_results.append({
-                            "function": func.func.__name__,
-                            "dataset": func.dataset,
-                            "labels": func.labels,
-                            "result": EvalResult(
-                                input=None, output=None,
-                                error=f"input_loader failed: {e}\n{traceback.format_exc()}"
-                            ).model_dump()
-                        })
-                        continue
-
-                    for expanded_func in expanded_funcs:
-                        await wait_while_paused()
+                if semaphore:
+                    async with semaphore:
                         if is_cancelled():
                             break
-                        if self.timeout is not None:
-                            expanded_func.timeout = self.timeout
-                        if on_start:
-                            on_start(expanded_func)
-                        if is_cancelled():
-                            break
-                        if expanded_func.is_async:
-                            results = await self.run_async_eval(expanded_func)
-                        else:
-                            results = self.run_sync_eval(expanded_func)
-                        if is_cancelled():
-                            break
-                        for result in results:
-                            if is_cancelled():
-                                break
-                            result_dict = {
-                                "function": expanded_func.func.__name__,
-                                "dataset": expanded_func.dataset,
-                                "labels": expanded_func.labels,
-                                "result": result.model_dump()
-                            }
-                            all_results.append(result_dict)
-                            if on_complete and not is_cancelled():
-                                on_complete(expanded_func, result_dict)
-                    continue
-
-                # Apply global timeout if set
-                if self.timeout is not None:
-                    func.timeout = self.timeout
-
-                # Call on_start callback if provided
-                if on_start:
-                    on_start(func)
-
-                if is_cancelled():
-                    break
-
-                if func.is_async:
-                    results = await self.run_async_eval(func)
+                        completed.extend(
+                            await self._run_single_eval(
+                                eval_func,
+                                on_start=on_start,
+                                on_complete=on_complete,
+                                is_cancelled=is_cancelled,
+                                run_sync_in_thread=run_sync_in_thread,
+                            )
+                        )
                 else:
-                    results = self.run_sync_eval(func)
+                    completed.extend(
+                        await self._run_single_eval(
+                            eval_func,
+                            on_start=on_start,
+                            on_complete=on_complete,
+                            is_cancelled=is_cancelled,
+                            run_sync_in_thread=run_sync_in_thread,
+                        )
+                    )
+            return completed
 
+        if self.concurrency == 1:
+            for func in functions:
+                all_results.extend(await run_single(func, semaphore=None, run_sync_in_thread=False))
                 if is_cancelled():
                     break
-
-                for result in results:
-                    if is_cancelled():
-                        break
-                    result_dict = {
-                        "function": func.func.__name__,
-                        "dataset": func.dataset,
-                        "labels": func.labels,
-                        "result": result.model_dump()
-                    }
-                    all_results.append(result_dict)
-
-                    # Call on_complete callback if provided
-                    if on_complete and not is_cancelled():
-                        on_complete(func, result_dict)
         else:
-            # Concurrent execution
             semaphore = asyncio.Semaphore(self.concurrency)
-
-            async def run_single(func: EvalFunction):
-                await wait_while_paused()
-                if is_cancelled():
-                    return []
-
-                # Handle input_loader expansion
-                if func.input_loader:
-                    try:
-                        expanded_funcs = await self._expand_with_loader(func)
-                    except Exception as e:
-                        return [{
-                            "function": func.func.__name__,
-                            "dataset": func.dataset,
-                            "labels": func.labels,
-                            "result": EvalResult(
-                                input=None, output=None,
-                                error=f"input_loader failed: {e}\n{traceback.format_exc()}"
-                            ).model_dump()
-                        }]
-
-                    all_completed = []
-                    for expanded_func in expanded_funcs:
-                        await wait_while_paused()
-                        if is_cancelled():
-                            break
-                        if self.timeout is not None:
-                            expanded_func.timeout = self.timeout
-
-                        async with semaphore:
-                            if is_cancelled():
-                                break
-                            if on_start:
-                                on_start(expanded_func)
-                            if is_cancelled():
-                                break
-                            if expanded_func.is_async:
-                                results = await self.run_async_eval(expanded_func)
-                            else:
-                                results = await asyncio.to_thread(self.run_sync_eval, expanded_func)
-                            if is_cancelled():
-                                break
-                            for result in results:
-                                result_dict = {
-                                    "function": expanded_func.func.__name__,
-                                    "dataset": expanded_func.dataset,
-                                    "labels": expanded_func.labels,
-                                    "result": result.model_dump()
-                                }
-                                all_completed.append(result_dict)
-                                if on_complete and not is_cancelled():
-                                    on_complete(expanded_func, result_dict)
-                    return all_completed
-
-                # Apply global timeout if set
-                if self.timeout is not None:
-                    func.timeout = self.timeout
-
-                await wait_while_paused()
-                async with semaphore:
-                    if is_cancelled():
-                        return []
-
-                    if on_start:
-                        on_start(func)
-
-                    if is_cancelled():
-                        return []
-
-                    if func.is_async:
-                        results = await self.run_async_eval(func)
-                    else:
-                        results = await asyncio.to_thread(self.run_sync_eval, func)
-
-                    if is_cancelled():
-                        return []
-
-                    completed = []
-                    for result in results:
-                        result_dict = {
-                            "function": func.func.__name__,
-                            "dataset": func.dataset,
-                            "labels": func.labels,
-                            "result": result.model_dump()
-                        }
-                        completed.append(result_dict)
-
-                        # Call on_complete callback if provided
-                        if on_complete and not is_cancelled():
-                            on_complete(func, result_dict)
-                    return completed
 
             tasks = []
             func_iter = iter(functions)
@@ -375,7 +316,7 @@ class EvalRunner:
                     func = next(func_iter)
                 except StopIteration:
                     return False
-                tasks.append(asyncio.create_task(run_single(func)))
+                tasks.append(asyncio.create_task(run_single(func, semaphore=semaphore, run_sync_in_thread=True)))
                 return True
 
             for _ in range(self.concurrency):
@@ -560,3 +501,90 @@ def run_evals(
     runner = EvalRunner(concurrency=concurrency, verbose=verbose, timeout=timeout)
     raw_results = _run_async_with_loop_handling(lambda: runner.run_all_async(functions))
     return [EvalResult(**r["result"]) for r in raw_results]
+
+
+def run(
+    path: str,
+    dataset: Optional[str] = None,
+    labels: Optional[List[str]] = None,
+    limit: Optional[int] = None,
+    output: Optional[str] = None,
+    concurrency: Optional[int] = None,
+    timeout: Optional[float] = None,
+    verbose: bool = False,
+    session: Optional[str] = None,
+    run_name: Optional[str] = None,
+    no_save: bool = False,
+    results_dir: Optional[str] = None,
+    overwrite: Optional[bool] = None,
+    use_config: bool = False,
+    on_start: Optional[Callable[[EvalFunction], None]] = None,
+    on_complete: Optional[Callable[[EvalFunction, Dict], None]] = None,
+) -> RunResult:
+    """Programmatic equivalent of `ezvals run`."""
+    from ezvals.storage import ResultsStore
+
+    config = load_config() if use_config else DEFAULT_CONFIG.copy()
+    effective_concurrency = concurrency if concurrency is not None else config.get("concurrency", 1)
+    effective_timeout = timeout if timeout is not None else config.get("timeout")
+    effective_results_dir = results_dir if results_dir is not None else config.get("results_dir", ".ezvals/sessions")
+    effective_overwrite = overwrite if overwrite is not None else config.get("overwrite", True)
+
+    function_name = None
+    resolved_path = path
+    if "::" in resolved_path:
+        resolved_path, function_name = resolved_path.rsplit("::", 1)
+
+    path_obj = Path(resolved_path)
+    if not path_obj.exists():
+        raise ValueError(f"Path {resolved_path} does not exist")
+
+    runner = EvalRunner(concurrency=effective_concurrency, verbose=verbose, timeout=effective_timeout)
+    store = ResultsStore(effective_results_dir)
+    run_id = store.generate_run_id()
+    session_name = session if session else "default"
+
+    token = run_metadata_var.set(
+        {
+            "run_id": run_id,
+            "session_name": session_name,
+            "run_name": run_name,
+            "eval_path": resolved_path,
+        }
+    )
+    try:
+        summary = runner.run(
+            path=resolved_path,
+            dataset=dataset,
+            labels=labels,
+            function_name=function_name,
+            on_start=on_start,
+            on_complete=on_complete,
+            limit=limit,
+        )
+        summary["path"] = resolved_path
+    finally:
+        run_metadata_var.reset(token)
+
+    saved_path = None
+    if not no_save:
+        if output:
+            runner._save_results(summary, output)
+            saved_path = output
+        else:
+            store.save_run(
+                summary,
+                run_id=run_id,
+                session_name=session_name,
+                run_name=run_name,
+                overwrite=effective_overwrite,
+            )
+            saved_path = str(store._find_run_file(run_id))
+
+    return {
+        "summary": summary,
+        "saved_path": saved_path,
+        "run_id": run_id,
+        "session_name": session_name,
+        "run_name": run_name,
+    }

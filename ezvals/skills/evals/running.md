@@ -136,6 +136,34 @@ ezvals run evals/ --output results.json
 ezvals run evals/ --no-save
 ```
 
+## Temporary Ad-Hoc Runs (No Saved Files)
+
+When you want a quick one-off eval (for example, testing an idea in a temp script) and do **not** want to persist run files, use the SDK `run(...)` with `no_save=True`.
+
+```python
+from ezvals import eval, EvalResult, run
+
+
+@eval()
+def test_temp_behavior():
+    return EvalResult(
+        input="hello",
+        output="hello",
+        scores={"key": "pass", "passed": True},
+    )
+
+
+if __name__ == "__main__":
+    result = run(
+        path=__file__,   # run evals defined in this temp script
+        no_save=True,    # do not write a run JSON file
+        verbose=True,
+    )
+    print(result["summary"]["total_evaluations"])
+```
+
+Use this pattern for scratch experiments, fast local checks, and agent-generated temp eval files.
+
 ## Serving Results for Review
 
 After running evals, serve them for the user to review in the browser.
