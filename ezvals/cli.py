@@ -17,9 +17,9 @@ from threading import Thread
 from rich.console import Console
 
 from ezvals.formatters import format_results_table
-from ezvals.decorators import EvalFunction, run_metadata_var
+from ezvals.decorators import EvalFunction
 from ezvals.discovery import EvalDiscovery
-from ezvals.runner import EvalRunner
+from ezvals.runner import run as run_sdk
 from ezvals.config import load_config
 
 
@@ -475,37 +475,11 @@ def run_cmd(
     no_save: bool,
 ):
     """Run evaluations headless. Optimized for LLM agents by default."""
-    from pathlib import Path as PathLib
-    from ezvals.storage import ResultsStore
-
-    # Load config and merge with CLI args
-    config = load_config()
-    concurrency = concurrency if concurrency is not None else config.get("concurrency", 1)
-    timeout = timeout if timeout is not None else config.get("timeout")
-
-    # Parse path to extract file path and optional function name
-    function_name = None
-    if '::' in path:
-        file_path, function_name = path.rsplit('::', 1)
-        path = file_path
-
-    # Validate path exists
-    path_obj = PathLib(path)
-    if not path_obj.exists():
-        console.print(f"[red]Error: Path {path} does not exist[/red]")
-        sys.exit(1)
-
     labels = list(label) if label else None
+    display_path = path.rsplit('::', 1)[0] if '::' in path else path
 
-    # Set up runner and reporter based on mode
-    runner = EvalRunner(concurrency=concurrency, verbose=verbose, timeout=timeout)
+    # Set up reporter based on mode
     reporter = ProgressReporter() if visual else None
-
-    # Generate run metadata for context var (so eval code can access it)
-    results_dir_resolved = config.get("results_dir", ".ezvals/sessions")
-    store = ResultsStore(results_dir_resolved)
-    run_id = store.generate_run_id()
-    sess = session if session else "default"
 
     def on_complete_callback(func, result_dict):
         if verbose:
@@ -518,47 +492,32 @@ def run_cmd(
     if visual:
         console.print("[bold green]Running evaluations...[/bold green]")
     else:
-        console.print(f"Running {path}...")
-
-    # Set run metadata context var for this run
-    token = run_metadata_var.set({
-        'run_id': run_id,
-        'session_name': sess,
-        'run_name': run_name,
-        'eval_path': path,
-    })
+        console.print(f"Running {display_path}...")
 
     try:
-        summary = runner.run(
+        run_result = run_sdk(
             path=path,
             dataset=dataset,
             labels=labels,
-            function_name=function_name,
+            limit=limit,
+            output=output,
+            concurrency=concurrency,
+            timeout=timeout,
+            verbose=verbose,
+            session=session,
+            run_name=run_name,
+            no_save=no_save,
+            use_config=True,
             on_start=reporter.on_start if reporter else None,
             on_complete=on_complete_callback if verbose or reporter else None,
-            limit=limit
         )
-        summary["path"] = path
+        summary = run_result["summary"]
+        saved_path = run_result["saved_path"]
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
         if visual:
             console.print(traceback.format_exc())
         sys.exit(1)
-    finally:
-        run_metadata_var.reset(token)
-
-    # Save results to file (unless --no-save)
-    saved_path = None
-    if not no_save:
-        if output:
-            # --output overrides default results_dir
-            runner._save_results(summary, output)
-            saved_path = output
-        else:
-            # Save using pre-generated run_id and store instance
-            overwrite = config.get("overwrite", True)
-            store.save_run(summary, run_id=run_id, session_name=sess, run_name=run_name, overwrite=overwrite)
-            saved_path = str(store._find_run_file(run_id))
 
     if visual:
         # Rich output mode: progress dots, failures, table, summary
@@ -689,6 +648,55 @@ def _run_server_until_stop(app, server, server_thread) -> bool:
     return restart_requested
 
 
+def _serve_app(
+    app,
+    port: int,
+    query_params: Optional[List[tuple[str, str]]] = None,
+    status_lines: Optional[List[str]] = None,
+    open_browser: bool = True,
+    auto_run: bool = False,
+) -> Optional[int]:
+    import uvicorn
+
+    requested_port = port
+    port = _find_available_port(port)
+    if port != requested_port:
+        console.print(f"[yellow]Port {requested_port} in use → using {port}[/yellow]")
+
+    url = f"http://127.0.0.1:{port}"
+    if query_params:
+        url = f"{url}?{urllib.parse.urlencode(query_params, doseq=True)}"
+    console.print(f"\n[bold green]EZVals UI[/bold green] serving at: [bold blue]{url}[/bold blue]")
+    for line in status_lines or []:
+        console.print(line)
+    console.print("Press Esc to stop (or Ctrl+C)\n")
+
+    if open_browser:
+        Thread(target=lambda: (time.sleep(0.5), webbrowser.open(url)), daemon=True).start()
+
+    config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning", access_log=False)
+    server = uvicorn.Server(config)
+    server_thread = Thread(target=server.run)
+
+    if auto_run:
+        def do_auto_run():
+            time.sleep(0.5)
+            try:
+                req = urllib.request.Request(
+                    f"http://127.0.0.1:{port}/api/runs/rerun",
+                    data=b'{}',
+                    headers={'Content-Type': 'application/json'},
+                    method='POST',
+                )
+                urllib.request.urlopen(req, timeout=5)
+            except urllib.error.URLError:
+                pass
+        Thread(target=do_auto_run, daemon=True).start()
+
+    restart_requested = _run_server_until_stop(app, server, server_thread)
+    return port if restart_requested else None
+
+
 def _serve(
     path: Optional[str],
     dataset: Optional[str],
@@ -706,7 +714,6 @@ def _serve(
     """Serve a web UI to browse and run evaluations."""
     try:
         from ezvals.server import create_app
-        import uvicorn
     except Exception:
         console.print("[red]Missing server dependencies. Install with:[/red] \n  uv add fastapi uvicorn jinja2")
         raise
@@ -745,46 +752,19 @@ def _serve(
     elif not functions:
         console.print("[yellow]No evaluations found matching the criteria.[/yellow]")
 
-    requested_port = port
-    port = _find_available_port(port)
-    if port != requested_port:
-        console.print(f"[yellow]Port {requested_port} in use → using {port}[/yellow]")
-
-    url = f"http://127.0.0.1:{port}"
-    if query_params:
-        url = f"{url}?{urllib.parse.urlencode(query_params, doseq=True)}"
-    console.print(f"\n[bold green]EZVals UI[/bold green] serving at: [bold blue]{url}[/bold blue]")
-    if auto_run:
-        console.print(f"[cyan]Auto-running {len(functions)} evaluation(s)...[/cyan]")
-    else:
-        console.print(f"[cyan]Found {len(functions)} evaluation(s). Click Run to start.[/cyan]")
-    console.print("Press Esc to stop (or Ctrl+C)\n")
-
-    if open_browser:
-        Thread(target=lambda: (time.sleep(0.5), webbrowser.open(url)), daemon=True).start()
-
-    config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning", access_log=False)
-    server = uvicorn.Server(config)
-    server_thread = Thread(target=server.run)
-
-    # Auto-run evals if --run flag was passed
-    if auto_run:
-        def do_auto_run():
-            time.sleep(0.5)  # Wait for server to be ready
-            try:
-                req = urllib.request.Request(
-                    f"http://127.0.0.1:{port}/api/runs/rerun",
-                    data=b'{}',
-                    headers={'Content-Type': 'application/json'},
-                    method='POST'
-                )
-                urllib.request.urlopen(req, timeout=5)
-            except urllib.error.URLError:
-                pass  # Server not ready, user can click Run manually
-        Thread(target=do_auto_run, daemon=True).start()
-
-    restart_requested = _run_server_until_stop(app, server, server_thread)
-    return port if restart_requested else None
+    status_line = (
+        f"[cyan]Auto-running {len(functions)} evaluation(s)...[/cyan]"
+        if auto_run
+        else f"[cyan]Found {len(functions)} evaluation(s). Click Run to start.[/cyan]"
+    )
+    return _serve_app(
+        app,
+        port=port,
+        query_params=query_params,
+        status_lines=[status_line],
+        open_browser=open_browser,
+        auto_run=auto_run,
+    )
 
 
 def _serve_from_json(
@@ -797,7 +777,6 @@ def _serve_from_json(
     """Serve web UI loading an existing run JSON file."""
     try:
         from ezvals.server import create_app
-        import uvicorn
     except Exception:
         console.print("[red]Missing server dependencies. Install with:[/red] \n  uv add fastapi uvicorn jinja2")
         raise
@@ -849,27 +828,14 @@ def _serve_from_json(
     if not source_exists:
         console.print(f"[yellow]Warning: Source eval path '{eval_path}' not found. View-only mode (rerun disabled).[/yellow]")
 
-    requested_port = port
-    port = _find_available_port(port)
-    if port != requested_port:
-        console.print(f"[yellow]Port {requested_port} in use → using {port}[/yellow]")
-
-    url = f"http://127.0.0.1:{port}"
-    if query_params:
-        url = f"{url}?{urllib.parse.urlencode(query_params, doseq=True)}"
-    console.print(f"\n[bold green]EZVals UI[/bold green] serving at: [bold blue]{url}[/bold blue]")
-    console.print(f"[cyan]Loaded run: {run_name} ({len(run_data.get('results', []))} results)[/cyan]")
-    console.print("Press Esc to stop (or Ctrl+C)\n")
-
-    if open_browser:
-        Thread(target=lambda: (time.sleep(0.5), webbrowser.open(url)), daemon=True).start()
-
-    config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning", access_log=False)
-    server = uvicorn.Server(config)
-    server_thread = Thread(target=server.run)
-
-    restart_requested = _run_server_until_stop(app, server, server_thread)
-    return port if restart_requested else None
+    return _serve_app(
+        app,
+        port=port,
+        query_params=query_params,
+        status_lines=[f"[cyan]Loaded run: {run_name} ({len(run_data.get('results', []))} results)[/cyan]"],
+        open_browser=open_browser,
+        auto_run=False,
+    )
 
 
 # ============================================================================

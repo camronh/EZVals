@@ -1,6 +1,5 @@
 import pytest
 from click.testing import CliRunner
-import tempfile
 import json
 from pathlib import Path
 
@@ -13,6 +12,7 @@ from ezvals.cli import (
     _build_serve_query_params,
     _is_port_available,
 )
+from ezvals import run as run_sdk
 from ezvals.storage import ResultsStore
 
 
@@ -36,6 +36,77 @@ class TestCLI:
         assert '--concurrency' in result.output
         assert '--verbose' in result.output
         assert '--visual' in result.output
+
+    def test_run_command_uses_sdk(self, monkeypatch):
+        captured = {}
+
+        def fake_run_sdk(**kwargs):
+            captured.update(kwargs)
+            return {
+                "summary": {
+                    "total_evaluations": 0,
+                    "total_functions": 0,
+                    "total_errors": 0,
+                    "total_with_scores": 0,
+                    "total_passed": 0,
+                    "average_latency": 0,
+                    "results": [],
+                },
+                "saved_path": "fake.json",
+            }
+
+        monkeypatch.setattr("ezvals.cli.run_sdk", fake_run_sdk)
+        result = self.runner.invoke(cli, ['run', 'evals.py::test_one', '--dataset', 'qa'])
+        assert result.exit_code == 0
+        assert captured["path"] == "evals.py::test_one"
+        assert captured["dataset"] == "qa"
+        assert captured["use_config"] is True
+
+    def test_run_sdk_programmatic_with_flags(self):
+        with self.runner.isolated_filesystem():
+            with open('test_programmatic.py', 'w') as f:
+                f.write("""
+from ezvals import eval, EvalResult
+
+@eval(dataset="ds1")
+def test_ds1():
+    return EvalResult(input="a", output="a")
+
+@eval(dataset="ds2")
+def test_ds2():
+    return EvalResult(input="b", output="b")
+""")
+
+            result = run_sdk(
+                path='test_programmatic.py',
+                dataset='ds1',
+                limit=1,
+                output='programmatic-results.json',
+            )
+            assert Path('programmatic-results.json').exists()
+            with open('programmatic-results.json') as f:
+                data = json.load(f)
+            assert result['saved_path'] == 'programmatic-results.json'
+            assert data['total_functions'] == 1
+            assert data['total_evaluations'] == 1
+
+    def test_run_sdk_programmatic_error(self):
+        with pytest.raises(ValueError):
+            run_sdk(path='definitely_missing_evals.py')
+
+    def test_run_sdk_programmatic_does_not_create_config_by_default(self):
+        with self.runner.isolated_filesystem():
+            with open('test_programmatic_cfg.py', 'w') as f:
+                f.write("""
+from ezvals import eval, EvalResult
+
+@eval()
+def test_cfg():
+    return EvalResult(input="x", output="y")
+""")
+
+            run_sdk(path='test_programmatic_cfg.py', no_save=True)
+            assert not Path('ezvals.json').exists()
     
     def test_run_with_file(self):
         with self.runner.isolated_filesystem():

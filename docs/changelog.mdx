@@ -5,6 +5,11 @@ description: "All notable changes to EZVals"
 
 ## Unreleased
 
+- Added: SDK `run(...)` API for programmatic eval execution with `ezvals run` option parity; CLI `ezvals run` now calls this shared core path.
+- Changed: SDK `run(...)` now defaults to built-in runtime settings without creating `ezvals.json`; CLI continues to honor config by explicitly opting into config loading.
+- Changed: Runner internals now share one execution path for sequential and concurrent result shaping, reducing duplicated callback/loader/result mapping code.
+- Changed: Serve startup for eval-path and JSON-path flows now uses a shared server boot helper (port/url/browser/server lifecycle) to reduce duplication.
+- Tests: Stabilized the full-rerun E2E control test by asserting new-run artifacts in storage, removing flaky UI timing dependence under `pytest -n auto`.
 - Added: Detail sidebar score cards now support inline editing with per-score pencil controls, Save/Cancel actions, and persistence through the existing result PATCH API.
 - Changed: Score editing in detail view is type-locked; boolean scores remain boolean and value scores remain value-only, and keyboard save shortcuts were removed in favor of explicit Save clicks.
 - Changed: Detail edit pencils for scores and annotation now appear on hover for a cleaner default sidebar presentation.

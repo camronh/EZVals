@@ -7,7 +7,7 @@ This document specifies the Python API experience for EZVals.
 ## Public API
 
 ```python
-from ezvals import eval, EvalResult, TraceData, EvalContext, run_evals, EvalCase
+from ezvals import eval, EvalResult, TraceData, EvalContext, run_evals, run, EvalCase
 ```
 
 | Export | Type | Purpose |
@@ -17,7 +17,45 @@ from ezvals import eval, EvalResult, TraceData, EvalContext, run_evals, EvalCase
 | `TraceData` | class | Structured trace/debug data storage |
 | `EvalContext` | class | Mutable builder for results |
 | `run_evals` | function | Programmatic execution |
+| `run` | function | Programmatic `ezvals run` execution |
 | `EvalCase` | TypedDict | Schema for `cases` array items |
+
+---
+
+## `run`
+
+**Intent:** User wants SDK-level run execution with the same behavior/options as `ezvals run`.
+
+```python
+from ezvals import run
+
+result = run(
+    path="evals.py",
+    session="my-session",
+    run_name="baseline",
+    concurrency=4,
+)
+# result["summary"], result["saved_path"], result["run_id"], ...
+```
+
+```gherkin
+Scenario: Programmatic run command
+  Given a script calling run(path="evals.py", dataset="qa")
+  When run executes
+  Then behavior matches shell `ezvals run` for equivalent options
+  And it returns run metadata, summary, and saved path details
+
+Scenario: Programmatic command failure
+  Given run(path="missing.py")
+  When run executes
+  Then it raises a ValueError
+
+Scenario: SDK run does not create config by default
+  Given run(path="evals.py", no_save=True)
+  When no ezvals.json exists yet
+  Then run uses built-in defaults
+  And it does not create ezvals.json
+```
 
 ---
 

@@ -11,6 +11,17 @@ EZVals has three main commands:
 - `ezvals run` - Run evaluations headlessly (for CI/CD pipelines)
 - `ezvals export` - Export a run to various formats (JSON, CSV, Markdown)
 
+## Programmatic Invocation
+
+You can call the SDK equivalent of `ezvals run` from Python:
+
+```python
+from ezvals import run
+
+result = run(path="examples", concurrency=4, session="adhoc")
+print(result["saved_path"])
+```
+
 ## ezvals serve
 
 Start the web UI to discover and run evaluations interactively.

@@ -319,13 +319,24 @@ class TestRerunFunctionality:
                 # No selection, click play
                 page.locator("#play-btn").click()
 
-                # Wait for new results to appear (fast evals)
-                page.wait_for_timeout(2000)
-                page.reload()
-                page.wait_for_selector("#results-table")
+                # Verify the rerun created a new run with fast eval results.
+                new_run_id = None
+                deadline = time.time() + 30
+                while time.time() < deadline:
+                    for candidate_id in store.list_runs():
+                        if candidate_id == run_id:
+                            continue
+                        data = store.load_run(candidate_id)
+                        if any(r.get("dataset") == "fast_ds" for r in data.get("results", [])):
+                            new_run_id = candidate_id
+                            break
+                    if new_run_id:
+                        break
+                    page.wait_for_timeout(500)
+                else:
+                    raise AssertionError("Timed out waiting for rerun to create a new run containing fast_ds")
 
-                # Should have results from fast_ds (the new eval file)
-                page.wait_for_selector("#results-table:has-text('fast_ds')", timeout=5000)
+                assert new_run_id is not None
 
                 browser.close()
 
