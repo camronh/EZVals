@@ -8,7 +8,9 @@ import secrets
 import shutil
 import tempfile
 import time
+from copy import deepcopy
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 from typing import Any, Dict, Optional
@@ -295,9 +297,23 @@ class ResultsStore:
             result_updates = updates.get("result")
             if result_updates:
                 result_entry = entry.setdefault("result", {})
+                history_entries = []
                 for key in ("scores", "annotation", "annotations"):
                     if key in result_updates:
+                        before = deepcopy(result_entry.get(key))
+                        after = deepcopy(result_updates[key])
                         result_entry[key] = result_updates[key]
+                        if before != after:
+                            history_entries.append(
+                                {
+                                    "field": key,
+                                    "before": before,
+                                    "after": after,
+                                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                                }
+                            )
+                if history_entries:
+                    result_entry.setdefault("correction_history", []).extend(history_entries)
 
             # Persist atomically
             run_file = self._find_run_file(run_id)

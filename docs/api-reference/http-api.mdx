@@ -148,11 +148,30 @@ Update annotations or scores on a result.
 **Response:**
 
 ```json
-{"ok": true, "result": {...}}
+{
+  "ok": true,
+  "result": {
+    "result": {
+      "annotation": "Reviewed - looks good",
+      "scores": [{"key": "manual", "passed": true}],
+      "correction_history": [
+        {
+          "field": "annotation",
+          "before": null,
+          "after": "Reviewed - looks good",
+          "timestamp": "2026-02-20T12:34:56.000000+00:00"
+        }
+      ]
+    }
+  }
+}
 ```
 
 <Note>
 Only `annotation`, `annotations`, and `scores` fields can be updated.
+</Note>
+<Note>
+When a PATCH changes one of those fields, EZVals appends a `correction_history` entry with `before`/`after` values and a UTC timestamp.
 </Note>
 
 ## Export

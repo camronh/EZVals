@@ -96,6 +96,40 @@ def test_patch_endpoint_updates_json(tmp_path: Path):
     assert data["results"][1]["result"]["scores"] == [{"key": "metric", "value": 1.0}]
 
 
+def test_patch_tracks_correction_history(tmp_path: Path):
+    store = ResultsStore(tmp_path / "runs")
+    summary = make_summary()
+    run_id = store.save_run(summary, "2024-01-01T00-00-00Z")
+
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+    client = TestClient(app)
+
+    score_update = [{"key": "metric", "value": 1.0, "notes": "human correction"}]
+    first = client.patch(f"/api/runs/{run_id}/results/1", json={"result": {"scores": score_update}})
+    assert first.status_code == 200
+
+    second = client.patch(f"/api/runs/{run_id}/results/1", json={"result": {"annotation": "judge missed detail"}})
+    assert second.status_code == 200
+
+    # Same value should not add duplicate history entries.
+    third = client.patch(f"/api/runs/{run_id}/results/1", json={"result": {"annotation": "judge missed detail"}})
+    assert third.status_code == 200
+
+    data = store.load_run(run_id)
+    history = data["results"][1]["result"]["correction_history"]
+    assert len(history) == 2
+
+    assert history[0]["field"] == "scores"
+    assert history[0]["before"] is None
+    assert history[0]["after"] == score_update
+    assert isinstance(history[0]["timestamp"], str) and history[0]["timestamp"]
+
+    assert history[1]["field"] == "annotation"
+    assert history[1]["before"] is None
+    assert history[1]["after"] == "judge missed detail"
+    assert isinstance(history[1]["timestamp"], str) and history[1]["timestamp"]
+
+
 def test_annotation_via_patch(tmp_path: Path):
     store = ResultsStore(tmp_path / "runs")
     summary = make_summary()

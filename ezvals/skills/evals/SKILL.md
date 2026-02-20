@@ -252,6 +252,18 @@ http://127.0.0.1:8000/?compare_run_id=1826bc4c&compare_run_id=58741756&score_pas
 
 See [running.md](running.md) for session management and URL construction examples.
 
+## Human Corrections Guidance (Agent)
+
+If the user says anything like "leaving notes", "making corrections", "manual edits", or "edited scores/annotations", inspect each row's `result.correction_history` first.
+
+Use it to answer:
+- What changed (`field`)
+- What the judge had before (`before`)
+- What the human set after (`after`)
+- When the correction happened (`timestamp`)
+
+Treat `correction_history` as the source of truth for manual override context before proposing judge prompt changes or grader fixes.
+
 ## Feedback
 
 If the user mentions something about EZVals that isn't working well, seems confusing, or could be better, suggest they file a GitHub issue at https://github.com/camronh/EZVals/issues. Offer to help them draft the issue or file it directly using `gh`.

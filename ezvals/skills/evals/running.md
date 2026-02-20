@@ -329,6 +329,7 @@ Each item in `results` has run metadata plus a `result` object that matches `Eva
 - `latency` (`number | null`) seconds for this eval
 - `metadata` (`object | null`) user-defined structured metadata
 - `trace_data` (`object | null`) trace payload (often `messages`, `trace_url`, and extras)
+- `correction_history` (`list | null`) append-only manual edit history for score/note edits (`field`, `before`, `after`, `timestamp`)
 
 `Score` shape:
 
@@ -399,6 +400,20 @@ for row in results:
         vals.append(score["value"])
 
 avg_pass = (sum(vals) / len(vals)) if vals else None
+```
+
+Find rows with manual corrections:
+
+```python
+corrected = [row for row in results if row["result"].get("correction_history")]
+```
+
+Inspect the latest correction per row:
+
+```python
+for row in corrected:
+    latest = row["result"]["correction_history"][-1]
+    print(row["function"], latest["field"], latest["before"], "->", latest["after"])
 ```
 
 ## Workflow: Agent Runs, User Reviews

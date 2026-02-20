@@ -208,6 +208,7 @@ Scenario: Save annotation
   Given the user is editing an annotation
   When the user types text and clicks Save
   Then the annotation saves to the JSON file via PATCH API
+  And a correction_history entry is appended with field="annotation", before, after, and timestamp
   And the view returns to read-only mode showing the annotation text
   And the annotation persists across page reloads
 
@@ -270,6 +271,7 @@ Scenario: Save score edits
   Given the user is editing a score
   When the user updates fields and clicks Save
   Then the scores save to the JSON file via PATCH API
+  And a correction_history entry is appended with field="scores", before, after, and timestamp
   And the score card returns to read-only mode
   And the edits persist across page reloads
   And score type does not change (boolean stays boolean, value stays value)
@@ -640,6 +642,14 @@ Results are stored in `.ezvals/sessions/` with hierarchical session directories:
         "metadata": {"model": "gpt-4"},
         "trace_data": {},
         "status": "completed",
+        "correction_history": [
+          {
+            "field": "scores",
+            "before": [{"key": "pass", "passed": false, "notes": "judge output"}],
+            "after": [{"key": "pass", "passed": true, "notes": "human correction"}],
+            "timestamp": "2026-02-20T12:34:56.000000+00:00"
+          }
+        ],
         "annotations": null
       }
     }
