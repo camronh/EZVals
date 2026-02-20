@@ -1117,6 +1117,49 @@ class TestStatusChipPosition:
 
                 browser.close()
 
+    def test_detail_output_shows_loading_state_while_running(self, tmp_path):
+        """Detail page should show loading indicator in output panel during running status."""
+        summary = {
+            "total_evaluations": 1,
+            "total_functions": 1,
+            "total_errors": 0,
+            "total_passed": 0,
+            "total_with_scores": 0,
+            "average_latency": 0.0,
+            "results": [
+                {
+                    "function": "test_running_detail_output",
+                    "dataset": "active_dataset",
+                    "labels": [],
+                    "result": {
+                        "input": "input payload",
+                        "output": "stale output that should not be shown",
+                        "reference": None,
+                        "scores": [],
+                        "error": None,
+                        "latency": None,
+                        "metadata": None,
+                        "status": "running",
+                    },
+                }
+            ],
+        }
+        store = ResultsStore(tmp_path / "runs")
+        run_id = store.save_run(summary, "2024-01-01T00-00-00Z")
+        app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+        with run_server(app) as url:
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page()
+                page.goto(f"{url}/runs/{run_id}/results/0")
+                page.wait_for_selector("#output-panel")
+
+                expect(page.locator("#output-loading-indicator")).to_be_visible()
+                expect(page.locator("#output-panel")).not_to_contain_text("stale output that should not be shown")
+
+                browser.close()
+
 
 def test_long_dataset_and_label_chips_truncate_with_tooltips(tmp_path):
     store = ResultsStore(tmp_path / "runs")

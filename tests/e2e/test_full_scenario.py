@@ -278,7 +278,8 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             )
             running_rows = page.locator("tr[data-row='main'][data-status='running']")
             if running_rows.count() > 0:
-                expect(running_rows.first.locator(".status-pill")).to_have_text("running")
+                expect(running_rows.first.locator(".status-indicator-running")).to_have_count(1)
+                expect(running_rows.first.locator(".status-pill", has_text="running")).to_have_count(0)
             page.wait_for_function(
                 "() => window.__skeletonSeen && window.__skeletonSeen.latency && "
                 "window.__skeletonSeen.output && window.__skeletonSeen.scores",

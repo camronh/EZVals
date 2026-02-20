@@ -165,6 +165,12 @@ Scenario: Message-format data rendering
   Then those sections default to a pretty chat-style rendering
   And each section provides a Pretty/Raw toggle
   And Raw shows the underlying JSON payload without transformation
+
+Scenario: Output loading state during active run
+  Given the detail view is open
+  And the selected result status is pending or running
+  Then the Output panel shows an animated loading state
+  And stale output text is hidden until the result reaches completed or error
 ```
 
 ### Navigation

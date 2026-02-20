@@ -5,6 +5,8 @@ description: "All notable changes to EZVals"
 
 ## Unreleased
 
+- Fixed: Detail view output now shows a subtle animated loading state while a result is `pending` or `running`, instead of showing stale output content.
+- Tests: Added E2E coverage to verify the detail output loading state is visible during running status and stale output text remains hidden.
 - Fixed: Long score key names no longer cause the score filter select control to overflow outside the filters panel.
 - Changed: Score keys are now validated with a maximum length of 32 characters.
 - Tests: Added unit and E2E regression coverage for score key max-length validation and long-key filter layout containment.

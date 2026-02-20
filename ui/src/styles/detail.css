@@ -132,3 +132,34 @@ body.resizing * { cursor: inherit !important; user-select: none !important; }
 .dark .msg-tool .msg-box-content, .dark .msg-tool_calls .msg-box-content { background: rgb(168 85 247 / 0.08); }
 .dark .msg-tool_result .msg-box-header { background: rgb(236 72 153 / 0.25); color: rgb(249 168 212); }
 .dark .msg-tool_result .msg-box-content { background: rgb(236 72 153 / 0.08); }
+
+.output-loading-state {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.25rem 0.1rem;
+}
+.output-loading-line {
+  position: relative;
+  overflow: hidden;
+  border-radius: 9999px;
+  height: 9px;
+  background: rgb(226 232 240 / 0.7);
+}
+.dark .output-loading-line {
+  background: rgb(39 39 42 / 0.9);
+}
+.output-loading-line::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(16 185 129 / 0.45), transparent);
+  animation: output-shimmer 1.5s ease-in-out infinite;
+}
+.output-loading-line-1 { width: 88%; }
+.output-loading-line-2 { width: 72%; }
+.output-loading-line-3 { width: 61%; }
+@keyframes output-shimmer {
+  100% { transform: translateX(100%); }
+}

@@ -414,9 +414,9 @@ export default function DetailPage() {
           const r = await fetch(`/api/runs/${encodeURIComponent(runId)}/results/${data.index}`)
           if (r.ok) {
             const next = await r.json() as ResultDetailPayload
+            setData(next)
             const status = next.result?.result?.status
             if (status === 'completed' || status === 'error') {
-              setData(next)
               setIsRerunning(false)
               return
             }
@@ -580,6 +580,7 @@ export default function DetailPage() {
   const resultEntry = data.result
   const result = (resultEntry?.result || {}) as NonNullable<RunResultRow['result']>
   const status = result.status || 'completed'
+  const isOutputLoading = isRerunning || status === 'pending' || status === 'running'
   const hasReference = result.reference != null && result.reference !== '—'
   const hasMetadata = result.metadata != null && result.metadata !== '—'
   const metadataEntries = hasMetadata
@@ -788,13 +789,27 @@ export default function DetailPage() {
                     <div className="data-panel-header flex items-center justify-between border-b border-blue-100 bg-emerald-50/50 px-3 py-1.5 dark:border-zinc-800/60 dark:bg-zinc-900/50">
                       <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Output</span>
                       <CopyButton
-                        getText={() => getRawText(result.output)}
+                        getText={() => getRawText(isOutputLoading ? null : result.output)}
                         className="copy-btn text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
                         title="Copy"
                       />
                     </div>
                     <div className="data-panel-body p-3 bg-white dark:bg-zinc-900/30 overflow-auto flex-1">
-                      <DataViewer content={result.output} placeholder="—" />
+                      {isOutputLoading ? (
+                        <div
+                          id="output-loading-indicator"
+                          className="output-loading-state"
+                          role="status"
+                          aria-live="polite"
+                          aria-label="Output is loading"
+                        >
+                          <div className="output-loading-line output-loading-line-1" />
+                          <div className="output-loading-line output-loading-line-2" />
+                          <div className="output-loading-line output-loading-line-3" />
+                        </div>
+                      ) : (
+                        <DataViewer content={result.output} placeholder="—" />
+                      )}
                     </div>
                   </div>
                 </div>
