@@ -13,6 +13,7 @@ type SettingsModalProps = {
   onSave: (event: FormEvent<HTMLFormElement>) => void
   settingsForm: SettingsFormState
   setSettingsForm: Dispatch<SetStateAction<SettingsFormState>>
+  onNotificationsChange: (enabled: boolean) => void
   onToggleTheme: () => void
 }
 
@@ -22,6 +23,7 @@ export default function SettingsModal({
   onSave,
   settingsForm,
   setSettingsForm,
+  onNotificationsChange,
   onToggleTheme,
 }: SettingsModalProps) {
   if (!open) {
@@ -93,7 +95,7 @@ export default function SettingsModal({
               id="settings-completion-notifications"
               type="checkbox"
               checked={settingsForm.completion_notifications}
-              onChange={(e) => setSettingsForm((prev) => ({ ...prev, completion_notifications: e.target.checked }))}
+              onChange={(e) => onNotificationsChange(e.target.checked)}
             />
           </label>
           <div className="flex justify-end gap-2 border-t border-theme-border pt-3">

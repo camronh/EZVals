@@ -90,7 +90,7 @@ type ComparisonRow = {
 }
 
 type ResizeState = { colKey: string; startX: number; startWidth: number; moved: boolean }
-type SettingsFormState = { concurrency: string; results_dir: string; timeout: string }
+type SettingsFormState = { concurrency: string; results_dir: string; timeout: string; completion_notifications: boolean }
 type DashboardQueryState = {
   runId: string | null
   comparisonRuns: ComparisonRun[]
@@ -403,7 +403,8 @@ export default function DashboardPage() {
   const [isRestartingServer, setIsRestartingServer] = useState(false)
   const [hasRunBefore, setHasRunBefore] = useState(false)
   const [animateStats, setAnimateStats] = useState(false)
-  const [settingsForm, setSettingsForm] = useState<SettingsFormState>({ concurrency: '', results_dir: '', timeout: '' })
+  const [settingsForm, setSettingsForm] = useState<SettingsFormState>({ concurrency: '', results_dir: '', timeout: '', completion_notifications: false })
+  const [completionNotificationsEnabled, setCompletionNotificationsEnabled] = useState(false)
   const [queryActiveRunId, setQueryActiveRunId] = useState<string | null>(null)
 
   const filtersToggleRef = useRef<HTMLButtonElement | null>(null)
@@ -421,6 +422,8 @@ export default function DashboardPage() {
   const suppressSortUntilRef = useRef<number>(0)
   const headerRefs = useRef<Record<string, HTMLElement | null>>({})
   const isHydratingFromQueryRef = useRef(false)
+  const previousRunActiveRef = useRef<boolean | null>(null)
+  const notificationsDraftRef = useRef(false)
 
   const debouncedSearch = useDebouncedValue(search, 120)
   const normalizedComparisonRuns = useMemo(() => normalizeComparisonRuns(comparisonRuns), [comparisonRuns])
@@ -429,6 +432,32 @@ export default function DashboardPage() {
   const comparisonDataCount = useMemo(() => Object.keys(comparisonData).length, [comparisonData])
   const searchColumnsSet = useMemo(() => new Set(searchColumns.filter((key) => DEFAULT_SEARCH_COLS.includes(key))), [searchColumns])
   const hasFilters = isFilterActive(filters, debouncedSearch)
+
+  const loadConfigSettings = useCallback(async () => {
+    const resp = await fetch('/api/config')
+    if (!resp.ok) throw new Error(`Config load failed: HTTP ${resp.status}`)
+    const config = await resp.json() as Config
+    const notificationsEnabled = config.completion_notifications === true
+    setCompletionNotificationsEnabled(notificationsEnabled)
+    notificationsDraftRef.current = notificationsEnabled
+    setSettingsForm({
+      concurrency: config.concurrency != null ? String(config.concurrency) : '',
+      results_dir: config.results_dir ?? '',
+      timeout: config.timeout != null ? String(config.timeout) : '',
+      completion_notifications: notificationsEnabled,
+    })
+    return config
+  }, [])
+
+  const loadCompletionNotificationsSetting = useCallback(async () => {
+    const resp = await fetch('/api/config')
+    if (!resp.ok) throw new Error(`Config load failed: HTTP ${resp.status}`)
+    const config = await resp.json() as Config
+    const notificationsEnabled = config.completion_notifications === true
+    setCompletionNotificationsEnabled(notificationsEnabled)
+    notificationsDraftRef.current = notificationsEnabled
+    return notificationsEnabled
+  }, [])
 
   useEffect(() => {
     document.title = 'EZVals'
@@ -495,6 +524,68 @@ export default function DashboardPage() {
   useEffect(() => {
     loadResults()
   }, [loadResults])
+
+  useEffect(() => {
+    let active = true
+    async function loadInitialConfigSettings() {
+      try {
+        const notificationsEnabled = await loadCompletionNotificationsSetting()
+        if (!active) return
+        setCompletionNotificationsEnabled(notificationsEnabled)
+      } catch {
+        // ignore config load failures
+      }
+    }
+    loadInitialConfigSettings()
+    return () => { active = false }
+  }, [loadCompletionNotificationsSetting])
+
+  useEffect(() => {
+    if (!data) return
+    const isActive = hasActiveResults(data)
+    if (previousRunActiveRef.current == null) {
+      previousRunActiveRef.current = isActive
+      return
+    }
+    const justCompleted = previousRunActiveRef.current && !isActive
+    previousRunActiveRef.current = isActive
+    if (!justCompleted) return
+
+    async function maybeNotifyOnCompletion() {
+      let enabled = completionNotificationsEnabled
+      if (!enabled) {
+        try {
+          enabled = await loadCompletionNotificationsSetting()
+        } catch {
+          enabled = false
+        }
+      }
+      if (!enabled) return
+      if (typeof window === 'undefined' || !('Notification' in window)) return
+
+      const title = `${data.run_name || 'Run'} complete`
+      const body = `${data.total_evaluations || 0} eval${(data.total_evaluations || 0) === 1 ? '' : 's'} finished`
+      const notify = () => {
+        try {
+          new Notification(title, { body, icon: '/logo.png' })
+        } catch {
+          // ignore notification failures
+        }
+      }
+
+      if (Notification.permission === 'granted') {
+        notify()
+        return
+      }
+      if (Notification.permission === 'default') {
+        Notification.requestPermission().then((permission) => {
+          if (permission === 'granted') notify()
+        }).catch(() => {})
+      }
+    }
+
+    void maybeNotifyOnCompletion()
+  }, [data, completionNotificationsEnabled, loadCompletionNotificationsSetting])
 
   useEffect(() => {
     if (!data) return
@@ -1090,20 +1181,13 @@ export default function DashboardPage() {
   }, [])
 
   const handleSettingsOpen = useCallback(async () => {
-    setSettingsOpen(true)
     try {
-      const resp = await fetch('/api/config')
-      if (!resp.ok) return
-      const config = await resp.json() as Config
-      setSettingsForm({
-        concurrency: config.concurrency != null ? String(config.concurrency) : '',
-        results_dir: config.results_dir ?? '',
-        timeout: config.timeout != null ? String(config.timeout) : '',
-      })
+      await loadConfigSettings()
     } catch {
       // ignore
     }
-  }, [])
+    setSettingsOpen(true)
+  }, [loadConfigSettings])
 
   const handleSettingsSave = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -1114,6 +1198,8 @@ export default function DashboardPage() {
     if (resultsDir) payload.results_dir = resultsDir
     const timeout = parseFloat(settingsForm.timeout)
     if (!Number.isNaN(timeout)) payload.timeout = timeout
+    const notificationsEnabled = notificationsDraftRef.current
+    payload.completion_notifications = notificationsEnabled
 
     try {
       const resp = await fetch('/api/config', {
@@ -1122,12 +1208,20 @@ export default function DashboardPage() {
         body: JSON.stringify(payload),
       })
       if (!resp.ok) throw new Error('Save failed')
+      setCompletionNotificationsEnabled(notificationsEnabled)
+      notificationsDraftRef.current = notificationsEnabled
+      setSettingsForm((prev) => ({ ...prev, completion_notifications: notificationsEnabled }))
       setSettingsOpen(false)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       alert(`Failed to save settings: ${message}`)
     }
   }, [settingsForm])
+
+  const handleNotificationsChange = useCallback((enabled: boolean) => {
+    notificationsDraftRef.current = enabled
+    setSettingsForm((prev) => ({ ...prev, completion_notifications: enabled }))
+  }, [])
 
   const handleExport = useCallback(async (format) => {
     if (format === 'png') {
@@ -1389,6 +1483,7 @@ export default function DashboardPage() {
         onSave={handleSettingsSave}
         settingsForm={settingsForm}
         setSettingsForm={setSettingsForm}
+        onNotificationsChange={handleNotificationsChange}
         onToggleTheme={handleThemeToggle}
       />
 

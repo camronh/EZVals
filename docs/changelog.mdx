@@ -19,6 +19,8 @@ description: "All notable changes to EZVals"
 - Added: Settings now includes a `Notifications` toggle that controls run-complete alerts from the config menu.
 - Changed: Completion alerts now use a softer two-note chime and include the EZVals logo as the notification icon.
 - Changed: Notification preference is persisted as `completion_notifications` in `ezvals.json` and defaults to disabled.
+- Fixed: Notifications toggle state now saves reliably from the settings modal and persists as `completion_notifications` in config on submit.
+- Fixed: Browser completion notifications now trigger when an active run transitions from pending/running to done with notifications enabled.
 - Tests: Added E2E coverage for saving notification settings and triggering a completion notification when a run finishes.
 - Changed: Dashboard run controls are now a single stable `Run`/`Stop` action (no run-mode switching between rerun/new-run).
 - Added: Stats panel now includes a dedicated new-run icon beside run controls that creates a fresh auto-named run with no completed results.
