@@ -903,6 +903,7 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
 
             # Export JSON/CSV and validate schema columns.
             # Export is now in its own dropdown (not settings modal)
+            page.locator("#more-menu-toggle").click()
             page.locator("#export-toggle").click()
             page.wait_for_selector("#export-menu:not(.hidden)")
             with page.expect_download() as download_info:
@@ -917,6 +918,7 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             page.wait_for_timeout(300)
             page.click("body")  # Close if still open
             page.wait_for_timeout(100)
+            page.locator("#more-menu-toggle").click()
             page.locator("#export-toggle").click()
             page.wait_for_selector("#export-menu:not(.hidden)")
             with page.expect_download() as download_info:

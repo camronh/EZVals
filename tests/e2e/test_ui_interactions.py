@@ -163,6 +163,7 @@ def test_row_expand_sort_and_toggle_columns(tmp_path):
             expect(first_func).to_contain_text("b")  # 0.1s row should be first
 
             # Toggle Output column visibility off
+            page.locator("#more-menu-toggle").click()
             page.locator("#columns-toggle").click()
             cb = page.locator("#columns-menu input[data-col='output']")
             # Ensure checked then uncheck
@@ -509,6 +510,7 @@ def test_png_export_modal_allows_configurable_preview(tmp_path):
             page.goto(f"{url}?compare_run_id={run_a}&compare_run_id={run_b}")
             page.wait_for_selector("#results-table")
 
+            page.locator("#more-menu-toggle").click()
             page.locator("#export-toggle").click()
             page.locator("#export-png-btn").click()
             page.wait_for_selector("#png-export-modal")

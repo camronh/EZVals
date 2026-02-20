@@ -454,7 +454,7 @@ ezvals export .ezvals/runs/baseline.json -f csv -o results.csv
 
 ### From Web UI
 
-Click the download icon in the header to export:
+Open the overflow (three-dot) menu in the header, then hover **Download** to export:
 - **JSON**: Raw results file
 - **CSV**: Flat format for spreadsheets
 - **Markdown**: ASCII charts + table (respects current filters)

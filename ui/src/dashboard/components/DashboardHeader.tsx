@@ -98,11 +98,13 @@ export default function DashboardHeader({
       const target = event.target as Node
       if (!moreMenuRef.current?.contains(target) && !moreToggleRef.current?.contains(target)) {
         setMoreMenuOpen(false)
+        setColumnsOpen(false)
+        setExportOpen(false)
       }
     }
     document.addEventListener('click', handleClick)
     return () => document.removeEventListener('click', handleClick)
-  }, [moreMenuOpen])
+  }, [moreMenuOpen, setColumnsOpen, setExportOpen])
 
   return (
     <header className="sticky top-0 z-40 border-b border-theme-border bg-theme-bg/95 backdrop-blur-sm">
@@ -411,86 +413,6 @@ export default function DashboardHeader({
               </div>
             </div>
           </div>
-          <div className="dropdown relative">
-            <button
-              ref={columnsToggleRef}
-              id="columns-toggle"
-              className="flex h-7 w-7 items-center justify-center rounded border border-theme-btn-border bg-theme-btn-bg text-theme-text-secondary hover:bg-theme-btn-bg-hover hover:text-theme-text"
-              onClick={() => { setColumnsOpen((prev) => !prev); setFiltersOpen(false) }}
-            >
-              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <use href="#icon-grid"></use>
-              </svg>
-            </button>
-            <div
-              ref={columnsMenuRef}
-              id="columns-menu"
-              className={`columns-panel absolute right-0 z-50 mt-1 w-48 rounded border border-zinc-700 bg-zinc-900 p-2 text-xs shadow-xl ${columnsOpen ? 'active' : ''}`}
-            >
-              <div className="text-[9px] font-medium uppercase tracking-wider text-zinc-500 mb-2">Columns</div>
-              {columnDefs.map((col) => (
-                <label key={col.key} className="flex items-center gap-2 py-0.5 text-zinc-300 hover:text-zinc-100">
-                  <input
-                    type="checkbox"
-                    data-col={col.key}
-                    checked={!hiddenSet.has(col.key)}
-                    className="accent-blue-500"
-                    onChange={(e) => {
-                      const next = new Set(hiddenSet)
-                      if (e.target.checked) next.delete(col.key)
-                      else next.add(col.key)
-                      setHiddenColumns(Array.from(next))
-                    }}
-                  />
-                  <span>{col.label}</span>
-                </label>
-              ))}
-              <div className="mt-2 flex gap-1 border-t border-zinc-800 pt-2">
-                <button id="reset-columns" className="flex-1 rounded bg-zinc-800 px-2 py-1 text-[10px] text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300" onClick={() => setHiddenColumns(Array.from(DEFAULT_HIDDEN_COLS))}>Reset</button>
-                <button id="reset-sorting" className="flex-1 rounded bg-zinc-800 px-2 py-1 text-[10px] text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300" onClick={() => setSortState([])}>Sort</button>
-                <button id="reset-widths" className="flex-1 rounded bg-zinc-800 px-2 py-1 text-[10px] text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300" onClick={() => setColWidths({})}>Width</button>
-              </div>
-            </div>
-          </div>
-          <div className="dropdown relative">
-            <button
-              ref={exportToggleRef}
-              id="export-toggle"
-              className="flex h-7 w-7 items-center justify-center rounded border border-theme-btn-border bg-theme-btn-bg text-theme-text-secondary hover:bg-theme-btn-bg-hover hover:text-theme-text"
-              onClick={() => setExportOpen((prev) => !prev)}
-            >
-              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <use href="#icon-download"></use>
-              </svg>
-            </button>
-            <div
-              ref={exportMenuRef}
-              id="export-menu"
-              className={`absolute right-0 z-50 mt-1 w-44 rounded border border-zinc-700 bg-zinc-900 p-2 text-xs shadow-xl ${exportOpen ? '' : 'hidden'}`}
-            >
-              <div className="text-[9px] font-medium uppercase tracking-wider text-zinc-500 mb-2">Export</div>
-              <button id="export-json-btn" className="w-full flex items-center gap-2 py-1.5 px-2 rounded text-zinc-300 hover:bg-zinc-800" onClick={() => handleExport('json')}>
-                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><use href="#icon-download"></use></svg>
-                JSON
-                <span className="ml-auto text-zinc-500 text-[9px]">raw</span>
-              </button>
-              <button id="export-csv-btn" className="w-full flex items-center gap-2 py-1.5 px-2 rounded text-zinc-300 hover:bg-zinc-800" onClick={() => handleExport('csv')}>
-                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><use href="#icon-download"></use></svg>
-                CSV
-                <span className="ml-auto text-zinc-500 text-[9px]">raw</span>
-              </button>
-              <div className="border-t border-zinc-800 my-1.5"></div>
-              <div className="text-[9px] text-zinc-500 mb-1 px-2">Filtered view</div>
-              <button id="export-md-btn" className="w-full flex items-center gap-2 py-1.5 px-2 rounded text-zinc-300 hover:bg-zinc-800" onClick={() => handleExport('markdown')}>
-                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><use href="#icon-download"></use></svg>
-                Markdown
-              </button>
-              <button id="export-png-btn" className="w-full flex items-center gap-2 py-1.5 px-2 rounded text-zinc-300 hover:bg-zinc-800" onClick={() => handleExport('png')}>
-                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><use href="#icon-download"></use></svg>
-                PNG
-              </button>
-            </div>
-          </div>
           <button id="settings-toggle" className="flex h-7 w-7 items-center justify-center rounded border border-theme-btn-border bg-theme-btn-bg text-theme-text-secondary hover:bg-theme-btn-bg-hover hover:text-theme-text" onClick={handleSettingsOpen}>
             <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <use href="#icon-gear"></use>
@@ -515,11 +437,128 @@ export default function DashboardHeader({
               id="more-menu"
               className={`absolute right-0 z-50 mt-1 w-44 rounded border border-zinc-700 bg-zinc-900 p-1.5 text-xs shadow-xl ${moreMenuOpen ? '' : 'hidden'}`}
             >
+              <div className="relative">
+                <button
+                  ref={columnsToggleRef}
+                  id="columns-toggle"
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-zinc-300 hover:bg-zinc-800"
+                  onMouseEnter={() => {
+                    setColumnsOpen(true)
+                    setExportOpen(false)
+                  }}
+                  onFocus={() => {
+                    setColumnsOpen(true)
+                    setExportOpen(false)
+                  }}
+                  onClick={() => {
+                    setColumnsOpen(true)
+                    setExportOpen(false)
+                  }}
+                >
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <use href="#icon-grid"></use>
+                  </svg>
+                  <span>Columns</span>
+                  <svg className="ml-auto h-3 w-3 text-zinc-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M15 6l-6 6 6 6"></path>
+                  </svg>
+                </button>
+                <div
+                  ref={columnsMenuRef}
+                  id="columns-menu"
+                  className={`columns-panel absolute right-[calc(100%+0.75rem)] top-0 z-[60] w-48 rounded border border-zinc-700 bg-zinc-900 p-2 text-xs shadow-xl ${columnsOpen ? 'active' : ''}`}
+                >
+                  <div className="mb-2 text-[9px] font-medium uppercase tracking-wider text-zinc-500">Columns</div>
+                  {columnDefs.map((col) => (
+                    <label key={col.key} className="flex items-center gap-2 py-0.5 text-zinc-300 hover:text-zinc-100">
+                      <input
+                        type="checkbox"
+                        data-col={col.key}
+                        checked={!hiddenSet.has(col.key)}
+                        className="accent-blue-500"
+                        onChange={(e) => {
+                          const next = new Set(hiddenSet)
+                          if (e.target.checked) next.delete(col.key)
+                          else next.add(col.key)
+                          setHiddenColumns(Array.from(next))
+                        }}
+                      />
+                      <span>{col.label}</span>
+                    </label>
+                  ))}
+                  <div className="mt-2 flex gap-1 border-t border-zinc-800 pt-2">
+                    <button id="reset-columns" className="flex-1 rounded bg-zinc-800 px-2 py-1 text-[10px] text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300" onClick={() => setHiddenColumns(Array.from(DEFAULT_HIDDEN_COLS))}>Reset</button>
+                    <button id="reset-sorting" className="flex-1 rounded bg-zinc-800 px-2 py-1 text-[10px] text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300" onClick={() => setSortState([])}>Sort</button>
+                    <button id="reset-widths" className="flex-1 rounded bg-zinc-800 px-2 py-1 text-[10px] text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300" onClick={() => setColWidths({})}>Width</button>
+                  </div>
+                </div>
+              </div>
+              <div className="relative">
+                <button
+                  ref={exportToggleRef}
+                  id="export-toggle"
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-zinc-300 hover:bg-zinc-800"
+                  onMouseEnter={() => {
+                    setExportOpen(true)
+                    setColumnsOpen(false)
+                  }}
+                  onFocus={() => {
+                    setExportOpen(true)
+                    setColumnsOpen(false)
+                  }}
+                  onClick={() => {
+                    setExportOpen(true)
+                    setColumnsOpen(false)
+                  }}
+                >
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <use href="#icon-download"></use>
+                  </svg>
+                  <span>Download</span>
+                  <svg className="ml-auto h-3 w-3 text-zinc-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M15 6l-6 6 6 6"></path>
+                  </svg>
+                </button>
+                <div
+                  ref={exportMenuRef}
+                  id="export-menu"
+                  className={`absolute right-[calc(100%+0.75rem)] top-0 z-[60] w-44 rounded border border-zinc-700 bg-zinc-900 p-2 text-xs shadow-xl ${exportOpen ? '' : 'hidden'}`}
+                >
+                  <div className="mb-2 text-[9px] font-medium uppercase tracking-wider text-zinc-500">Export</div>
+                  <button id="export-json-btn" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-zinc-300 hover:bg-zinc-800" onClick={() => handleExport('json')}>
+                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><use href="#icon-download"></use></svg>
+                    JSON
+                    <span className="ml-auto text-[9px] text-zinc-500">raw</span>
+                  </button>
+                  <button id="export-csv-btn" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-zinc-300 hover:bg-zinc-800" onClick={() => handleExport('csv')}>
+                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><use href="#icon-download"></use></svg>
+                    CSV
+                    <span className="ml-auto text-[9px] text-zinc-500">raw</span>
+                  </button>
+                  <div className="my-1.5 border-t border-zinc-800"></div>
+                  <div className="mb-1 px-2 text-[9px] text-zinc-500">Filtered view</div>
+                  <button id="export-md-btn" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-zinc-300 hover:bg-zinc-800" onClick={() => handleExport('markdown')}>
+                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><use href="#icon-download"></use></svg>
+                    Markdown
+                  </button>
+                  <button id="export-png-btn" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-zinc-300 hover:bg-zinc-800" onClick={() => handleExport('png')}>
+                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><use href="#icon-download"></use></svg>
+                    PNG
+                  </button>
+                </div>
+              </div>
+              <div className="my-1 border-t border-zinc-800"></div>
               <button
                 id="restart-server-btn"
                 className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-amber-300 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+                onMouseEnter={() => {
+                  setColumnsOpen(false)
+                  setExportOpen(false)
+                }}
                 onClick={() => {
                   setMoreMenuOpen(false)
+                  setColumnsOpen(false)
+                  setExportOpen(false)
                   onRestartServer()
                 }}
                 disabled={isRestartingServer}
