@@ -121,6 +121,7 @@ export interface Config {
   results_dir?: string | null
   timeout?: number | null
   verbose?: boolean | null
+  completion_notifications?: boolean | null
 }
 
 export interface ColumnDef {

@@ -1,3 +1,6 @@
+import json
+import re
+
 from playwright.sync_api import sync_playwright, expect
 import requests
 
@@ -413,6 +416,125 @@ def test_reload_server_button_posts_restart_endpoint(tmp_path):
             expect(page.locator("#restart-server-btn")).to_be_disabled()
             assert app.state.restart_requested is True
 
+            browser.close()
+
+
+def test_settings_modal_saves_completion_notifications_to_config(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    store = ResultsStore(tmp_path / "runs")
+    run_id = store.save_run(make_summary(), "2024-01-01T00-00-00Z")
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            context = browser.new_context(permissions=["notifications"])
+            page = context.new_page()
+            page.goto(url)
+            page.wait_for_selector("#results-table")
+
+            page.locator("#settings-toggle").click()
+            page.wait_for_selector("#settings-modal")
+            notifications_toggle = page.locator("#settings-completion-notifications")
+            expect(notifications_toggle).not_to_be_checked()
+
+            notifications_toggle.check()
+            page.locator("#settings-form button[type='submit']").click()
+            expect(page.locator("#settings-modal")).to_have_class(re.compile(r"hidden"))
+
+            cfg_resp = requests.get(f"{url}/api/config", timeout=5)
+            assert cfg_resp.status_code == 200
+            cfg = cfg_resp.json()
+            assert cfg["completion_notifications"] is True
+
+            context.close()
+            browser.close()
+
+
+def test_run_completion_sends_browser_notification_when_enabled(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "ezvals.json").write_text(json.dumps({
+        "concurrency": 1,
+        "results_dir": str(tmp_path / "runs"),
+        "overwrite": True,
+        "completion_notifications": True,
+    }))
+
+    running_summary = {
+        "total_evaluations": 1,
+        "total_functions": 1,
+        "total_errors": 0,
+        "total_passed": 0,
+        "total_with_scores": 0,
+        "average_latency": 0.0,
+        "results": [
+            {
+                "function": "eval_running",
+                "dataset": "ds",
+                "labels": [],
+                "result": {
+                    "status": "running",
+                    "input": "i",
+                    "output": None,
+                    "reference": None,
+                    "scores": None,
+                    "error": None,
+                    "latency": None,
+                    "metadata": None,
+                },
+            }
+        ],
+    }
+    completed_summary = {
+        **running_summary,
+        "total_passed": 1,
+        "results": [
+            {
+                **running_summary["results"][0],
+                "result": {
+                    **running_summary["results"][0]["result"],
+                    "status": "completed",
+                    "output": "ok",
+                    "latency": 0.1,
+                },
+            }
+        ],
+    }
+
+    store = ResultsStore(tmp_path / "runs")
+    run_id = store.save_run(running_summary, run_id="run-notify")
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.add_init_script(
+                """
+                class FakeNotification {
+                    static permission = 'granted'
+                    static requestPermission() { return Promise.resolve('granted') }
+                    constructor(title, options) {
+                        window.__notifCount = (window.__notifCount || 0) + 1
+                        window.__notifTitle = title
+                        window.__notifBody = options?.body || ''
+                        window.__notifIcon = options?.icon || ''
+                    }
+                }
+                window.Notification = FakeNotification
+                window.__notifCount = 0
+                """
+            )
+            page.goto(url)
+            page.wait_for_selector("#results-table")
+            assert page.evaluate("window.__notifCount") == 0
+
+            run_file = store._find_run_file(run_id)
+            run_file.write_text(json.dumps(completed_summary))
+
+            page.wait_for_function("() => window.__notifCount === 1")
+            assert "complete" in page.evaluate("window.__notifTitle").lower()
+            assert page.evaluate("window.__notifIcon") == "/logo.png"
             browser.close()
 
 

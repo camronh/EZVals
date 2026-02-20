@@ -289,6 +289,10 @@ def create_app(
     def index():
         return _serve_ui_index()
 
+    @app.get("/logo.png")
+    def logo():
+        return FileResponse(static_dir / "logo.png")
+
     def _build_not_started_summary() -> Optional[Dict[str, Any]]:
         if not app.state.discovered_functions:
             return None

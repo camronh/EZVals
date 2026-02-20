@@ -93,7 +93,12 @@ type ComparisonRow = {
 }
 
 type ResizeState = { colKey: string; startX: number; startWidth: number; moved: boolean }
-type SettingsFormState = { concurrency: string; results_dir: string; timeout: string }
+type SettingsFormState = {
+  concurrency: string
+  results_dir: string
+  timeout: string
+  completion_notifications: boolean
+}
 type DashboardQueryState = {
   runId: string | null
   comparisonRuns: ComparisonRun[]
@@ -409,8 +414,14 @@ export default function DashboardPage() {
   const [isRestartingServer, setIsRestartingServer] = useState(false)
   const [hasRunBefore, setHasRunBefore] = useState(false)
   const [animateStats, setAnimateStats] = useState(false)
-  const [settingsForm, setSettingsForm] = useState<SettingsFormState>({ concurrency: '', results_dir: '', timeout: '' })
+  const [settingsForm, setSettingsForm] = useState<SettingsFormState>({
+    concurrency: '',
+    results_dir: '',
+    timeout: '',
+    completion_notifications: false,
+  })
   const [queryActiveRunId, setQueryActiveRunId] = useState<string | null>(null)
+  const wasRunActiveRef = useRef<boolean | null>(null)
 
   const filtersToggleRef = useRef<HTMLButtonElement | null>(null)
   const filtersMenuRef = useRef<HTMLDivElement | null>(null)
@@ -504,6 +515,26 @@ export default function DashboardPage() {
   }, [loadResults])
 
   useEffect(() => {
+    let active = true
+    async function loadSettings() {
+      try {
+        const resp = await fetch('/api/config')
+        if (!resp.ok || !active) return
+        const config = await resp.json() as Config
+        if (!active) return
+        setSettingsForm((prev) => ({
+          ...prev,
+          completion_notifications: !!config.completion_notifications,
+        }))
+      } catch {
+        // ignore
+      }
+    }
+    loadSettings()
+    return () => { active = false }
+  }, [])
+
+  useEffect(() => {
     if (!data) return
     const restored = normalizedComparisonRuns
     if (restored.length < 2) return
@@ -546,6 +577,56 @@ export default function DashboardPage() {
     if (!data) return
     if (!hasRunningResults(data)) setIsRunningOverride(false)
   }, [data])
+
+  useEffect(() => {
+    if (!data || isComparisonMode) return
+    const isActive = hasActiveResults(data)
+    const hadActiveRun = wasRunActiveRef.current
+    wasRunActiveRef.current = isActive
+    if (hadActiveRun !== true || isActive) return
+
+    const rows = data.results || []
+    if (!rows.some((row) => {
+      const status = row.result?.status
+      return status === 'completed' || status === 'error'
+    })) {
+      return
+    }
+
+    const hasErrors = (data.total_errors || 0) > 0
+    if (settingsForm.completion_notifications && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      new Notification(hasErrors ? 'EZVals run finished with errors' : 'EZVals run complete', {
+        body: data.run_name || data.run_id,
+        icon: '/logo.png',
+      })
+    }
+    if (settingsForm.completion_notifications && typeof window !== 'undefined' && 'AudioContext' in window) {
+      try {
+        const ctx = new AudioContext()
+        const gain = ctx.createGain()
+        gain.connect(ctx.destination)
+        gain.gain.setValueAtTime(0.0001, ctx.currentTime)
+        gain.gain.exponentialRampToValueAtTime(0.03, ctx.currentTime + 0.02)
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.28)
+
+        const toneA = ctx.createOscillator()
+        toneA.type = 'sine'
+        toneA.frequency.value = hasErrors ? 420 : 740
+        toneA.connect(gain)
+        toneA.start(ctx.currentTime)
+        toneA.stop(ctx.currentTime + 0.12)
+
+        const toneB = ctx.createOscillator()
+        toneB.type = 'sine'
+        toneB.frequency.value = hasErrors ? 360 : 988
+        toneB.connect(gain)
+        toneB.start(ctx.currentTime + 0.11)
+        toneB.stop(ctx.currentTime + 0.26)
+      } catch {
+        // ignore
+      }
+    }
+  }, [data, isComparisonMode, settingsForm.completion_notifications])
 
   useEffect(() => {
     isHydratingFromQueryRef.current = true
@@ -1097,6 +1178,7 @@ export default function DashboardPage() {
         concurrency: config.concurrency != null ? String(config.concurrency) : '',
         results_dir: config.results_dir ?? '',
         timeout: config.timeout != null ? String(config.timeout) : '',
+        completion_notifications: !!config.completion_notifications,
       })
     } catch {
       // ignore
@@ -1112,8 +1194,12 @@ export default function DashboardPage() {
     if (resultsDir) payload.results_dir = resultsDir
     const timeout = parseFloat(settingsForm.timeout)
     if (!Number.isNaN(timeout)) payload.timeout = timeout
+    payload.completion_notifications = !!settingsForm.completion_notifications
 
     try {
+      if (settingsForm.completion_notifications && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+        await Notification.requestPermission()
+      }
       const resp = await fetch('/api/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

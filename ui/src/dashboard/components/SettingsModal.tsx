@@ -4,6 +4,7 @@ type SettingsFormState = {
   concurrency: string
   results_dir: string
   timeout: string
+  completion_notifications: boolean
 }
 
 type SettingsModalProps = {
@@ -86,6 +87,15 @@ export default function SettingsModal({
               <span className="dark:hidden">Dark</span><span className="hidden dark:inline">Light</span>
             </button>
           </div>
+          <label className="flex cursor-pointer items-center justify-between gap-3">
+            <span className="text-theme-text-muted">Notifications</span>
+            <input
+              id="settings-completion-notifications"
+              type="checkbox"
+              checked={settingsForm.completion_notifications}
+              onChange={(e) => setSettingsForm((prev) => ({ ...prev, completion_notifications: e.target.checked }))}
+            />
+          </label>
           <div className="flex justify-end gap-2 border-t border-theme-border pt-3">
             <button type="button" id="settings-cancel" className="rounded border border-theme-border bg-theme-bg-secondary px-3 py-1.5 text-theme-text-muted hover:bg-theme-bg-elevated" onClick={onClose}>Cancel</button>
             <button type="submit" className="rounded bg-blue-600 px-3 py-1.5 font-medium text-white hover:bg-blue-500">Save</button>

@@ -578,6 +578,14 @@ The UI is backed by these REST endpoints, also available programmatically.
 | `/api/config` | GET | Get ezvals.json config |
 | `/api/config` | PUT | Update config |
 
+```gherkin
+Scenario: Configure completion notifications from Settings
+  Given the user opens the Settings modal from the config menu
+  When the user toggles "Completion notifications + sound" and clicks Save
+  Then the value is persisted via `/api/config`
+  And future run-complete events honor the toggle
+```
+
 ---
 
 ## Error States

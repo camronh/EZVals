@@ -5,6 +5,10 @@ description: "All notable changes to EZVals"
 
 ## Unreleased
 
+- Added: Settings now includes a `Notifications` toggle that controls run-complete alerts from the config menu.
+- Changed: Completion alerts now use a softer two-note chime and include the EZVals logo as the notification icon.
+- Changed: Notification preference is persisted as `completion_notifications` in `ezvals.json` and defaults to disabled.
+- Tests: Added E2E coverage for saving notification settings and triggering a completion notification when a run finishes.
 - Added: Cell hover preview popover on dashboard content columns (input, output, reference, error, scores) replaces row-click-to-expand with a scrollable, interactive preview on hover.
 - Fixed: Detail view output now shows a subtle animated loading state while a result is `pending` or `running`, instead of showing stale output content.
 - Tests: Added E2E coverage to verify the detail output loading state is visible during running status and stale output text remains hidden.
