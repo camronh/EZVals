@@ -107,10 +107,10 @@ export default function DashboardHeader({
   return (
     <header className="sticky top-0 z-40 border-b border-theme-border bg-theme-bg/95 backdrop-blur-sm">
       <div className="flex items-center justify-between px-4 py-2">
-        <div className="flex items-center gap-3">
+        <a href="https://ezvals.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3">
           <img src="/logo.png" alt="EZVals" className="h-7 w-7" />
           <span className="font-mono text-base font-semibold tracking-tight text-theme-text">EZVals</span>
-        </div>
+        </a>
         <div className="flex items-center gap-2">
           <div className="relative">
             <svg className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
