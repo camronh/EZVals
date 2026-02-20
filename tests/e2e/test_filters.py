@@ -14,6 +14,7 @@ sys.path.pop(0)
 
 
 def make_summary_with_scores():
+    long_key = "score_key_with_extremely_long_name_that_should_not_overflow_filter_panel_width"
     return {
         "total_evaluations": 3,
         "total_functions": 3,
@@ -33,6 +34,7 @@ def make_summary_with_scores():
                     "scores": [
                         {"key": "accuracy", "value": 0.91, "passed": True},
                         {"key": "fluency", "value": 0.8},
+                        {"key": long_key, "value": 0.5},
                     ],
                     "error": None,
                     "latency": 1.2,
@@ -96,9 +98,12 @@ def test_advanced_filters_ui(tmp_path):
             # Menu visible (React UI uses .active class when open)
             page.wait_for_selector("#filters-menu.active")
             menu_box = page.eval_on_selector('#filters-menu', 'el => el.getBoundingClientRect()')
+            key_select_box = page.eval_on_selector('#key-select', 'el => el.getBoundingClientRect()')
             vp = page.viewport_size
             assert menu_box['left'] >= 0
             assert menu_box['right'] <= vp['width']
+            assert key_select_box['left'] >= menu_box['left']
+            assert key_select_box['right'] <= menu_box['right']
 
             # Clicking again should close
             btn.click()

@@ -161,11 +161,11 @@ export default function DashboardHeader({
                 </button>
               </div>
               <div className="mb-2 rounded bg-zinc-800/50 p-2">
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <span className="text-[9px] font-medium uppercase tracking-wider text-zinc-500">Score</span>
+                <div className="mb-1.5 flex min-w-0 items-center gap-1.5">
+                  <span className="shrink-0 text-[9px] font-medium uppercase tracking-wider text-zinc-500">Score</span>
                   <select
                     id="key-select"
-                    className="flex-1 rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-[11px] text-zinc-200 focus:border-blue-500 focus:outline-none"
+                    className="w-0 min-w-0 max-w-full flex-1 rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-[11px] text-zinc-200 focus:border-blue-500 focus:outline-none"
                     value={selectedScoreKey}
                     onChange={(e) => setSelectedScoreKey(e.target.value)}
                   >

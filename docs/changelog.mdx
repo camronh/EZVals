@@ -5,6 +5,9 @@ description: "All notable changes to EZVals"
 
 ## Unreleased
 
+- Fixed: Long score key names no longer cause the score filter select control to overflow outside the filters panel.
+- Changed: Score keys are now validated with a maximum length of 32 characters.
+- Tests: Added unit and E2E regression coverage for score key max-length validation and long-key filter layout containment.
 - Added: Column settings now include per-column search scope controls, so search can be limited to specific table columns.
 - Changed: Column visibility and search scope are now configured independently in the same Columns submenu using separate Show and Search toggles.
 - Tests: Added E2E coverage to verify search-column scoping and that hiding a column does not disable searching that column unless Search is toggled off.

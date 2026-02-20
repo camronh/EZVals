@@ -107,7 +107,7 @@ class TraceData:
 
 
 class Score(BaseModel):
-    key: str
+    key: str = Field(max_length=32)
     value: Optional[float] = None
     passed: Optional[bool] = None
     notes: Optional[str] = None
