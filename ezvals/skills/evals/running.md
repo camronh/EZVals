@@ -82,6 +82,18 @@ ezvals run evals/
 # Creates: .ezvals/runs/swift-falcon_2024-01-15T10-30-00Z.json
 ```
 
+### Rename an Existing Saved Run
+
+Use run-id based rename mode when you want to update a run name from scripts or terminal workflows.
+
+```bash
+# Rename by run_id
+ezvals run --rename run123 better-name
+
+# Restrict lookup to one session
+ezvals run --rename run123 better-name --session model-comparison
+```
+
 ## Running Evals
 
 ### Basic Run

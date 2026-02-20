@@ -5,6 +5,9 @@ description: "All notable changes to EZVals"
 
 ## Unreleased
 
+- Changed: `ezvals run` now supports `--rename <run_id> <new_name>` to rename saved runs by ID from scripts and terminal workflows.
+- Changed: Evals skill docs now document run-id rename mode under `ezvals run --rename`.
+- Tests: Added CLI unit coverage for `ezvals run --rename` help text, successful rename, and missing-run failure.
 - Fixed: Running rows in the dashboard now show a subtle spinner indicator instead of a prominent "running" text chip.
 - Tests: Added E2E coverage to verify running status uses the subtle indicator and no running text chip is rendered.
 - Fixed: Publish workflow now assembles `ezvals/skills/evals/ezvals-docs/` before building the wheel, so `ezvals skills add --claude` installs bundled API reference docs from PyPI packages.

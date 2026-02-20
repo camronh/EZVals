@@ -448,7 +448,7 @@ def serve_cmd(
 
 
 @cli.command('run')
-@click.argument('path', type=str)
+@click.argument('path', type=str, required=False)
 @click.option('--dataset', '-d', help='Filter by dataset(s), comma-separated')
 @click.option('--label', '-l', multiple=True, help='Filter by label(s)')
 @click.option('--limit', type=int, help='Limit the number of evaluations')
@@ -460,8 +460,9 @@ def serve_cmd(
 @click.option('--session', default=None, help='Name for this evaluation session')
 @click.option('--run-name', default=None, help='Name for this specific run')
 @click.option('--no-save', is_flag=True, help='Skip saving results to file')
+@click.option('--rename', nargs=2, type=str, metavar='RUN_ID NEW_NAME', help='Rename an existing saved run by run ID')
 def run_cmd(
-    path: str,
+    path: Optional[str],
     dataset: Optional[str],
     label: tuple,
     limit: Optional[int],
@@ -473,8 +474,29 @@ def run_cmd(
     session: Optional[str],
     run_name: Optional[str],
     no_save: bool,
+    rename: Optional[tuple[str, str]],
 ):
     """Run evaluations headless. Optimized for LLM agents by default."""
+    if rename:
+        if path:
+            raise click.ClickException("--rename cannot be used with PATH.")
+        from ezvals.storage import ResultsStore
+
+        config = load_config()
+        store = ResultsStore(config.get("results_dir", ".ezvals/sessions"))
+        run_id, new_name = rename
+        try:
+            renamed = store.rename_run(run_id, new_name, session_name=session)
+        except FileNotFoundError:
+            raise click.ClickException(f"Run '{run_id}' not found.")
+        console.print(f"Renamed run '{run_id}' to '{renamed}'.")
+        return
+
+    if not path:
+        raise click.ClickException(
+            "Missing PATH. Provide PATH to run evaluations, or use --rename RUN_ID NEW_NAME."
+        )
+
     labels = list(label) if label else None
     display_path = path.rsplit('::', 1)[0] if '::' in path else path
 

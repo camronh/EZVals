@@ -430,6 +430,32 @@ def test_runname():
                 data = json.load(f)
             assert data['run_name'] == 'baseline'
 
+    def test_run_command_help_shows_rename_mode(self):
+        result = self.runner.invoke(cli, ['run', '--help'])
+        assert result.exit_code == 0
+        assert '--rename RUN_ID NEW_NAME' in result.output
+
+    def test_rename_run_command(self):
+        with self.runner.isolated_filesystem():
+            store = ResultsStore(".ezvals/sessions")
+            summary = {"results": [], "total_evaluations": 0}
+            run_id = store.save_run(summary, run_id="run001", session_name="s1", run_name="old-name")
+
+            result = self.runner.invoke(cli, ['run', '--rename', run_id, 'new-name', '--session', 's1'])
+            assert result.exit_code == 0
+            assert "Renamed run 'run001' to 'new-name'." in result.output
+
+            loaded = store.load_run(run_id, session_name="s1")
+            assert loaded['run_name'] == 'new-name'
+            renamed_files = list(Path('.ezvals/sessions/s1').glob('new-name_*.json'))
+            assert len(renamed_files) == 1
+
+    def test_rename_run_command_missing_run(self):
+        with self.runner.isolated_filesystem():
+            result = self.runner.invoke(cli, ['run', '--rename', 'missing-run', 'new-name'])
+            assert result.exit_code == 1
+            assert "Run 'missing-run' not found." in result.output
+
     def test_comma_separated_datasets(self):
         """--dataset a,b filters with OR logic"""
         with self.runner.isolated_filesystem():

@@ -138,6 +138,22 @@ Scenario: No overwrite (when disabled)
   Given overwrite=false in ezvals.json
   When the user runs `ezvals run evals/ --session upgrade --run-name gpt5` twice
   Then both runs are kept as separate files with different timestamps
+
+Scenario: Rename an existing run by ID
+  Given run "run123" exists
+  When the user runs `ezvals run --rename run123 better-name`
+  Then the run file is renamed to include "better-name"
+  And run metadata field `run_name` becomes "better-name"
+
+Scenario: Rename with explicit session
+  Given run "run123" exists in session "model-upgrade"
+  When the user runs `ezvals run --rename run123 better-name --session model-upgrade`
+  Then only that session is searched for the run
+  And the run is renamed in-place
+
+Scenario: Rename run not found
+  When the user runs `ezvals run --rename missing-id better-name`
+  Then CLI exits non-zero with a clear "run not found" error
 ```
 
 ### Output Formats
@@ -375,6 +391,7 @@ Scenario: Concurrency set to zero
 | `--no-save` | flag | false | JSON to stdout only |
 | `--session` | str | auto | Session name |
 | `--run-name` | str | auto | Run name |
+| `--rename` | str str | none | Rename existing run by `run_id` and new name |
 
 ### `ezvals serve`
 
