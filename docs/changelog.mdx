@@ -5,6 +5,10 @@ description: "All notable changes to EZVals"
 
 ## Unreleased
 
+- Changed: `ezvals run` now uses selector-first path syntax for targeted runs (for example, `ezvals run evals.py::test_a,test_b`) instead of a dedicated extra flag.
+- Added: Case-target selectors now support `@case_id` shorthand (for example, `ezvals run evals.py::test_math@low,test_math@high`) as an intuitive alias for bracketed case variants.
+- Changed: Evals skill docs now guide agents to use path selectors (`::...`) and `@case_id` for rerunning specific failures without label workarounds.
+- Tests: Added unit and CLI coverage for comma-separated selector lists and `function@case_id` selection behavior.
 - Changed: Dashboard stats/status panel is now expanded-only; compact mode and the collapse/expand toggle have been removed.
 - Fixed: Run-switch dropdown anchoring now consistently uses the expanded stats bar run selector.
 - Tests: Updated E2E coverage to validate expanded-only stats behavior and removed compact-mode toggle expectations.

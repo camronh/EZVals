@@ -354,6 +354,7 @@ class EvalRunner:
         dataset: Optional[str] = None,
         labels: Optional[List[str]] = None,
         function_name: Optional[str] = None,
+        function_names: Optional[List[str]] = None,
         output_file: Optional[str] = None,
         csv_file: Optional[str] = None,
         verbose: bool = False,
@@ -364,7 +365,13 @@ class EvalRunner:
     ) -> Dict:
         # Discover functions
         discovery = EvalDiscovery()
-        functions = discovery.discover(path, dataset, labels, function_name)
+        functions = discovery.discover(
+            path=path,
+            dataset=dataset,
+            labels=labels,
+            function_name=function_name,
+            function_names=function_names,
+        )
 
         if limit is not None:
             functions = functions[:limit]
@@ -507,6 +514,8 @@ def run(
     path: str,
     dataset: Optional[str] = None,
     labels: Optional[List[str]] = None,
+    function_name: Optional[str] = None,
+    function_names: Optional[List[str]] = None,
     limit: Optional[int] = None,
     output: Optional[str] = None,
     concurrency: Optional[int] = None,
@@ -530,10 +539,16 @@ def run(
     effective_results_dir = results_dir if results_dir is not None else config.get("results_dir", ".ezvals/sessions")
     effective_overwrite = overwrite if overwrite is not None else config.get("overwrite", True)
 
-    function_name = None
+    selectors: List[str] = []
     resolved_path = path
     if "::" in resolved_path:
-        resolved_path, function_name = resolved_path.rsplit("::", 1)
+        resolved_path, path_selector = resolved_path.rsplit("::", 1)
+        selectors.extend(name.strip() for name in path_selector.split(",") if name.strip())
+
+    if function_name:
+        selectors.extend(name.strip() for name in function_name.split(",") if name.strip())
+    if function_names:
+        selectors.extend(name.strip() for name in function_names if name and name.strip())
 
     path_obj = Path(resolved_path)
     if not path_obj.exists():
@@ -557,7 +572,7 @@ def run(
             path=resolved_path,
             dataset=dataset,
             labels=labels,
-            function_name=function_name,
+            function_names=selectors or None,
             on_start=on_start,
             on_complete=on_complete,
             limit=limit,

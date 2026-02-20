@@ -283,7 +283,7 @@ def cli():
     Start the UI: ezvals serve evals.py
     Run headless: ezvals run evals.py
 
-    Path can include function name filter: file.py::function_name
+    Path can include selector filters: file.py::function_name or file.py::function_a,function_b@case_id
     """
     pass
 
@@ -498,7 +498,12 @@ def run_cmd(
         )
 
     labels = list(label) if label else None
-    display_path = path.rsplit('::', 1)[0] if '::' in path else path
+    function_names: Optional[List[str]] = None
+    if '::' in path:
+        path, path_selector = path.rsplit('::', 1)
+        function_names = [name.strip() for name in path_selector.split(",") if name.strip()]
+
+    display_path = path
 
     # Set up reporter based on mode
     reporter = ProgressReporter() if visual else None
@@ -521,6 +526,7 @@ def run_cmd(
             path=path,
             dataset=dataset,
             labels=labels,
+            function_names=function_names or None,
             limit=limit,
             output=output,
             concurrency=concurrency,

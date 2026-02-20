@@ -122,3 +122,56 @@ def func_c(): return EvalResult(input='c', output='c')
             assert result.exit_code == 0
             assert 'Total Functions: 1' in result.output
             assert 'Total Evaluations: 1' in result.output
+
+    def test_cli_run_multiple_eval_selectors(self):
+        """Test CLI can run a specific list of evals via PATH::a,b selectors."""
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            with open('test_cli_multi_select.py', 'w') as f:
+                f.write("""
+from ezvals import eval, EvalResult
+
+@eval()
+def func_a(): return EvalResult(input='a', output='a')
+
+@eval()
+def func_b(): return EvalResult(input='b', output='b')
+
+@eval()
+def func_c(): return EvalResult(input='c', output='c')
+""")
+
+            result = runner.invoke(
+                cli,
+                [
+                    'run', 'test_cli_multi_select.py::func_a,func_c',
+                    '--visual',
+                ],
+            )
+            assert result.exit_code == 0
+            assert 'Total Functions: 2' in result.output
+            assert 'Total Evaluations: 2' in result.output
+
+    def test_cli_run_case_ids_with_at_selector(self):
+        """Test CLI supports function@case_id selectors."""
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            with open('test_cli_case_ids.py', 'w') as f:
+                f.write("""
+from ezvals import eval, EvalResult, EvalContext
+
+@eval(cases=[
+    {"id": "case_id_1", "input": "a"},
+    {"id": "case_id_2", "input": "b"},
+    {"id": "case_id_3", "input": "c"},
+])
+def test_a(ctx: EvalContext): return EvalResult(input=ctx.input, output=ctx.input)
+""")
+
+            result = runner.invoke(
+                cli,
+                ['run', 'test_cli_case_ids.py::test_a@case_id_1,test_a@case_id_2', '--visual'],
+            )
+            assert result.exit_code == 0
+            assert 'Total Functions: 2' in result.output
+            assert 'Total Evaluations: 2' in result.output

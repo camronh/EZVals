@@ -65,7 +65,8 @@ class EvalDiscovery:
         path: str,
         dataset: Optional[str] = None,
         labels: Optional[List[str]] = None,
-        function_name: Optional[str] = None
+        function_name: Optional[str] = None,
+        function_names: Optional[List[str]] = None,
     ) -> List[EvalFunction]:
         self.discovered_functions = []
         path_obj = Path(path)
@@ -88,13 +89,28 @@ class EvalDiscovery:
             label_set = set(labels)
             filtered = [f for f in filtered if any(l in label_set for l in f.labels)]
         
+        selectors: List[str] = []
         if function_name:
-            # Filter by function name
-            # Match exact name or case variants (e.g., "func" matches "func[param1]")
+            selectors.extend(name.strip() for name in function_name.split(",") if name.strip())
+        if function_names:
+            selectors.extend(name.strip() for name in function_names if name and name.strip())
+
+        if selectors:
+            normalized_selectors = []
+            for selector in selectors:
+                if "@" in selector:
+                    fn_name, case_id = selector.split("@", 1)
+                    normalized_selectors.append(f"{fn_name.strip()}[{case_id.strip()}]")
+                else:
+                    normalized_selectors.append(selector)
+            # Match exact names or case variants (e.g., "func" matches "func[param1]")
             filtered = [
                 f for f in filtered
-                if f.func.__name__ == function_name
-                or f.func.__name__.startswith(function_name + "[")
+                if any(
+                    f.func.__name__ == selector
+                    or f.func.__name__.startswith(selector + "[")
+                    for selector in normalized_selectors
+                )
             ]
         
         return filtered

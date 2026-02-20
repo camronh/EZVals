@@ -58,9 +58,38 @@ class TestCLI:
         monkeypatch.setattr("ezvals.cli.run_sdk", fake_run_sdk)
         result = self.runner.invoke(cli, ['run', 'evals.py::test_one', '--dataset', 'qa'])
         assert result.exit_code == 0
-        assert captured["path"] == "evals.py::test_one"
+        assert captured["path"] == "evals.py"
+        assert captured["function_names"] == ["test_one"]
         assert captured["dataset"] == "qa"
         assert captured["use_config"] is True
+
+    def test_run_command_with_multiple_path_selectors(self, monkeypatch):
+        captured = {}
+
+        def fake_run_sdk(**kwargs):
+            captured.update(kwargs)
+            return {
+                "summary": {
+                    "total_evaluations": 0,
+                    "total_functions": 0,
+                    "total_errors": 0,
+                    "total_with_scores": 0,
+                    "total_passed": 0,
+                    "average_latency": 0,
+                    "results": [],
+                },
+                "saved_path": "fake.json",
+            }
+
+        monkeypatch.setattr("ezvals.cli.run_sdk", fake_run_sdk)
+        result = self.runner.invoke(
+            cli,
+            ['run', 'evals.py::test_one,test_two,test_three'],
+        )
+
+        assert result.exit_code == 0
+        assert captured["path"] == "evals.py"
+        assert captured["function_names"] == ["test_one", "test_two", "test_three"]
 
     def test_run_sdk_programmatic_with_flags(self):
         with self.runner.isolated_filesystem():

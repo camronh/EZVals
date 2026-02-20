@@ -110,6 +110,12 @@ def test_rag_accuracy(ctx: EvalContext):
 
 Run with: `ezvals run evals.py --session example-testing`
 
+To rerun a specific list of failing evals, use explicit path selectors instead of temporary labels:
+`ezvals run evals.py::test_a,test_b`
+
+For specific case IDs, use `@case_id` selectors:
+`ezvals run evals.py::test_a@case_id_1,test_a@case_id_2`
+
 This eval runs your RAG agent against each test case and reports which passed. The `cases` parameter generates three separate evals from one function. Failed assertions become failing scores with the assertion message as notes.
 
 ## Eval Planning Flow

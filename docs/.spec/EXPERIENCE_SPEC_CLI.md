@@ -35,9 +35,17 @@ Scenario: Run a specific function
   When the user runs `ezvals run evals.py::test_refund`
   Then only test_refund runs
 
+Scenario: Run a specific list of functions
+  When the user runs `ezvals run evals.py::test_refund,test_escalation`
+  Then only test_refund and test_escalation run
+
 Scenario: Run a case variant
   When the user runs `ezvals run evals.py::test_math[2][3][5]`
   Then only that specific variant runs
+
+Scenario: Run specific case IDs with intuitive selectors
+  When the user runs `ezvals run evals.py::test_math@low,test_math@high`
+  Then only case variants `test_math[low]` and `test_math[high]` run
 ```
 
 ### Filtering Options

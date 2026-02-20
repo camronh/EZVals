@@ -107,6 +107,12 @@ ezvals run evals/customer_service.py
 
 # Run a specific function
 ezvals run evals/customer_service.py::test_refund
+
+# Run a specific list of evals (no label hacks)
+ezvals run evals/customer_service.py::test_refund,test_escalation
+
+# Run specific case IDs with intuitive selectors
+ezvals run evals/customer_service.py::test_math@low,test_math@high
 ```
 
 ### Filtering

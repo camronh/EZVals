@@ -163,6 +163,8 @@ Where `PATH` can be:
 - A file: `ezvals run evals/customer_service.py`
 - A specific function: `ezvals run evals.py::test_refund`
 - A case variant: `ezvals run evals.py::test_math[2-3-5]`
+- A list of selectors: `ezvals run evals.py::test_refund,test_escalation`
+- Case IDs with intuitive syntax: `ezvals run evals.py::test_math@low,test_math@high`
 
 ### Filtering Options
 
