@@ -39,6 +39,31 @@ Evals answer evolving questions about your system:
 | **Saturation** | When evals hit 100%—a sign you need harder test cases, not that your agent is perfect. |
 | **Error analysis** | Systematically reviewing traces to identify failure patterns before writing evals. |
 
+## Phoenix Arize -> EZVals Migration Quick Map
+
+If the user is migrating from Phoenix Arize, map old concepts to EZVals primitives first, then implement with normal Python tests.
+
+| Phoenix Arize Pattern | EZVals Equivalent |
+|------|------------|
+| Dataset in Phoenix | `cases=[...]`, `dataset=`, or `input_loader=` |
+| Task/experiment run | `@eval` function execution |
+| Span-level trace analysis | `ctx.store(metadata=...)` plus run/result inspection in `ezvals serve` |
+| Evaluator templates / rubric prompts | Assertions, `ctx.store(scores=...)`, or LLM-as-judge graders in eval code |
+| Pass/fail evaluator output | Assertion success/failure or boolean score via `ctx.store(scores=[...])` |
+| Numeric evaluator score | Numeric `score.value` (0-1 or arbitrary scale) via `ctx.store(scores=[...])` |
+| Human annotation/correction loops | Web UI edits to scores/annotations (`correction_history` tracks before/after) |
+| Compare experiments | Multiple runs in one session + compare view/URL filters |
+
+Common migration approach (adapt as needed):
+
+1. Start by porting a representative Arize dataset slice into EZVals `cases`.
+2. Translate an evaluator into assertion logic to establish a baseline.
+3. Add model-based grading where code checks are not enough.
+4. Run with `ezvals run ...` and inspect trace/metadata in `ezvals serve ...`.
+5. Recreate experiment comparison by naming runs and using compare mode.
+
+When helping with migration, prefer direct concept translation over rebuilding Arize-style abstractions. Keep the user's eval logic explicit in Python so it stays easy to debug.
+
 ## Anatomy of an Eval
 
 ```
