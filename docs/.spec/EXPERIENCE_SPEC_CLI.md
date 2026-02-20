@@ -97,13 +97,6 @@ Scenario: Default minimal output
     - "Running {path}"
     - "Results saved to {file}"
 
-Scenario: Visual output
-  When the user runs `ezvals run evals/ --visual`
-  Then output includes:
-    - Progress dots (. for pass, F for fail)
-    - Rich results table
-    - Summary statistics
-
 Scenario: Verbose output
   When the user runs `ezvals run evals/ --verbose`
   Then print statements from eval functions appear in output
@@ -170,23 +163,6 @@ Scenario: Rename run not found
 ```
 Running evals.py
 Results saved to .ezvals/sessions/default/swift-falcon_1705312200.json
-```
-
-**Visual (`--visual`) Example:**
-```
-Running evals.py
-customer_service.py ..F
-
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃                     customer_service                           ┃
-┣━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┫
-┃ ...                ┃ ...      ┃ ...      ┃ ...               ┃
-└─────────────────────┴──────────┴──────────┴───────────────────┘
-
-Total Functions: 2
-Total Evaluations: 2
-Passed: 1
-Errors: 1
 ```
 
 ---

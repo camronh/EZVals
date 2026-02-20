@@ -152,7 +152,7 @@ ezvals serve evals/ --no-open
 
 ## ezvals run
 
-Run evaluations headlessly. Outputs minimal text by default (optimized for LLM agents). Use `--visual` for rich table output.
+Run evaluations headlessly. Outputs minimal text by default (optimized for LLM agents).
 
 ```bash
 ezvals run PATH [OPTIONS]
@@ -223,14 +223,6 @@ ezvals run evals/ --timeout 30.0
 ```bash
 ezvals run evals/ --verbose
 ezvals run evals/ -v
-```
-
-<ParamField path="--visual" type="flag">
-  Show rich progress dots, results table, and summary. Without this flag, output is minimal.
-</ParamField>
-
-```bash
-ezvals run evals/ --visual
 ```
 
 <ParamField path="-o, --output" type="string">
@@ -383,8 +375,8 @@ ezvals run evals/ -o results.json
 ### Verbose Debug Run
 
 ```bash
-# Show eval stdout and rich output
-ezvals run evals/ -v --visual --limit 5
+# Show eval stdout while running a subset
+ezvals run evals/ -v --limit 5
 ```
 
 ### Production CI Pipeline
@@ -465,28 +457,8 @@ The CLI does not currently set non-zero exit codes for failed evaluations—only
 By default, `ezvals run` outputs minimal text optimized for LLM agents and CI pipelines:
 
 ```
-Running...
+Running evals/...
 Results saved to .ezvals/runs/swift-falcon_2024-01-15T10-30-00Z.json
-```
-
-### Visual Output (--visual)
-
-Use `--visual` for rich progress dots, results table, and summary:
-
-```
-Running...
-customer_service.py ..F
-
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃                     customer_service                           ┃
-┣━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┫
-┃ Name                ┃ Status   ┃ Score    ┃ Latency           ┃
-┡━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━┩
-│ test_refund         │ ✓ passed │ 1.0      │ 0.23s             │
-│ test_complaint      │ ✗ failed │ 0.0      │ 0.45s             │
-└─────────────────────┴──────────┴──────────┴───────────────────┘
-
-Summary: 1/2 passed (50.0%)
 ```
 
 ### JSON File Output

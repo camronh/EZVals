@@ -1,8 +1,6 @@
 import click
 import sys
-import inspect
 import os
-import traceback
 import time
 import webbrowser
 import json
@@ -16,8 +14,6 @@ from threading import Thread
 
 from rich.console import Console
 
-from ezvals.formatters import format_results_table
-from ezvals.decorators import EvalFunction
 from ezvals.discovery import EvalDiscovery
 from ezvals.runner import run as run_sdk
 from ezvals.config import load_config
@@ -177,103 +173,6 @@ def _parse_compare_run_names(compare_runs: str) -> List[str]:
     if len(set(names)) != len(names):
         raise click.ClickException("--compare-runs cannot include duplicate run names.")
     return names
-
-
-class ProgressReporter:
-    """Pytest-style progress reporter for evaluation runs"""
-
-    def __init__(self):
-        self.failures: List[Dict] = []
-        self.current_file = None
-
-    def _get_file_display(self, func: EvalFunction) -> str:
-        """Get the display name for the file containing the function"""
-        try:
-            file_path = inspect.getfile(func.func)
-            try:
-                return str(Path(file_path).relative_to(os.getcwd()))
-            except ValueError:
-                return Path(file_path).name
-        except (TypeError, OSError):
-            return func.dataset
-
-    def _switch_file_if_needed(self, func: EvalFunction):
-        """Print newline and new file header if file changed."""
-        file_display = self._get_file_display(func)
-        if file_display != self.current_file:
-            if self.current_file is not None:
-                console.print("")
-            console.print(f"{file_display} ", end="")
-            self.current_file = file_display
-
-    def on_start(self, func: EvalFunction):
-        """Called when an evaluation starts"""
-        self._switch_file_if_needed(func)
-
-    def on_complete(self, func: EvalFunction, result_dict: Dict):
-        """Called when an evaluation completes"""
-        self._switch_file_if_needed(func)
-        result = result_dict["result"]
-
-        # Determine status character and color
-        if result.get("error"):
-            char, color = "E", "red"
-            self.failures.append({"func": func, "result_dict": result_dict, "type": "error"})
-        elif result.get("scores"):
-            passed = any(s.get("passed") is True for s in result["scores"])
-            failed = any(s.get("passed") is False for s in result["scores"])
-            if passed:
-                char, color = ".", "green"
-            elif failed:
-                char, color = "F", "red"
-                self.failures.append({"func": func, "result_dict": result_dict, "type": "failure"})
-            else:
-                char, color = ".", "green"
-        else:
-            char, color = ".", "green"
-
-        console.print(f"[{color}]{char}[/{color}]", end="")
-
-    def print_failures(self):
-        """Print detailed failure information"""
-        if self.current_file is not None:
-            console.print("") # Final newline
-
-        if not self.failures:
-            return
-
-        for i, failure in enumerate(self.failures, 1):
-            func = failure["func"]
-            result_dict = failure["result_dict"]
-            result = result_dict["result"]
-            failure_type = failure["type"]
-
-            # Format like pytest: dataset::function_name
-            dataset = result_dict.get("dataset", "unknown")
-            func_name = func.func.__name__
-
-            console.print(f"\n[red]{i}. {dataset}::{func_name}[/red]")
-
-            if failure_type == "error":
-                error_msg = result.get("error", "Unknown error")
-                console.print(f"   [red]ERROR:[/red] {error_msg}")
-            elif failure_type == "failure":
-                # Show failing scores
-                if result.get("scores"):
-                    for score in result["scores"]:
-                        if score.get("passed") is False:
-                            key = score.get("key", "unknown")
-                            notes = score.get("notes", "")
-                            if notes:
-                                console.print(f"   [red]FAIL:[/red] {key} - {notes}")
-                            else:
-                                console.print(f"   [red]FAIL:[/red] {key}")
-
-            # Show input/output if available
-            if result.get("input"):
-                console.print(f"   [dim]Input:[/dim] {result['input']}")
-            if result.get("output"):
-                console.print(f"   [dim]Output:[/dim] {result['output']}")
 
 
 @click.group()
@@ -456,7 +355,6 @@ def serve_cmd(
 @click.option('--concurrency', '-c', default=None, type=int, help='Number of concurrent evaluations (0 for sequential)')
 @click.option('--timeout', type=float, help='Global timeout in seconds')
 @click.option('--verbose', '-v', is_flag=True, help='Show stdout from eval functions')
-@click.option('--visual', is_flag=True, help='Show rich progress dots, table, and summary')
 @click.option('--session', default=None, help='Name for this evaluation session')
 @click.option('--run-name', default=None, help='Name for this specific run')
 @click.option('--no-save', is_flag=True, help='Skip saving results to file')
@@ -470,7 +368,6 @@ def run_cmd(
     concurrency: Optional[int],
     timeout: Optional[float],
     verbose: bool,
-    visual: bool,
     session: Optional[str],
     run_name: Optional[str],
     no_save: bool,
@@ -505,21 +402,13 @@ def run_cmd(
 
     display_path = path
 
-    # Set up reporter based on mode
-    reporter = ProgressReporter() if visual else None
-
     def on_complete_callback(func, result_dict):
         if verbose:
             result = result_dict["result"]
             if result.get("error"):
                 console.print(f"\n[red]ERROR in {func.func.__name__}:[/red]\n{result['error']}")
-        if reporter:
-            reporter.on_complete(func, result_dict)
 
-    if visual:
-        console.print("[bold green]Running evaluations...[/bold green]")
-    else:
-        console.print(f"Running {display_path}...")
+    console.print(f"Running {display_path}...")
 
     try:
         run_result = run_sdk(
@@ -536,39 +425,17 @@ def run_cmd(
             run_name=run_name,
             no_save=no_save,
             use_config=True,
-            on_start=reporter.on_start if reporter else None,
-            on_complete=on_complete_callback if verbose or reporter else None,
+            on_complete=on_complete_callback if verbose else None,
         )
         summary = run_result["summary"]
         saved_path = run_result["saved_path"]
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
-        if visual:
-            console.print(traceback.format_exc())
         sys.exit(1)
 
-    if visual:
-        # Rich output mode: progress dots, failures, table, summary
-        reporter.print_failures()
-
-        if summary["total_evaluations"] == 0:
-            console.print("[yellow]No evaluations found matching the criteria[/yellow]")
-            return
-
-        if summary['results']:
-            table = format_results_table(summary['results'])
-            console.print(table)
-
-        console.print("\n[bold]Evaluation Summary[/bold]")
-        console.print(f"Total Functions: {summary['total_functions']}")
-        console.print(f"Total Evaluations: {summary['total_evaluations']}")
-        console.print(f"Errors: {summary['total_errors']}")
-
-        if summary['total_with_scores'] > 0:
-            console.print(f"Passed: {summary['total_passed']}/{summary['total_with_scores']}")
-
-        if summary['average_latency'] > 0:
-            console.print(f"Average Latency: {summary['average_latency']:.3f}s")
+    if summary["total_evaluations"] == 0:
+        console.print("[yellow]No evaluations found matching the criteria[/yellow]")
+        return
 
     if no_save:
         print(json.dumps(summary, default=str))

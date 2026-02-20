@@ -140,8 +140,8 @@ ezvals run evals/ --timeout 60.0
 # Show verbose output
 ezvals run evals/ --verbose
 
-# Rich visual output with progress table
-ezvals run evals/ --visual
+# Save to a custom path
+ezvals run evals/ --output results.json
 ```
 
 ### Output Options
@@ -500,5 +500,5 @@ CLI flags always override config values.
 2. **Use descriptive run names** - You'll thank yourself later
 3. **Serve results for user review** - Don't just dump JSON
 4. **Run with concurrency** - `--concurrency 4` speeds up large suites
-5. **Use `--visual` during development** - Easier to see what's happening
+5. **Use `--verbose` during development** - Surface eval stdout/logging quickly
 6. **Commit the session name** - Include it in PR descriptions for traceability

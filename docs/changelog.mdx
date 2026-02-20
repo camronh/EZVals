@@ -5,6 +5,9 @@ description: "All notable changes to EZVals"
 
 ## Unreleased
 
+- Changed: Removed `--visual` from `ezvals run`; headless runs now use the minimal output flow plus JSON results output (`--output` or `--no-save`).
+- Changed: Simplified `ezvals run` internals by deleting rich progress/table reporting code that was only used by `--visual`.
+- Tests: Updated CLI unit coverage to validate run behavior via JSON output files and removed obsolete visual-progress tests.
 - Changed: `ezvals run` now uses selector-first path syntax for targeted runs (for example, `ezvals run evals.py::test_a,test_b`) instead of a dedicated extra flag.
 - Added: Case-target selectors now support `@case_id` shorthand (for example, `ezvals run evals.py::test_math@low,test_math@high`) as an intuitive alias for bracketed case variants.
 - Changed: Evals skill docs now guide agents to use path selectors (`::...`) and `@case_id` for rerunning specific failures without label workarounds.
