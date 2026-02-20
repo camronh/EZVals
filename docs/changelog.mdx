@@ -5,6 +5,9 @@ description: "All notable changes to EZVals"
 
 ## Unreleased
 
+- Added: Column settings now include per-column search scope controls, so search can be limited to specific table columns.
+- Changed: Column visibility and search scope are now configured independently in the same Columns submenu using separate Show and Search toggles.
+- Tests: Added E2E coverage to verify search-column scoping and that hiding a column does not disable searching that column unless Search is toggled off.
 - Added: Result PATCH edits for `scores`, `annotation`, and `annotations` now append `result.correction_history` entries with `field`, `before`, `after`, and UTC `timestamp`.
 - Changed: Evals skill guidance now tells agents to inspect `result.correction_history` whenever users mention notes, corrections, or manual edits.
 - Tests: Added integration coverage for correction history persistence, including guard behavior that skips duplicate entries when values are unchanged.

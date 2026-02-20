@@ -504,6 +504,16 @@ Scenario: Filters persist on navigation
 
 Filters are stored in sessionStorage and restored on page load.
 
+### Search Column Scope
+
+```gherkin
+Scenario: Search scope is configurable per column
+  Given the columns menu is open
+  When the user toggles search on or off for a column
+  Then search only matches text from columns with search enabled
+  And table visibility toggles remain independent from search toggles
+```
+
 ---
 
 ## REST API Endpoints

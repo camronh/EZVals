@@ -191,3 +191,40 @@ def test_filters_update_url_query_live(tmp_path):
             assert params.get("dataset_in") == ["ds"]
             assert params.get("run_id") == [run_id]
             browser.close()
+
+
+def test_search_column_scope_is_independent_from_visible_columns(tmp_path):
+    store = ResultsStore(tmp_path / "runs")
+    run_id = store.save_run(make_summary_with_scores(), "2024-01-01T00-00-00Z")
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(url)
+            page.wait_for_selector("#results-table")
+
+            page.fill("#search-input", "o2")
+            rows = page.locator("tbody tr[data-row='main']")
+            expect(rows).to_have_count(1)
+            expect(rows.first).to_contain_text("f2")
+
+            page.click("#columns-toggle")
+            page.wait_for_selector("#columns-menu.active")
+            output_search_cb = page.locator("#columns-menu input[data-search-col='output']")
+            if output_search_cb.is_checked():
+                output_search_cb.uncheck()
+            expect(rows).to_have_count(0)
+
+            output_search_cb.check()
+            expect(rows).to_have_count(1)
+
+            output_col_cb = page.locator("#columns-menu input[data-col='output']")
+            if output_col_cb.is_checked():
+                output_col_cb.uncheck()
+
+            hidden_output_cells = page.locator("tbody td[data-col='output'].hidden")
+            assert hidden_output_cells.count() > 0
+            expect(rows).to_have_count(1)
+            browser.close()

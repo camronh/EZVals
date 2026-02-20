@@ -27,6 +27,8 @@ type DashboardHeaderProps = {
   datasetLabels: { datasets: string[]; labels: string[] }
   hiddenSet: Set<string>
   setHiddenColumns: (value: string[]) => void
+  searchColumns: Set<string>
+  setSearchColumns: (value: string[]) => void
   columnDefs: ColumnDef[]
   setSortState: React.Dispatch<React.SetStateAction<SortStateItem[]>>
   setColWidths: React.Dispatch<React.SetStateAction<Record<string, number>>>
@@ -70,6 +72,8 @@ export default function DashboardHeader({
   datasetLabels,
   hiddenSet,
   setHiddenColumns,
+  searchColumns,
+  setSearchColumns,
   columnDefs,
   setSortState,
   setColWidths,
@@ -466,28 +470,49 @@ export default function DashboardHeader({
                 <div
                   ref={columnsMenuRef}
                   id="columns-menu"
-                  className={`columns-panel absolute right-[calc(100%+0.75rem)] top-0 z-[60] w-48 rounded border border-zinc-700 bg-zinc-900 p-2 text-xs shadow-xl ${columnsOpen ? 'active' : ''}`}
+                  className={`columns-panel absolute right-[calc(100%+0.75rem)] top-0 z-[60] w-64 rounded border border-zinc-700 bg-zinc-900 p-2 text-xs shadow-xl ${columnsOpen ? 'active' : ''}`}
                 >
-                  <div className="mb-2 text-[9px] font-medium uppercase tracking-wider text-zinc-500">Columns</div>
+                  <div className="mb-2 grid grid-cols-[1fr_44px_52px] items-center text-[9px] font-medium uppercase tracking-wider text-zinc-500">
+                    <span>Columns</span>
+                    <span className="text-center">Show</span>
+                    <span className="text-center">Search</span>
+                  </div>
                   {columnDefs.map((col) => (
-                    <label key={col.key} className="flex items-center gap-2 py-0.5 text-zinc-300 hover:text-zinc-100">
-                      <input
-                        type="checkbox"
-                        data-col={col.key}
-                        checked={!hiddenSet.has(col.key)}
-                        className="accent-blue-500"
-                        onChange={(e) => {
-                          const next = new Set(hiddenSet)
-                          if (e.target.checked) next.delete(col.key)
-                          else next.add(col.key)
-                          setHiddenColumns(Array.from(next))
-                        }}
-                      />
+                    <div key={col.key} className="grid grid-cols-[1fr_44px_52px] items-center py-0.5 text-zinc-300 hover:text-zinc-100">
                       <span>{col.label}</span>
-                    </label>
+                      <label className="mx-auto">
+                        <input
+                          type="checkbox"
+                          data-col={col.key}
+                          checked={!hiddenSet.has(col.key)}
+                          className="accent-blue-500"
+                          onChange={(e) => {
+                            const next = new Set(hiddenSet)
+                            if (e.target.checked) next.delete(col.key)
+                            else next.add(col.key)
+                            setHiddenColumns(Array.from(next))
+                          }}
+                        />
+                      </label>
+                      <label className="mx-auto">
+                        <input
+                          type="checkbox"
+                          data-search-col={col.key}
+                          checked={searchColumns.has(col.key)}
+                          className="accent-emerald-500"
+                          onChange={(e) => {
+                            const next = new Set(searchColumns)
+                            if (e.target.checked) next.add(col.key)
+                            else next.delete(col.key)
+                            setSearchColumns(Array.from(next))
+                          }}
+                        />
+                      </label>
+                    </div>
                   ))}
                   <div className="mt-2 flex gap-1 border-t border-zinc-800 pt-2">
                     <button id="reset-columns" className="flex-1 rounded bg-zinc-800 px-2 py-1 text-[10px] text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300" onClick={() => setHiddenColumns(Array.from(DEFAULT_HIDDEN_COLS))}>Reset</button>
+                    <button id="reset-search-columns" className="flex-1 rounded bg-zinc-800 px-2 py-1 text-[10px] text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300" onClick={() => setSearchColumns(columnDefs.map((col) => col.key))}>Search</button>
                     <button id="reset-sorting" className="flex-1 rounded bg-zinc-800 px-2 py-1 text-[10px] text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300" onClick={() => setSortState([])}>Sort</button>
                     <button id="reset-widths" className="flex-1 rounded bg-zinc-800 px-2 py-1 text-[10px] text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300" onClick={() => setColWidths({})}>Width</button>
                   </div>

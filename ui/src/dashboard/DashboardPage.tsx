@@ -63,6 +63,7 @@ const COLUMN_DEFS: ColumnDef[] = [
   { key: 'scores', label: 'Scores', width: '140px', type: 'number', align: 'left' },
   { key: 'latency', label: 'Time', width: '70px', type: 'number', align: 'right' },
 ]
+const DEFAULT_SEARCH_COLS = COLUMN_DEFS.map((col) => col.key)
 
 const RUN_MODE_KEY = 'ezvals:runMode'
 
@@ -100,6 +101,7 @@ type DashboardQueryState = {
   hasFilters: boolean
   filters: FilterState
   sortState: SortStateItem[]
+  searchColumns: string[] | null
 }
 
 function parseScoreValueRule(raw: string) {
@@ -177,6 +179,10 @@ function readDashboardQuery(params: URLSearchParams): DashboardQueryState {
   const sortState = params.getAll('sort')
     .map(parseSortRule)
     .filter((v): v is NonNullable<typeof v> => !!v)
+  const searchColumnsRaw = params.getAll('search_col')
+    .map((x) => x.trim())
+    .filter((x) => DEFAULT_SEARCH_COLS.includes(x))
+  const searchColumns = searchColumnsRaw.length ? Array.from(new Set(searchColumnsRaw)) : null
 
   const runIdRaw = (params.get('run_id') || '').trim()
   const runId = runIdRaw || null
@@ -215,6 +221,7 @@ function readDashboardQuery(params: URLSearchParams): DashboardQueryState {
       hasError,
     },
     sortState,
+    searchColumns,
   }
 }
 
@@ -222,6 +229,7 @@ function writeDashboardQuery(args: {
   runId: string | null | undefined
   comparisonRuns: ComparisonRun[] | NormalizedComparisonRun[]
   search: string
+  searchColumns: string[]
   filters: FilterState
   sortState: SortStateItem[]
 }) {
@@ -237,6 +245,10 @@ function writeDashboardQuery(args: {
 
   const q = args.search.trim()
   if (q) params.set('search', q)
+  const normalizedSearchCols = Array.from(new Set(args.searchColumns.filter((key) => DEFAULT_SEARCH_COLS.includes(key))))
+  if (normalizedSearchCols.length > 0 && normalizedSearchCols.length < DEFAULT_SEARCH_COLS.length) {
+    normalizedSearchCols.forEach((key) => params.append('search_col', key))
+  }
 
   const filters = args.filters || defaultFilters()
   if (filters.annotation && filters.annotation !== 'any') params.set('annotation', filters.annotation)
@@ -288,40 +300,44 @@ function hasRunningRows(data: RunSummary | null) {
   return (data?.results || []).some((r) => r.result?.status === 'running')
 }
 
-function buildRowSearchText(row: RunResultRow) {
+function buildRowSearchText(row: RunResultRow, searchColumns: Set<string>) {
   const result = row.result || {}
   const scores = result.scores || []
-  const parts = [
-    row.function,
-    row.dataset,
-    ...(row.labels || []),
-    result.input != null ? formatValue(result.input) : '',
-    result.reference != null ? formatValue(result.reference) : '',
-    result.output != null ? formatValue(result.output) : '',
-    result.error || '',
-    result.annotation || '',
-    ...scores.map((s) => `${s.key} ${s.value ?? ''} ${s.passed ?? ''}`),
-  ]
+  const parts: string[] = []
+  if (searchColumns.has('function')) parts.push(row.function, row.dataset, ...(row.labels || []))
+  if (searchColumns.has('input')) parts.push(result.input != null ? formatValue(result.input) : '')
+  if (searchColumns.has('reference')) parts.push(result.reference != null ? formatValue(result.reference) : '')
+  if (searchColumns.has('output')) parts.push(result.output != null ? formatValue(result.output) : '')
+  if (searchColumns.has('error')) parts.push(result.error || '')
+  if (searchColumns.has('scores')) {
+    parts.push(result.annotation || '')
+    scores.forEach((s) => {
+      parts.push(`${s.key} ${s.value ?? ''} ${s.passed ?? ''}`)
+    })
+  }
+  if (searchColumns.has('latency')) parts.push(result.latency != null ? `${result.latency}` : '')
   return parts.filter(Boolean).join(' ').toLowerCase()
 }
 
-function buildComparisonSearchText(entry: ComparisonMatrixEntry, comparisonRuns: NormalizedComparisonRun[]) {
+function buildComparisonSearchText(entry: ComparisonMatrixEntry, comparisonRuns: NormalizedComparisonRun[], searchColumns: Set<string>) {
   const meta = entry?._meta as { function?: string; dataset?: string; labels?: string[] } | undefined
-  const parts = [meta?.function, meta?.dataset, ...(meta?.labels || [])]
+  const parts: string[] = []
+  if (searchColumns.has('function')) parts.push(meta?.function || '', meta?.dataset || '', ...(meta?.labels || []))
   comparisonRuns.forEach((run) => {
     const row = entry?.[run.runId] as RunResultRow | undefined
     const result = row?.result
     if (!result) return
-    parts.push(
-      result.input != null ? formatValue(result.input) : '',
-      result.reference != null ? formatValue(result.reference) : '',
-      result.output != null ? formatValue(result.output) : '',
-      result.error || '',
-      result.annotation || '',
-    )
-    ;(result.scores || []).forEach((s) => {
-      parts.push(`${s.key} ${s.value ?? ''} ${s.passed ?? ''}`)
-    })
+    if (searchColumns.has('input')) parts.push(result.input != null ? formatValue(result.input) : '')
+    if (searchColumns.has('reference')) parts.push(result.reference != null ? formatValue(result.reference) : '')
+    if (searchColumns.has('output')) parts.push(result.output != null ? formatValue(result.output) : '')
+    if (searchColumns.has('error')) parts.push(result.error || '')
+    if (searchColumns.has('scores')) {
+      parts.push(result.annotation || '')
+      ;(result.scores || []).forEach((s) => {
+        parts.push(`${s.key} ${s.value ?? ''} ${s.passed ?? ''}`)
+      })
+    }
+    if (searchColumns.has('latency')) parts.push(result.latency != null ? `${result.latency}` : '')
   })
   return parts.filter(Boolean).join(' ').toLowerCase()
 }
@@ -381,6 +397,7 @@ export default function DashboardPage() {
   const [runNameDraft, setRunNameDraft] = useState('')
   const [filters, setFilters] = useSessionStorageState<FilterState>('ezvals:filters', defaultFilters)
   const [search, setSearch] = useSessionStorageState<string>('ezvals:search', '')
+  const [searchColumns, setSearchColumns] = useLocalStorageState<string[]>('ezvals:search_columns', DEFAULT_SEARCH_COLS)
   const [hiddenColumns, setHiddenColumns] = useLocalStorageState<string[]>('ezvals:hidden_columns', Array.from(DEFAULT_HIDDEN_COLS))
   const [colWidths, setColWidths] = useLocalStorageState<Record<string, number>>('ezvals:col_widths', {})
   const [statsExpanded, setStatsExpanded] = useLocalStorageState<boolean>('ezvals:statsExpanded', true)
@@ -418,6 +435,7 @@ export default function DashboardPage() {
   const isComparisonMode = normalizedComparisonRuns.length > 1
   const comparisonMatrix = useMemo<Record<string, ComparisonMatrixEntry>>(() => buildComparisonMatrix(comparisonData), [comparisonData])
   const comparisonDataCount = useMemo(() => Object.keys(comparisonData).length, [comparisonData])
+  const searchColumnsSet = useMemo(() => new Set(searchColumns.filter((key) => DEFAULT_SEARCH_COLS.includes(key))), [searchColumns])
   const hasFilters = isFilterActive(filters, debouncedSearch)
 
   useEffect(() => {
@@ -538,6 +556,7 @@ export default function DashboardPage() {
 
     if (query.search != null) setSearch(query.search)
     if (query.hasFilters) setFilters(query.filters)
+    if (query.searchColumns) setSearchColumns(query.searchColumns)
     if (params.has('sort')) setSortState(query.sortState)
     if (query.comparisonRuns.length) setComparisonRuns(query.comparisonRuns)
     if (query.runId) setQueryActiveRunId(query.runId)
@@ -553,7 +572,7 @@ export default function DashboardPage() {
       history.replaceState(null, '', nextUrl)
     }
     isHydratingFromQueryRef.current = false
-  }, [setComparisonRuns, setFilters, setSearch])
+  }, [setComparisonRuns, setFilters, setSearch, setSearchColumns])
 
   useEffect(() => {
     if (!data || isHydratingFromQueryRef.current) return
@@ -561,6 +580,7 @@ export default function DashboardPage() {
       runId: data.run_id,
       comparisonRuns: normalizedComparisonRuns,
       search,
+      searchColumns,
       filters,
       sortState,
     })
@@ -568,7 +588,7 @@ export default function DashboardPage() {
     const nextUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname
     const currentUrl = `${window.location.pathname}${window.location.search}`
     if (nextUrl !== currentUrl) history.replaceState(null, '', nextUrl)
-  }, [data, filters, normalizedComparisonRuns, search, sortState])
+  }, [data, filters, normalizedComparisonRuns, search, searchColumns, sortState])
 
   useEffect(() => {
     if (!queryActiveRunId || !data) return
@@ -654,10 +674,10 @@ export default function DashboardPage() {
         hasMessages: !!(result.trace_data?.messages?.length),
         hasError: !!result.error,
         annotation: result.annotation || '',
-        searchText: buildRowSearchText(r),
+        searchText: buildRowSearchText(r, searchColumnsSet),
       }
     })
-  }, [data])
+  }, [data, searchColumnsSet])
 
   const filteredRows = useMemo(() => {
     if (!rows.length) return []
@@ -714,10 +734,10 @@ export default function DashboardPage() {
         linkRunId,
         linkIndex,
         firstResult,
-        searchText: buildComparisonSearchText(entry, normalizedComparisonRuns),
+        searchText: buildComparisonSearchText(entry, normalizedComparisonRuns, searchColumnsSet),
       }
     })
-  }, [comparisonMatrix, data, isComparisonMode, normalizedComparisonRuns])
+  }, [comparisonMatrix, data, isComparisonMode, normalizedComparisonRuns, searchColumnsSet])
 
   const filteredComparisonRows = useMemo(() => {
     if (!isComparisonMode) return []
@@ -1279,6 +1299,8 @@ export default function DashboardPage() {
         datasetLabels={datasetLabels}
         hiddenSet={hiddenSet}
         setHiddenColumns={setHiddenColumns}
+        searchColumns={searchColumnsSet}
+        setSearchColumns={setSearchColumns}
         columnDefs={COLUMN_DEFS}
         setSortState={setSortState}
         setColWidths={setColWidths}
