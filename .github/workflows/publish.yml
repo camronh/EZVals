@@ -32,9 +32,18 @@ jobs:
       run: |
         npm ci
         npm run build
+    - name: Assemble EZVals docs into skill
+      run: |
+        mkdir -p ezvals/skills/evals/ezvals-docs
+        cp docs/introduction.mdx ezvals/skills/evals/ezvals-docs/
+        cp docs/setup.mdx ezvals/skills/evals/ezvals-docs/quickstart.mdx
+        cp docs/examples/*.mdx ezvals/skills/evals/ezvals-docs/
+        cp docs/core-concepts/*.mdx ezvals/skills/evals/ezvals-docs/
+        cp docs/guides/*.mdx ezvals/skills/evals/ezvals-docs/
+        cp docs/api-reference/*.mdx ezvals/skills/evals/ezvals-docs/
     - name: Build package
       run: python -m build
-    - name: Verify wheel contains UI assets
+    - name: Verify wheel contains bundled assets
       run: |
         python - <<'PY'
         import glob
@@ -50,6 +59,7 @@ jobs:
             has_index = any(name.endswith("ezvals/static/index.html") for name in names)
             has_js = any(name.endswith(".js") and "ezvals/static/assets/" in name for name in names)
             has_css = any(name.endswith(".css") and "ezvals/static/assets/" in name for name in names)
+            has_docs = any("ezvals/skills/evals/ezvals-docs/" in name for name in names)
 
         if not has_index:
             raise SystemExit("Wheel missing ezvals/static/index.html")
@@ -57,8 +67,28 @@ jobs:
             raise SystemExit("Wheel missing JS assets under ezvals/static/assets/")
         if not has_css:
             raise SystemExit("Wheel missing CSS assets under ezvals/static/assets/")
-        print("Wheel UI assets verified")
+        if not has_docs:
+            raise SystemExit("Wheel missing ezvals/skills/evals/ezvals-docs/")
+        print("Wheel assets verified")
         PY
+    - name: Verify wheel install includes skill docs
+      run: |
+        set -euo pipefail
+        WHEEL_PATH=$(ls dist/*.whl | head -n1)
+        python -m venv /tmp/ezvals-wheel-check
+        /tmp/ezvals-wheel-check/bin/pip install "$WHEEL_PATH"
+        mkdir -p /tmp/ezvals-wheel-project
+        cd /tmp/ezvals-wheel-project
+        /tmp/ezvals-wheel-check/bin/ezvals skills add --claude
+        test -f .claude/skills/evals/ezvals-docs/quickstart.mdx
+        test -f .claude/skills/evals/ezvals-docs/decorators.mdx
+        test -f .claude/skills/evals/ezvals-docs/eval-context.mdx
+        test -f .claude/skills/evals/ezvals-docs/scoring.mdx
+        test -f .claude/skills/evals/ezvals-docs/patterns.mdx
+        test -f .claude/skills/evals/ezvals-docs/cli.mdx
+        test -f .claude/skills/evals/ezvals-docs/web-ui.mdx
+        DOC_COUNT=$(find .claude/skills/evals/ezvals-docs -name '*.mdx' | wc -l)
+        test "$DOC_COUNT" -ge 10
     - name: Publish package
       uses: pypa/gh-action-pypi-publish@release/v1
       with:

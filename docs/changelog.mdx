@@ -3,6 +3,12 @@ title: "Changelog"
 description: "All notable changes to EZVals"
 ---
 
+## Unreleased
+
+- Fixed: Publish workflow now assembles `ezvals/skills/evals/ezvals-docs/` before building the wheel, so `ezvals skills add --claude` installs bundled API reference docs from PyPI packages.
+- Fixed: Skill sync workflow now sources `docs/setup.mdx` as `quickstart.mdx`, matching current docs layout while preserving skill doc naming.
+- Tests: Publish workflow now verifies both wheel payload and installed-wheel behavior by running `ezvals skills add --claude` and asserting required `ezvals-docs` files.
+
 ## 0.1.7 - 2026-02-17
 
 - Added: SDK `run(...)` API for programmatic eval execution with `ezvals run` option parity; CLI `ezvals run` now calls this shared core path.
