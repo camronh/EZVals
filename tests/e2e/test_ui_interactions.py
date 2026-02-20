@@ -282,6 +282,7 @@ def test_detail_page_navigation(tmp_path):
             expect(page.locator("text=1/3")).to_be_visible()
             # Function name should be visible in the header
             expect(page.locator("span.font-mono.font-semibold")).to_contain_text("a")
+            expect(page.locator("button[title='Edit annotation']")).to_be_visible()
 
             # Use arrow key to navigate to next
             page.keyboard.press("ArrowDown")
@@ -297,6 +298,30 @@ def test_detail_page_navigation(tmp_path):
             page.keyboard.press("Escape")
             page.wait_for_url("**/")
             page.wait_for_selector("#results-table")
+
+            browser.close()
+
+
+def test_detail_page_dataset_link_opens_filtered_dashboard(tmp_path):
+    store = ResultsStore(tmp_path / "runs")
+    run_id = store.save_run(make_summary(), "2024-01-01T00-00-00Z")
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+
+            page.goto(f"{url}/runs/{run_id}/results/0")
+            page.wait_for_selector("#sidebar-panel a[href*='dataset_in=ds']")
+            dataset_link = page.locator("#sidebar-panel a[href*='dataset_in=ds']").first
+            expect(dataset_link).to_have_text("ds")
+            dataset_link.click()
+
+            page.wait_for_url("**/?**")
+            page.wait_for_selector("#results-table")
+            assert page.evaluate("new URLSearchParams(window.location.search).get('dataset_in')") == "ds"
+            assert page.evaluate("new URLSearchParams(window.location.search).get('run_id')") == run_id
 
             browser.close()
 

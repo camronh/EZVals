@@ -5,6 +5,11 @@ description: "All notable changes to EZVals"
 
 ## Unreleased
 
+- Changed: Detail view annotation editing now uses a single explicit control (the pencil icon), and the empty state shows `No annotation` instead of a secondary add button.
+- Fixed: The annotation edit pencil in detail view is always visible instead of appearing only on hover.
+- Added: Detail sidebar dataset values now link back to the dashboard with the current run selected and the dataset filter pre-applied.
+- Changed: In detail view, the reference pane is stacked under input in the left column, while output remains in the right column.
+- Tests: Added and updated E2E coverage for dataset-link filtering, always-visible annotation edit control, and left-column reference pane layout geometry.
 - Fixed: Not-started evaluation titles in the dashboard are now clickable links to detail pages while retaining their gray not-started styling.
 - Fixed: Detail routes now load synthesized not-started results for the active run when no run file has been saved yet, preventing pre-run "Run not found" errors.
 - Tests: Added E2E coverage for clicking a not-started title and navigating to its detail page.

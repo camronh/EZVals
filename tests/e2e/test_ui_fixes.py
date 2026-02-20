@@ -719,11 +719,21 @@ class TestDetailLayoutDefaults:
                     () => {
                       const sidebar = document.querySelector('#sidebar-panel')?.getBoundingClientRect();
                       const ref = document.querySelector('#ref-panel')?.getBoundingClientRect();
+                      const input = document.querySelector('#input-panel')?.getBoundingClientRect();
+                      const output = document.querySelector('#output-panel')?.getBoundingClientRect();
                       const main = document.querySelector('#main-panel')?.getBoundingClientRect();
                       return {
                         sidebarWidth: sidebar?.width || 0,
                         refHeight: ref?.height || 0,
+                        refX: ref?.x || 0,
+                        refWidth: ref?.width || 0,
+                        refY: ref?.y || 0,
+                        inputX: input?.x || 0,
+                        inputWidth: input?.width || 0,
+                        inputY: input?.y || 0,
+                        outputX: output?.x || 0,
                         mainHeight: main?.height || 0,
+                        mainWidth: main?.width || 0,
                         viewportWidth: window.innerWidth,
                       };
                     }
@@ -732,6 +742,11 @@ class TestDetailLayoutDefaults:
 
                 assert dims["sidebarWidth"] <= dims["viewportWidth"] * 0.35
                 assert dims["refHeight"] <= dims["mainHeight"] * 0.35
+                assert abs(dims["refX"] - dims["inputX"]) < 2
+                assert abs(dims["refWidth"] - dims["inputWidth"]) < 2
+                assert dims["refY"] > dims["inputY"]
+                assert dims["refWidth"] < dims["mainWidth"] * 0.8
+                assert dims["refX"] + dims["refWidth"] <= dims["outputX"] + 2
 
                 browser.close()
 
@@ -1054,7 +1069,7 @@ class TestStatusChipPosition:
                 browser.close()
 
     def test_running_status_uses_subtle_indicator(self, tmp_path):
-        """Running status should use a subtle spinner indicator, not a text chip."""
+        """Running status should use a running status pill in the subtext row."""
         summary = {
             "total_evaluations": 1,
             "total_functions": 1,
@@ -1096,9 +1111,9 @@ class TestStatusChipPosition:
                 )
                 subtext_row = running_row.locator("td[data-col='function'] div.flex.flex-col > div").nth(1)
 
-                expect(subtext_row.locator(".status-indicator-running")).to_have_count(1)
-                expect(subtext_row.locator(".status-pill")).to_have_count(0)
-                assert "running" not in (subtext_row.inner_text() or "").lower()
+                expect(subtext_row.locator(".status-indicator-running")).to_have_count(0)
+                expect(subtext_row.locator(".status-pill")).to_have_count(1)
+                expect(subtext_row.locator(".status-pill")).to_contain_text("running")
 
                 browser.close()
 
