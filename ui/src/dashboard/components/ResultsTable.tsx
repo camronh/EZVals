@@ -97,12 +97,10 @@ export default function ResultsTable({
           const isRunning = status === 'running'
           const isNotStarted = status === 'not_started'
           const scores = result.scores || []
-          const functionCell = isNotStarted ? (
-            <span className="font-mono text-[12px] font-medium text-zinc-500">{row.function}</span>
-          ) : (
+          const functionCell = (
             <a
               href={`/runs/${data?.run_id}/results/${row.index}`}
-              className="font-mono text-[12px] font-medium text-accent-link hover:text-accent-link-hover"
+              className={`font-mono text-[12px] font-medium ${isNotStarted ? 'text-zinc-500 hover:text-zinc-400' : 'text-accent-link hover:text-accent-link-hover'}`}
               onClick={() => sessionStorage.setItem('ezvals:scrollY', window.scrollY.toString())}
             >
               {row.function}

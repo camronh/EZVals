@@ -289,15 +289,56 @@ def create_app(
     def index():
         return _serve_ui_index()
 
-    @app.get("/runs/{run_id}/results/{index}")
-    def result_detail_page(run_id: str, index: int):
-        """SPA entry for a single result."""
-        # Validate run_id and index exist before returning UI
+    def _build_not_started_summary() -> Optional[Dict[str, Any]]:
+        if not app.state.discovered_functions:
+            return None
+
+        results_list = [{
+            "function": f.func.__name__,
+            "dataset": f.dataset,
+            "labels": f.labels,
+            "result": {
+                "input": _make_json_safe(f.context_kwargs.get("input")),
+                "reference": _make_json_safe(f.context_kwargs.get("reference")),
+                "metadata": _make_json_safe(f.context_kwargs.get("metadata")),
+                "output": None,
+                "error": None,
+                "scores": None,
+                "latency": None,
+                "status": "not_started",
+            },
+        } for f in app.state.discovered_functions]
+
+        return {
+            "session_name": app.state.session_name,
+            "run_name": app.state.run_name,
+            "run_id": app.state.active_run_id,
+            "total_evaluations": len(results_list),
+            "total_errors": 0,
+            "total_passed": 0,
+            "average_latency": 0,
+            "results": results_list,
+            "score_chips": [],
+            "eval_path": app.state.path,
+        }
+
+    def _load_summary_for_detail(run_id: str) -> tuple[str, Dict[str, Any]]:
         rid = app.state.active_run_id if run_id in ("latest", app.state.active_run_id) else run_id
         try:
             summary = store.load_run(rid)
         except FileNotFoundError:
-            raise HTTPException(status_code=404, detail="Run not found")
+            if rid != app.state.active_run_id:
+                raise HTTPException(status_code=404, detail="Run not found")
+            summary = _build_not_started_summary()
+            if summary is None:
+                raise HTTPException(status_code=404, detail="Run not found")
+        return rid, summary
+
+    @app.get("/runs/{run_id}/results/{index}")
+    def result_detail_page(run_id: str, index: int):
+        """SPA entry for a single result."""
+        # Validate run_id and index exist before returning UI
+        _, summary = _load_summary_for_detail(run_id)
 
         results = summary.get("results", [])
         if index < 0 or index >= len(results):
@@ -308,11 +349,7 @@ def create_app(
     @app.get("/api/runs/{run_id}/results/{index}")
     def result_detail_api(run_id: str, index: int):
         """Get a single result by index (JSON API)."""
-        rid = app.state.active_run_id if run_id in ("latest", app.state.active_run_id) else run_id
-        try:
-            summary = store.load_run(rid)
-        except FileNotFoundError:
-            raise HTTPException(status_code=404, detail="Run not found")
+        rid, summary = _load_summary_for_detail(run_id)
 
         results = summary.get("results", [])
         if index < 0 or index >= len(results):
@@ -336,34 +373,9 @@ def create_app(
             summary = store.load_run(app.state.active_run_id)
         except FileNotFoundError:
             # No run on disk yet - show discovered functions if available
-            if app.state.discovered_functions:
-                results_list = [{
-                    "function": f.func.__name__,
-                    "dataset": f.dataset,
-                    "labels": f.labels,
-                    "result": {
-                        "input": _make_json_safe(f.context_kwargs.get("input")),
-                        "reference": _make_json_safe(f.context_kwargs.get("reference")),
-                        "metadata": _make_json_safe(f.context_kwargs.get("metadata")),
-                        "output": None,
-                        "error": None,
-                        "scores": None,
-                        "latency": None,
-                        "status": "not_started",
-                    },
-                } for f in app.state.discovered_functions]
-                return {
-                    "session_name": app.state.session_name,
-                    "run_name": app.state.run_name,
-                    "run_id": app.state.active_run_id,
-                    "total_evaluations": len(results_list),
-                    "total_errors": 0,
-                    "total_passed": 0,
-                    "average_latency": 0,
-                    "results": results_list,
-                    "score_chips": [],
-                    "eval_path": app.state.path,
-                }
+            summary = _build_not_started_summary()
+            if summary is not None:
+                return summary
             raise HTTPException(status_code=404, detail="Active run not found")
 
         score_chips = _build_score_chips(summary.get("results", []))

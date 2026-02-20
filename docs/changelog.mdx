@@ -5,6 +5,10 @@ description: "All notable changes to EZVals"
 
 ## Unreleased
 
+- Fixed: Not-started evaluation titles in the dashboard are now clickable links to detail pages while retaining their gray not-started styling.
+- Fixed: Detail routes now load synthesized not-started results for the active run when no run file has been saved yet, preventing pre-run "Run not found" errors.
+- Tests: Added E2E coverage for clicking a not-started title and navigating to its detail page.
+- Tests: Added integration coverage for pre-run detail page/API behavior when results are sourced from discovered functions.
 - Changed: `ezvals run` now supports `--rename <run_id> <new_name>` to rename saved runs by ID from scripts and terminal workflows.
 - Changed: Evals skill docs now document run-id rename mode under `ezvals run --rename`.
 - Tests: Added CLI unit coverage for `ezvals run --rename` help text, successful rename, and missing-run failure.

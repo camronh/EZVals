@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from ezvals.discovery import EvalDiscovery
 from ezvals.server import create_app
 from ezvals.storage import ResultsStore
 
@@ -761,6 +762,44 @@ def test_result_index_out_of_range_404(tmp_path: Path):
     response = client.get(f"/runs/{run_id}/results/999")
     assert response.status_code == 404
     assert "Result not found" in response.json()["detail"]
+
+
+def test_not_started_detail_routes_without_saved_run(tmp_path: Path):
+    eval_file = tmp_path / "pending_evals.py"
+    eval_file.write_text("""
+from ezvals import eval, EvalResult
+
+@eval(dataset="ds")
+def pending_a():
+    return EvalResult(input="i1", output="o1")
+
+@eval(dataset="ds")
+def pending_b():
+    return EvalResult(input="i2", output="o2")
+""")
+
+    discovered = EvalDiscovery().discover(path=str(eval_file))
+    app = create_app(
+        results_dir=str(tmp_path / "runs"),
+        active_run_id="pending-run",
+        path=str(eval_file),
+        discovered_functions=discovered,
+    )
+    client = TestClient(app)
+
+    dashboard = client.get("/results")
+    assert dashboard.status_code == 200
+    assert dashboard.json()["run_id"] == "pending-run"
+
+    page_response = client.get("/runs/pending-run/results/0")
+    assert page_response.status_code == 200
+
+    api_response = client.get("/api/runs/pending-run/results/1")
+    assert api_response.status_code == 200
+    payload = api_response.json()
+    assert payload["run_id"] == "pending-run"
+    assert payload["result"]["result"]["status"] == "not_started"
+    assert payload["result"]["result"]["output"] is None
 
 
 def test_readonly_fields_not_editable(tmp_path: Path):

@@ -174,6 +174,53 @@ def test_row_expand_sort_and_toggle_columns(tmp_path):
             browser.close()
 
 
+def test_not_started_function_name_navigates_to_detail(tmp_path):
+    store = ResultsStore(tmp_path / "runs")
+    run_id = store.save_run(
+        {
+            "total_evaluations": 1,
+            "total_functions": 1,
+            "total_errors": 0,
+            "total_passed": 0,
+            "total_with_scores": 0,
+            "average_latency": 0.0,
+            "results": [
+                {
+                    "function": "pending_eval",
+                    "dataset": "ds",
+                    "labels": [],
+                    "result": {
+                        "status": "not_started",
+                        "input": "i1",
+                        "output": None,
+                        "reference": None,
+                        "scores": None,
+                        "error": None,
+                        "latency": None,
+                        "metadata": None,
+                    },
+                }
+            ],
+        },
+        "2024-01-01T00-00-00Z",
+    )
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(url)
+            page.wait_for_selector("#results-table")
+
+            pending_link = page.locator("tr[data-row='main'][data-status='not_started'] td[data-col='function'] a").first
+            expect(pending_link).to_be_visible()
+            expect(pending_link).to_have_attribute("href", re.compile(r"/runs/.+/results/0"))
+            pending_link.click()
+            page.wait_for_url(f"**/runs/{run_id}/results/0")
+            browser.close()
+
+
 def test_column_resize_changes_header_width(tmp_path):
     store = ResultsStore(tmp_path / "runs")
     run_id = store.save_run(make_summary(), "2024-01-01T00-00-00Z")
