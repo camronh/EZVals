@@ -872,11 +872,11 @@ class TestPercentageDisplay:
                 page.goto(url)
                 page.wait_for_selector("#results-table")
 
-                # Check that percentage format is shown in compact stats
-                compact_stats = page.locator("#stats-compact").text_content()
-                # Should show percentage format like "67% (2/3)"
-                assert "%" in compact_stats, f"Compact stats should show percentage: {compact_stats}"
-                assert "2/3" in compact_stats, f"Compact stats should show ratio: {compact_stats}"
+                # Check that percentage format is shown in expanded stats
+                expanded_stats = page.locator("#stats-expanded .stats-chart-values").text_content()
+                # Should show percentage format like "67% 2/3"
+                assert "%" in expanded_stats, f"Expanded stats should show percentage: {expanded_stats}"
+                assert "2/3" in expanded_stats, f"Expanded stats should show ratio: {expanded_stats}"
 
                 browser.close()
 
@@ -920,7 +920,7 @@ class TestRunDropdown:
                 time.sleep(0.5)
 
                 # Check that run dropdown button exists (custom button dropdown, not <select>)
-                dropdown = page.locator(".stats-run-dropdown, .stats-run-dropdown-compact")
+                dropdown = page.locator(".stats-run-dropdown")
                 assert dropdown.count() > 0, "Run dropdown should appear with multiple runs"
 
                 # Check dropdown button shows current run name
@@ -942,7 +942,7 @@ class TestRunDropdown:
                 page.wait_for_selector("#results-table")
 
                 # With only one run, dropdown should not appear
-                dropdown = page.locator(".stats-run-dropdown, .stats-run-dropdown-compact")
+                dropdown = page.locator(".stats-run-dropdown")
                 assert dropdown.count() == 0, "Run dropdown should not appear with single run"
 
                 browser.close()
@@ -983,7 +983,7 @@ class TestRunDropdown:
                 page.wait_for_selector("#results-table")
                 time.sleep(0.5)
 
-                dropdown = page.locator(".stats-run-dropdown, .stats-run-dropdown-compact")
+                dropdown = page.locator(".stats-run-dropdown")
                 assert dropdown.count() > 0, "Run dropdown should appear when one existing session run can be switched to"
 
                 browser.close()
@@ -1069,7 +1069,7 @@ class TestStatusChipPosition:
                 browser.close()
 
     def test_running_status_uses_subtle_indicator(self, tmp_path):
-        """Running status should use a running status pill in the subtext row."""
+        """Running status should use the subtle spinner indicator in the subtext row."""
         summary = {
             "total_evaluations": 1,
             "total_functions": 1,
@@ -1111,9 +1111,8 @@ class TestStatusChipPosition:
                 )
                 subtext_row = running_row.locator("td[data-col='function'] div.flex.flex-col > div").nth(1)
 
-                expect(subtext_row.locator(".status-indicator-running")).to_have_count(0)
-                expect(subtext_row.locator(".status-pill")).to_have_count(1)
-                expect(subtext_row.locator(".status-pill")).to_contain_text("running")
+                expect(subtext_row.locator(".status-indicator-running")).to_have_count(1)
+                expect(subtext_row.locator(".status-pill")).to_have_count(0)
 
                 browser.close()
 

@@ -194,8 +194,7 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             expect(page.locator("#run-dropdown-toggle")).to_be_hidden()
 
             stats_expanded = page.locator("#stats-expanded")
-            if "hidden" in (stats_expanded.get_attribute("class") or ""):
-                page.locator("#stats-expand-btn").click()
+            expect(stats_expanded).to_be_visible()
 
             tests_metric = page.locator("#stats-expanded .stats-metric").first.locator(".stats-metric-value")
             expect(tests_metric).to_have_text(str(expected_count))
@@ -319,13 +318,6 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             for i in range(fills.count()):
                 fill_class = fills.nth(i).get_attribute("class") or ""
                 assert "vbar-" in fill_class, "score bars should be color-coded"
-
-            # Compact view reflects tests count and is togglable.
-            page.locator("#stats-collapse-btn").click()
-            expect(page.locator("#stats-compact")).to_be_visible()
-            expect(page.locator("#stats-compact")).to_contain_text("Tests")
-            page.locator("#stats-expand-btn").click()
-            expect(page.locator("#stats-expanded")).to_be_visible()
 
             def score_values():
                 raw = page.eval_on_selector_all(
@@ -709,11 +701,6 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             dataset_pill.click()
             expect(page.locator("tr[data-row='main']:not(.hidden)")).to_have_count(dataset_count)
             expect(tests_metric).to_contain_text(f"{dataset_count}/{expected_count}")
-            page.locator("#stats-collapse-btn").click()
-            expect(page.locator("#stats-compact")).to_contain_text(f"{dataset_count}/{expected_count}")
-            page.locator("#stats-expand-btn").click()
-            page.locator("#filters-toggle").click()
-            expect(page.locator("#filters-menu")).to_be_visible()
             dataset_pill = page.locator("#dataset-pills button", has_text=filter_dataset).first
             dataset_pill.click()
             expect(page.locator("tr[data-row='main']:not(.hidden)")).to_have_count(expected_count - dataset_count)

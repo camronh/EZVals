@@ -156,31 +156,12 @@ tr[data-row="main"] {
   border-bottom: 1px solid var(--border);
   background: transparent;
 }
-.stats-expanded.hidden { display: none; }
 
 .stats-layout {
   display: flex;
   min-height: 200px;
   position: relative;
 }
-
-.stats-collapse-btn {
-  position: absolute;
-  top: 0;
-  right: 0;
-  z-index: 10;
-  display: flex;
-  width: 32px;
-  height: 32px;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: color 0.15s;
-}
-.stats-collapse-btn:hover { color: var(--text); }
 
 /* Left panel: details + Y-axis labels */
 .stats-left {
@@ -303,25 +284,6 @@ tr[data-row="main"] {
   font-size: 9px;
   margin-left: 4px;
 }
-.stats-run-dropdown-compact {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  color: var(--accent-link);
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 1px 4px;
-  cursor: pointer;
-  max-width: 180px;
-  text-align: left;
-}
-.stats-run-dropdown-compact:hover { border-color: var(--accent-link); }
-.stats-run-dropdown-compact .dropdown-arrow {
-  color: var(--text-muted);
-  font-size: 9px;
-  margin-left: 4px;
-}
-
 /* Progress bar for expanded stats - inline with tests */
 .stats-metric-row-main {
   display: flex;
@@ -389,21 +351,6 @@ tr[data-row="main"] {
   text-shadow: 0 0 8px rgba(96, 165, 250, 0.4);
   white-space: nowrap;
 }
-
-.stats-toggle-btn {
-  display: flex;
-  width: 24px;
-  height: 24px;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--btn-border);
-  border-radius: 4px;
-  background: var(--btn-bg);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.stats-toggle-btn:hover { background: var(--btn-bg-hover); color: var(--text); }
 
 /* Right panel - chart + X-axis */
 .stats-right {

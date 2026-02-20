@@ -5,8 +5,6 @@ import { chipStats, getBarColor } from '../utils'
 
 type StatsExpandedProps = {
   stats: StatsSummary
-  statsExpanded: boolean
-  setStatsExpanded: (value: boolean) => void
   hasFilters: boolean
   displayFilteredCount: number | null
   displayChips: ScoreChip[]
@@ -35,8 +33,6 @@ type StatsExpandedProps = {
 
 export default function StatsExpanded({
   stats,
-  statsExpanded,
-  setStatsExpanded,
   hasFilters,
   displayFilteredCount,
   displayChips,
@@ -331,11 +327,8 @@ export default function StatsExpanded({
   }
 
   return (
-    <div id="stats-expanded" className={`stats-expanded${statsExpanded ? '' : ' hidden'}${inComparison ? ' comparison-mode' : ''}`}>
+    <div id="stats-expanded" className={`stats-expanded${inComparison ? ' comparison-mode' : ''}`}>
       <div className="stats-layout">
-        <button id="stats-collapse-btn" className="stats-collapse-btn" title="Collapse" onClick={() => setStatsExpanded(false)}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><use href="#icon-chevron-up"></use></svg>
-        </button>
         <div className="stats-left">
           <div className="stats-left-content">
             {headerContent}

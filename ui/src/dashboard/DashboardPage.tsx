@@ -36,7 +36,6 @@ import { useDebouncedValue, useLocalStorageState, useSessionStorageState } from 
 import DashboardIcons from './components/DashboardIcons'
 import DashboardHeader from './components/DashboardHeader'
 import StatsExpanded from './components/StatsExpanded'
-import StatsCompact from './components/StatsCompact'
 import SettingsModal from './components/SettingsModal'
 import ComparisonTable from './components/ComparisonTable'
 import ResultsTable from './components/ResultsTable'
@@ -405,7 +404,6 @@ export default function DashboardPage() {
   const [searchColumns, setSearchColumns] = useLocalStorageState<string[]>('ezvals:search_columns', DEFAULT_SEARCH_COLS)
   const [hiddenColumns, setHiddenColumns] = useLocalStorageState<string[]>('ezvals:hidden_columns', Array.from(DEFAULT_HIDDEN_COLS))
   const [colWidths, setColWidths] = useLocalStorageState<Record<string, number>>('ezvals:col_widths', {})
-  const [statsExpanded, setStatsExpanded] = useLocalStorageState<boolean>('ezvals:statsExpanded', true)
   const [runMode, setRunMode] = useLocalStorageState<string>(RUN_MODE_KEY, 'rerun')
   const [comparisonRuns, setComparisonRuns] = useSessionStorageState<ComparisonRun[]>('ezvals:comparisonRuns', [])
   const [sortState, setSortState] = useState<SortStateItem[]>([])
@@ -432,7 +430,6 @@ export default function DashboardPage() {
   const compareDropdownAnchorRef = useRef<HTMLButtonElement | null>(null)
   const addCompareAnchorRef = useRef<HTMLButtonElement | null>(null)
   const runDropdownExpandedRef = useRef<HTMLButtonElement | null>(null)
-  const runDropdownCompactRef = useRef<HTMLButtonElement | null>(null)
   const selectAllRef = useRef<HTMLInputElement | null>(null)
   const lastCheckedRef = useRef<number | null>(null)
   const resizeStateRef = useRef<ResizeState | null>(null)
@@ -1399,8 +1396,6 @@ export default function DashboardPage() {
       <main className="flex-1 overflow-auto px-4 py-4">
         <StatsExpanded
           stats={stats}
-          statsExpanded={statsExpanded}
-          setStatsExpanded={setStatsExpanded}
           hasFilters={hasFilters}
           displayFilteredCount={displayFilteredCount}
           displayChips={displayChips}
@@ -1425,23 +1420,6 @@ export default function DashboardPage() {
           compareDropdownAnchorRef={compareDropdownAnchorRef}
           addCompareAnchorRef={addCompareAnchorRef}
           animateStats={animateStats}
-        />
-        <StatsCompact
-          stats={stats}
-          statsExpanded={statsExpanded}
-          setStatsExpanded={setStatsExpanded}
-          displayChips={displayChips}
-          displayFilteredCount={displayFilteredCount}
-          hasFilters={hasFilters}
-          sessionRuns={sessionRuns}
-          currentRunLabel={currentRunLabel}
-          editingRunName={editingRunName}
-          runNameDraft={runNameDraft}
-          setRunNameDraft={setRunNameDraft}
-          setEditingRunName={setEditingRunName}
-          onRunNameSave={handleRunNameSave}
-          onRunDropdownToggle={() => setRunDropdownOpen((prev) => !prev)}
-          runDropdownCompactRef={runDropdownCompactRef}
         />
 
         {isComparisonMode ? (
@@ -1511,7 +1489,7 @@ export default function DashboardPage() {
         sessionName={data?.session_name || ''}
       />
 
-      <FloatingMenu anchorRef={statsExpanded ? runDropdownExpandedRef : runDropdownCompactRef} open={runDropdownOpen} onClose={() => setRunDropdownOpen(false)}>
+      <FloatingMenu anchorRef={runDropdownExpandedRef} open={runDropdownOpen} onClose={() => setRunDropdownOpen(false)}>
         {sessionRuns.map((run) => {
           const isCurrent = run.run_id === data?.run_id
           return (

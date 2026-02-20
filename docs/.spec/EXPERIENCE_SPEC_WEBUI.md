@@ -433,14 +433,7 @@ Shows a bar chart with score breakdown:
   - Example: "87%" on first line, "54/62" smaller below
 - Left side shows: session name, run name (dropdown if multiple runs), test count, avg latency
 
-### Compact View
-
-Single-line format with inline score chips:
-```
-SESSION {name} · RUN {name} | TESTS {n} | {score_key}: {pct}% ({n}/{total}) | AVG LATENCY {n}s
-```
-
-Toggle between views with collapse/expand button.
+Compact mode is not available. The stats bar always uses expanded view.
 
 ### Dynamic Stats
 
