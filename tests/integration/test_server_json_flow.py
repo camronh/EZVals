@@ -1096,3 +1096,51 @@ def case3():
     assert results[2]["function"] == "case3"
     assert results[2]["result"]["output"] == "output3"  # New output from execution
     assert results[2]["result"]["status"] == "completed"
+
+
+def test_new_run_with_empty_indices_keeps_not_started_rows(tmp_path: Path):
+    """New run with no selected indices should still persist discovered rows as not_started."""
+    eval_dir = tmp_path / "evals"
+    eval_dir.mkdir()
+    f = eval_dir / "test_new_run_empty_selection.py"
+    f.write_text(
+        """
+from ezvals import eval, EvalResult
+
+@eval(dataset="selective_ds")
+def case1():
+    return EvalResult(input="input1", output="output1")
+
+@eval(dataset="selective_ds")
+def case2():
+    return EvalResult(input="input2", output="output2")
+
+@eval(dataset="selective_ds")
+def case3():
+    return EvalResult(input="input3", output="output3")
+"""
+    )
+
+    store = ResultsStore(tmp_path / "runs")
+    old_run_id = store.save_run({"total_evaluations": 0, "results": []}, "2024-01-01T00-00-00Z")
+
+    app = create_app(
+        results_dir=str(tmp_path / "runs"),
+        active_run_id=old_run_id,
+        path=str(f),
+    )
+    client = TestClient(app)
+
+    response = client.post("/api/runs/new", json={"indices": []})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload.get("ok") is True
+
+    new_run_id = payload["run_id"]
+    assert new_run_id != old_run_id
+
+    data = store.load_run(new_run_id)
+    assert data["total_evaluations"] == 3
+    assert len(data["results"]) == 3
+    assert all(r["result"]["status"] == "not_started" for r in data["results"])
+    assert all(r["result"]["output"] is None for r in data["results"])

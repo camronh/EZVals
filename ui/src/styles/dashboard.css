@@ -165,12 +165,16 @@ tr[data-row="main"] {
 
 /* Left panel: details + Y-axis labels */
 .stats-left {
-  width: 25%;
+  flex: 0 0 clamp(300px, 28%, 460px);
+  min-width: 300px;
+  max-width: 460px;
   display: flex;
+  overflow: hidden;
   border-right: 1px solid var(--border-subtle); /* This IS the Y-axis */
 }
 .stats-left-content {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -189,6 +193,11 @@ tr[data-row="main"] {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-width: 0;
+}
+.stats-run-actions-row {
+  gap: 0;
+  padding-left: 0;
 }
 .stats-info-label {
   font-size: 10px;
@@ -275,7 +284,13 @@ tr[data-row="main"] {
   border-radius: 4px;
   padding: 2px 6px;
   cursor: pointer;
-  max-width: 200px;
+  min-width: 0;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   text-align: left;
 }
 .stats-run-dropdown:hover { border-color: var(--accent-link); }
@@ -354,7 +369,8 @@ tr[data-row="main"] {
 
 /* Right panel - chart + X-axis */
 .stats-right {
-  width: 75%;
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   padding: 1rem 1.5rem 1rem 0;
@@ -650,7 +666,52 @@ tr[data-row="main"] {
   text-overflow: ellipsis;
 }
 
-/* + Compare button styling - matches run dropdown width */
+/* Run action buttons (new run + compare) */
+.stats-run-actions {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  max-width: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.stats-run-action-btn {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #71717a;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+
+.stats-run-action-btn:hover {
+  color: #a1a1aa;
+  border-color: #3f3f46;
+  background: rgba(39, 39, 42, 0.35);
+}
+
+.stats-run-action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.stats-run-row-main {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  flex: 1;
+}
+
+/* Legacy compare button styling (kept for compatibility in older markup) */
 .add-compare-btn {
   width: 200px;
   max-width: 200px;
@@ -720,11 +781,14 @@ tr[data-row="main"] {
 
 /* Adjust stats-right width in comparison mode for more horizontal space */
 .stats-expanded.comparison-mode .stats-right {
-  width: 80%;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .stats-expanded.comparison-mode .stats-left {
-  width: 20%;
+  flex: 0 0 clamp(280px, 22%, 380px);
+  min-width: 280px;
+  max-width: 380px;
 }
 
 /* Expand chart elements in comparison mode */

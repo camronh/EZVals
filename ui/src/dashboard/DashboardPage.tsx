@@ -64,8 +64,6 @@ const COLUMN_DEFS: ColumnDef[] = [
 ]
 const DEFAULT_SEARCH_COLS = COLUMN_DEFS.map((col) => col.key)
 
-const RUN_MODE_KEY = 'ezvals:runMode'
-
 type DashboardRow = {
   index: number
   function: string
@@ -92,12 +90,7 @@ type ComparisonRow = {
 }
 
 type ResizeState = { colKey: string; startX: number; startWidth: number; moved: boolean }
-type SettingsFormState = {
-  concurrency: string
-  results_dir: string
-  timeout: string
-  completion_notifications: boolean
-}
+type SettingsFormState = { concurrency: string; results_dir: string; timeout: string }
 type DashboardQueryState = {
   runId: string | null
   comparisonRuns: ComparisonRun[]
@@ -393,7 +386,6 @@ export default function DashboardPage() {
   const [exportOpen, setExportOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [pngExportOpen, setPngExportOpen] = useState(false)
-  const [runMenuOpen, setRunMenuOpen] = useState(false)
   const [runDropdownOpen, setRunDropdownOpen] = useState(false)
   const [compareDropdownOpen, setCompareDropdownOpen] = useState(false)
   const [addCompareOpen, setAddCompareOpen] = useState(false)
@@ -404,7 +396,6 @@ export default function DashboardPage() {
   const [searchColumns, setSearchColumns] = useLocalStorageState<string[]>('ezvals:search_columns', DEFAULT_SEARCH_COLS)
   const [hiddenColumns, setHiddenColumns] = useLocalStorageState<string[]>('ezvals:hidden_columns', Array.from(DEFAULT_HIDDEN_COLS))
   const [colWidths, setColWidths] = useLocalStorageState<Record<string, number>>('ezvals:col_widths', {})
-  const [runMode, setRunMode] = useLocalStorageState<string>(RUN_MODE_KEY, 'rerun')
   const [comparisonRuns, setComparisonRuns] = useSessionStorageState<ComparisonRun[]>('ezvals:comparisonRuns', [])
   const [sortState, setSortState] = useState<SortStateItem[]>([])
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set())
@@ -412,14 +403,8 @@ export default function DashboardPage() {
   const [isRestartingServer, setIsRestartingServer] = useState(false)
   const [hasRunBefore, setHasRunBefore] = useState(false)
   const [animateStats, setAnimateStats] = useState(false)
-  const [settingsForm, setSettingsForm] = useState<SettingsFormState>({
-    concurrency: '',
-    results_dir: '',
-    timeout: '',
-    completion_notifications: false,
-  })
+  const [settingsForm, setSettingsForm] = useState<SettingsFormState>({ concurrency: '', results_dir: '', timeout: '' })
   const [queryActiveRunId, setQueryActiveRunId] = useState<string | null>(null)
-  const wasRunActiveRef = useRef<boolean | null>(null)
 
   const filtersToggleRef = useRef<HTMLButtonElement | null>(null)
   const filtersMenuRef = useRef<HTMLDivElement | null>(null)
@@ -512,26 +497,6 @@ export default function DashboardPage() {
   }, [loadResults])
 
   useEffect(() => {
-    let active = true
-    async function loadSettings() {
-      try {
-        const resp = await fetch('/api/config')
-        if (!resp.ok || !active) return
-        const config = await resp.json() as Config
-        if (!active) return
-        setSettingsForm((prev) => ({
-          ...prev,
-          completion_notifications: !!config.completion_notifications,
-        }))
-      } catch {
-        // ignore
-      }
-    }
-    loadSettings()
-    return () => { active = false }
-  }, [])
-
-  useEffect(() => {
     if (!data) return
     const restored = normalizedComparisonRuns
     if (restored.length < 2) return
@@ -574,56 +539,6 @@ export default function DashboardPage() {
     if (!data) return
     if (!hasRunningResults(data)) setIsRunningOverride(false)
   }, [data])
-
-  useEffect(() => {
-    if (!data || isComparisonMode) return
-    const isActive = hasActiveResults(data)
-    const hadActiveRun = wasRunActiveRef.current
-    wasRunActiveRef.current = isActive
-    if (hadActiveRun !== true || isActive) return
-
-    const rows = data.results || []
-    if (!rows.some((row) => {
-      const status = row.result?.status
-      return status === 'completed' || status === 'error'
-    })) {
-      return
-    }
-
-    const hasErrors = (data.total_errors || 0) > 0
-    if (settingsForm.completion_notifications && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-      new Notification(hasErrors ? 'EZVals run finished with errors' : 'EZVals run complete', {
-        body: data.run_name || data.run_id,
-        icon: '/logo.png',
-      })
-    }
-    if (settingsForm.completion_notifications && typeof window !== 'undefined' && 'AudioContext' in window) {
-      try {
-        const ctx = new AudioContext()
-        const gain = ctx.createGain()
-        gain.connect(ctx.destination)
-        gain.gain.setValueAtTime(0.0001, ctx.currentTime)
-        gain.gain.exponentialRampToValueAtTime(0.03, ctx.currentTime + 0.02)
-        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.28)
-
-        const toneA = ctx.createOscillator()
-        toneA.type = 'sine'
-        toneA.frequency.value = hasErrors ? 420 : 740
-        toneA.connect(gain)
-        toneA.start(ctx.currentTime)
-        toneA.stop(ctx.currentTime + 0.12)
-
-        const toneB = ctx.createOscillator()
-        toneB.type = 'sine'
-        toneB.frequency.value = hasErrors ? 360 : 988
-        toneB.connect(gain)
-        toneB.start(ctx.currentTime + 0.11)
-        toneB.stop(ctx.currentTime + 0.26)
-      } catch {
-        // ignore
-      }
-    }
-  }, [data, isComparisonMode, settingsForm.completion_notifications])
 
   useEffect(() => {
     isHydratingFromQueryRef.current = true
@@ -689,7 +604,7 @@ export default function DashboardPage() {
   }, [data, loadResults, queryActiveRunId])
 
   useEffect(() => {
-    if (!filtersOpen && !columnsOpen && !exportOpen && !runMenuOpen) return
+    if (!filtersOpen && !columnsOpen && !exportOpen) return
     const handleClick = (event: MouseEvent) => {
       const target = event.target as Node
       if (filtersOpen && filtersMenuRef.current && !filtersMenuRef.current.contains(target) && !filtersToggleRef.current?.contains(target)) {
@@ -701,13 +616,10 @@ export default function DashboardPage() {
       if (exportOpen && exportMenuRef.current && !exportMenuRef.current.contains(target) && !exportToggleRef.current?.contains(target)) {
         setExportOpen(false)
       }
-      if (runMenuOpen && !document.getElementById('run-dropdown-menu')?.contains(target) && !document.getElementById('run-dropdown-toggle')?.contains(target)) {
-        setRunMenuOpen(false)
-      }
     }
     document.addEventListener('click', handleClick)
     return () => document.removeEventListener('click', handleClick)
-  }, [filtersOpen, columnsOpen, exportOpen, runMenuOpen])
+  }, [filtersOpen, columnsOpen, exportOpen])
 
   const allResultsForFilters = useMemo(() => {
     if (isComparisonMode) {
@@ -897,21 +809,14 @@ export default function DashboardPage() {
     const isPaused = !!data?.is_paused
     const isRunning = isRunningOverride || hasRunningResults(data)
     const isActive = isPaused || isRunning
-    const hasSelections = selectedIndices.size > 0
     if (isComparisonMode) {
-      return { hidden: true, text: 'Run', showDropdown: false, isRunning }
+      return { hidden: true, text: 'Run' }
     }
     if (isActive) {
-      return { hidden: false, text: 'Stop', showDropdown: false, isRunning: true }
+      return { hidden: false, text: 'Stop' }
     }
-    if (!hasRunBefore) {
-      return { hidden: false, text: 'Run', showDropdown: false, isRunning }
-    }
-    if (hasSelections) {
-      return { hidden: false, text: runMode === 'new' ? 'New Run' : 'Rerun', showDropdown: true, isRunning }
-    }
-    return { hidden: false, text: runMode === 'new' ? 'New Run' : 'Rerun', showDropdown: true, isRunning }
-  }, [data, hasRunBefore, isComparisonMode, runMode, selectedIndices.size, isRunningOverride])
+    return { hidden: false, text: 'Run' }
+  }, [data, isComparisonMode, isRunningOverride])
 
   const showPauseButton = useMemo(() => {
     if (isComparisonMode) return false
@@ -1072,7 +977,7 @@ export default function DashboardPage() {
     }
   }, [comparisonDataCount, comparisonRuns.length, normalizedComparisonRuns.length, setComparisonRuns])
 
-  const handleRunExecute = useCallback(async (mode: string) => {
+  const handleRunExecute = useCallback(async () => {
     const isActive = !!data?.is_paused || isRunningOverride || hasRunningResults(data)
     if (isActive) {
       try {
@@ -1084,17 +989,10 @@ export default function DashboardPage() {
       return
     }
 
-    let endpoint = '/api/runs/rerun'
-    let body: Record<string, unknown> = {}
-    if (mode === 'new') {
-      endpoint = '/api/runs/new'
-      if (selectedIndices.size > 0) body = { indices: Array.from(selectedIndices) }
-    } else if (selectedIndices.size > 0) {
-      body = { indices: Array.from(selectedIndices) }
-    }
+    const body = selectedIndices.size > 0 ? { indices: Array.from(selectedIndices) } : {}
 
     try {
-      const resp = await fetch(endpoint, {
+      const resp = await fetch('/api/runs/rerun', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -1118,6 +1016,32 @@ export default function DashboardPage() {
       alert(`Run failed: ${message}`)
     }
   }, [data, isRunningOverride, loadResults, selectedIndices])
+
+  const handleCreateNewRun = useCallback(async () => {
+    try {
+      const resp = await fetch('/api/runs/new', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ indices: [] }),
+      })
+      if (!resp.ok) {
+        const text = await resp.text()
+        let msg = text
+        try {
+          const parsed = JSON.parse(text)
+          msg = parsed?.detail || parsed?.message || text
+        } catch {
+          // ignore parse errors
+        }
+        throw new Error(msg || `HTTP ${resp.status}`)
+      }
+      setSelectedIndices(new Set())
+      await loadResults(true)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      alert(`New run failed: ${message}`)
+    }
+  }, [loadResults])
 
   const handlePauseToggle = useCallback(async () => {
     if (!hasActiveResults(data)) return
@@ -1175,7 +1099,6 @@ export default function DashboardPage() {
         concurrency: config.concurrency != null ? String(config.concurrency) : '',
         results_dir: config.results_dir ?? '',
         timeout: config.timeout != null ? String(config.timeout) : '',
-        completion_notifications: !!config.completion_notifications,
       })
     } catch {
       // ignore
@@ -1191,12 +1114,8 @@ export default function DashboardPage() {
     if (resultsDir) payload.results_dir = resultsDir
     const timeout = parseFloat(settingsForm.timeout)
     if (!Number.isNaN(timeout)) payload.timeout = timeout
-    payload.completion_notifications = !!settingsForm.completion_notifications
 
     try {
-      if (settingsForm.completion_notifications && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
-        await Notification.requestPermission()
-      }
       const resp = await fetch('/api/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -1382,10 +1301,6 @@ export default function DashboardPage() {
         isRestartingServer={isRestartingServer}
         onRestartServer={handleRestartServer}
         runButtonState={runButtonState}
-        runMode={runMode}
-        setRunMode={setRunMode}
-        runMenuOpen={runMenuOpen}
-        setRunMenuOpen={setRunMenuOpen}
         isComparisonMode={isComparisonMode}
         onRunExecute={handleRunExecute}
         showPauseButton={showPauseButton}
@@ -1411,6 +1326,7 @@ export default function DashboardPage() {
           setRunNameDraft={setRunNameDraft}
           setEditingRunName={setEditingRunName}
           onRunNameSave={handleRunNameSave}
+          onCreateNewRun={handleCreateNewRun}
           onRunDropdownToggle={() => setRunDropdownOpen((prev) => !prev)}
           onAddCompareToggle={() => setCompareDropdownOpen((prev) => !prev)}
           onAddMoreCompareToggle={() => setAddCompareOpen((prev) => !prev)}

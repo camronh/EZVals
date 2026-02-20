@@ -141,8 +141,6 @@ export interface SortStateItem {
 export interface RunButtonState {
   hidden: boolean
   text: string
-  showDropdown: boolean
-  isRunning: boolean
 }
 
 export interface StatsSummary {

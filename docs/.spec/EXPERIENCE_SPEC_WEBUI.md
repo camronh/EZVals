@@ -37,51 +37,34 @@ Scenario: Sort by scores column
   And clicking again reverses the sort order
 ```
 
-### Run Button (GitHub-style Split Button)
+### Run Button (Single Action)
 
-The Run button is context-aware with a split-button design like GitHub's "Create pull request" button.
+The top-right run control is a single stable action button.
 
 ```gherkin
-Scenario: Fresh session (nothing run yet)
-  Given the UI starts with a new session
-  And no evaluations have been run
+Scenario: Stable run button label
+  Given the UI is open
   When the user views the Run button
-  Then the button shows only "Run" (no dropdown)
-  And clicking Run starts all evaluations
-
-Scenario: Has previous runs (split button)
-  Given evaluations have been run before
-  When the user views the Run button
-  Then the button is a split button with dropdown arrow
-  And the main button shows the last-used option ("Rerun" or "New Run")
-  And the dropdown shows both options:
-    - "Rerun" (updates current run in place)
-    - "New Run" (creates new run file)
+  Then the button label is "Run" when idle
+  And the button label is "Stop" while a run is active
 
 Scenario: Selective run with checkboxes
   Given some evaluations are checked
-  When the user clicks "Rerun"
+  When the user clicks "Run"
   Then only the selected evaluations run
   And results update in place for the current run
 
-Scenario: Selective new run with checkboxes
-  Given some evaluations are checked
-  When the user clicks "New Run"
-  Then a new run file is created
-  And only the selected evaluations are executed
-  And non-selected evaluations show as not_started
-
-Scenario: Rerun behavior
-  When the user clicks "Rerun"
+Scenario: Run behavior
+  When the user clicks "Run"
   Then the current run is overwritten
   And the run_name stays the same
   And the timestamp updates
 
-Scenario: New Run behavior
-  When the user clicks "New Run"
-  Then a prompt appears for optional run name
-  And if left blank, auto-generates a friendly name
-  And a new run file is created (does not overwrite)
+Scenario: New run from stats panel
+  Given the stats panel shows the current run name
+  When the user clicks the new-run icon next to the run name
+  Then a new run file is created with an auto-generated friendly name
+  And the new run has no completed results yet
 ```
 
 ### Run Execution
@@ -89,14 +72,14 @@ Scenario: New Run behavior
 ```gherkin
 Scenario: Run all evaluations
   Given evaluations are displayed
-  When the user clicks Run/Rerun with nothing selected
+  When the user clicks Run with nothing selected
   Then all evaluations begin running
   And results stream in real-time as each completes
   And progress indicators update live
 
 Scenario: Run selected evaluations
   Given the user selects rows via checkboxes
-  When the user clicks Rerun
+  When the user clicks Run
   Then only selected evaluations run
   And unselected rows retain their previous results
 
@@ -531,7 +514,7 @@ The UI is backed by these REST endpoints, also available programmatically.
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/runs/rerun` | POST | Start new run or rerun selected |
+| `/api/runs/rerun` | POST | Run active eval configuration (optionally selected indices) |
 | `/api/runs/pause` | POST | Pause queued execution after in-flight evals finish |
 | `/api/runs/resume` | POST | Resume pending evals on a paused run |
 | `/api/runs/stop` | POST | Cancel pending/running evals |
@@ -562,7 +545,7 @@ The UI is backed by these REST endpoints, also available programmatically.
 | `/api/runs/{run_id}` | PATCH | Update run metadata (rename updates filename) |
 | `/api/runs/{run_id}` | DELETE | Delete specific run |
 | `/api/runs/{run_id}/activate` | POST | Switch active run to view/edit a different run |
-| `/api/runs/new` | POST | Create new run (no overwrite) |
+| `/api/runs/new` | POST | Create a new run with a fresh run_id/run_name (no overwrite) |
 
 ### Configuration
 

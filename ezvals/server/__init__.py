@@ -154,15 +154,23 @@ def create_app(
         run_store = ResultsStore(results_dir)
 
         if not functions:
-            summary = {
-                "total_evaluations": 0,
-                "total_functions": 0,
-                "total_errors": 0,
-                "total_passed": 0,
-                "total_with_scores": 0,
-                "average_latency": 0,
-                "results": [],
-            }
+            if existing_results is not None:
+                summary = EvalRunner._calculate_summary(existing_results)
+                summary["results"] = existing_results
+            else:
+                summary = {
+                    "total_evaluations": 0,
+                    "total_functions": 0,
+                    "total_errors": 0,
+                    "total_passed": 0,
+                    "total_with_scores": 0,
+                    "average_latency": 0,
+                    "results": [],
+                }
+            summary["path"] = app.state.path
+            summary["dataset"] = app.state.dataset
+            summary["labels"] = app.state.labels
+            summary["function_name"] = app.state.function_name
             run_store.save_run(summary, run_id=run_id, session_name=app.state.session_name, run_name=app.state.run_name, overwrite=overwrite)
             return
 
@@ -775,7 +783,7 @@ def create_app(
             app.state.active_run_id = run_id
             app.state.run_name = data.get("run_name", run_id)
             app.state.session_name = data.get("session_name", app.state.session_name)
-            # Sync rerun configuration to the selected run to keep "Rerun/New Run" aligned.
+            # Sync run configuration to the selected run so "Run" uses that run's source settings.
             app.state.path = data.get("path")
             if "dataset" in data:
                 app.state.dataset = data.get("dataset")

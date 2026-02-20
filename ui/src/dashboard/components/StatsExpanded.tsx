@@ -20,6 +20,7 @@ type StatsExpandedProps = {
   setRunNameDraft: (value: string) => void
   setEditingRunName: (value: boolean) => void
   onRunNameSave: () => void
+  onCreateNewRun: () => void
   onRunDropdownToggle: () => void
   onAddCompareToggle: () => void
   onAddMoreCompareToggle: () => void
@@ -48,6 +49,7 @@ export default function StatsExpanded({
   setRunNameDraft,
   setEditingRunName,
   onRunNameSave,
+  onCreateNewRun,
   onRunDropdownToggle,
   onAddCompareToggle,
   onAddMoreCompareToggle,
@@ -154,60 +156,78 @@ export default function StatsExpanded({
           {stats.runName ? (
             <div className="stats-info-row group">
               <span className="stats-info-label">run</span>
-              {editingRunName ? (
-                <input
-                  className="font-mono text-sm bg-zinc-800 border border-zinc-600 rounded px-1 w-28 text-white outline-none focus:border-zinc-500"
-                  value={runNameDraft}
-                  onChange={(e) => setRunNameDraft(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') onRunNameSave(); if (e.key === 'Escape') setEditingRunName(false) }}
-                  onBlur={() => setEditingRunName(false)}
-                  autoFocus
-                />
-              ) : canSwitchRuns ? (
-                <button
-                  ref={runDropdownExpandedRef}
-                  id="run-dropdown-expanded"
-                  className="stats-run-dropdown run-dropdown-btn"
-                  data-run-id={stats.runId}
-                  onClick={onRunDropdownToggle}
-                >
-                  {currentRunLabel} <span className="dropdown-arrow">v</span>
-                </button>
-              ) : (
-                <CopyableText text={stats.runName ?? ''} className="stats-run copyable cursor-pointer hover:text-zinc-300" />
-              )}
-              <button
-                className="edit-run-btn-expanded ml-1 text-zinc-600 transition hover:text-zinc-400"
-                title={editingRunName ? 'Save' : 'Rename run'}
-                onClick={() => {
-                  if (editingRunName) {
-                    onRunNameSave()
-                  } else {
-                    setEditingRunName(true)
-                    setRunNameDraft(stats.runName || '')
-                  }
-                }}
-              >
+              <div className="stats-run-row-main">
                 {editingRunName ? (
-                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5" /></svg>
+                  <input
+                    className="font-mono text-sm bg-zinc-800 border border-zinc-600 rounded px-1 w-28 text-white outline-none focus:border-zinc-500"
+                    value={runNameDraft}
+                    onChange={(e) => setRunNameDraft(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') onRunNameSave(); if (e.key === 'Escape') setEditingRunName(false) }}
+                    onBlur={() => setEditingRunName(false)}
+                    autoFocus
+                  />
+                ) : canSwitchRuns ? (
+                  <button
+                    ref={runDropdownExpandedRef}
+                    id="run-dropdown-expanded"
+                    className="stats-run-dropdown run-dropdown-btn"
+                    data-run-id={stats.runId}
+                    onClick={onRunDropdownToggle}
+                  >
+                    {currentRunLabel} <span className="dropdown-arrow">v</span>
+                  </button>
                 ) : (
-                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><use href="#icon-pencil"></use></svg>
+                  <CopyableText text={stats.runName ?? ''} className="stats-run copyable cursor-pointer hover:text-zinc-300" />
                 )}
-              </button>
+                <button
+                  className="edit-run-btn-expanded ml-1 text-zinc-600 transition hover:text-zinc-400"
+                  title={editingRunName ? 'Save' : 'Rename run'}
+                  onClick={() => {
+                    if (editingRunName) {
+                      onRunNameSave()
+                    } else {
+                      setEditingRunName(true)
+                      setRunNameDraft(stats.runName || '')
+                    }
+                  }}
+                >
+                  {editingRunName ? (
+                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5" /></svg>
+                  ) : (
+                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><use href="#icon-pencil"></use></svg>
+                  )}
+                </button>
+              </div>
             </div>
           ) : null}
-          {hasOtherSessionRuns && stats.runName ? (
-            <div className="stats-info-row">
-              <span className="stats-info-label"></span>
-              <button
-                ref={compareDropdownAnchorRef}
-                id="add-compare-btn"
-                className="add-compare-btn"
-                title="Compare with another run"
-                onClick={onAddCompareToggle}
-              >
-                + Compare
-              </button>
+          {stats.runName ? (
+            <div className="stats-info-row stats-run-actions-row">
+              <div className="stats-run-actions">
+                <button
+                  id="new-run-btn-expanded"
+                  className="stats-run-action-btn"
+                  title="Create new run"
+                  aria-label="Create new run"
+                  onClick={onCreateNewRun}
+                >
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <use href="#icon-plus"></use>
+                  </svg>
+                </button>
+                <button
+                  ref={compareDropdownAnchorRef}
+                  id="add-compare-btn"
+                  className="stats-run-action-btn"
+                  title={hasOtherSessionRuns ? 'Compare runs' : 'Need at least 2 runs to compare'}
+                  aria-label="Compare runs"
+                  onClick={onAddCompareToggle}
+                  disabled={!hasOtherSessionRuns}
+                >
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <use href="#icon-compare"></use>
+                  </svg>
+                </button>
+              </div>
             </div>
           ) : null}
         </div>

@@ -20,6 +20,12 @@ description: "All notable changes to EZVals"
 - Changed: Completion alerts now use a softer two-note chime and include the EZVals logo as the notification icon.
 - Changed: Notification preference is persisted as `completion_notifications` in `ezvals.json` and defaults to disabled.
 - Tests: Added E2E coverage for saving notification settings and triggering a completion notification when a run finishes.
+- Changed: Dashboard run controls are now a single stable `Run`/`Stop` action (no run-mode switching between rerun/new-run).
+- Added: Stats panel now includes a dedicated new-run icon beside run controls that creates a fresh auto-named run with no completed results.
+- Fixed: Creating a new run with an empty selection now preserves discovered evaluations as `not_started` rows instead of saving an empty `0 tests` run.
+- Changed: Stats-panel run actions are now icon-first controls with tooltips, including a compact compare action in the same row.
+- Fixed: Stats-panel left-column sizing and action-row layout now stay constrained so controls no longer push/overlap chart grid content.
+- Tests: Updated E2E run-controls/stats coverage and added integration coverage for empty-selection new-run behavior.
 - Added: Cell hover preview popover on dashboard content columns (input, output, reference, error, scores) replaces row-click-to-expand with a scrollable, interactive preview on hover.
 - Fixed: Detail view output now shows a subtle animated loading state while a result is `pending` or `running`, instead of showing stale output content.
 - Tests: Added E2E coverage to verify the detail output loading state is visible during running status and stale output text remains hidden.

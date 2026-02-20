@@ -37,12 +37,8 @@ type DashboardHeaderProps = {
   isRestartingServer: boolean
   onRestartServer: () => void
   runButtonState: RunButtonState
-  runMode: string
-  setRunMode: (value: string) => void
-  runMenuOpen: boolean
-  setRunMenuOpen: (value: boolean | ((prev: boolean) => boolean)) => void
   isComparisonMode: boolean
-  onRunExecute: (mode: string) => void
+  onRunExecute: () => void
   showPauseButton: boolean
   pauseButtonText: 'Pause' | 'Resume'
   onPauseToggle: () => void
@@ -82,10 +78,6 @@ export default function DashboardHeader({
   isRestartingServer,
   onRestartServer,
   runButtonState,
-  runMode,
-  setRunMode,
-  runMenuOpen,
-  setRunMenuOpen,
   isComparisonMode,
   onRunExecute,
   showPauseButton,
@@ -627,7 +619,7 @@ export default function DashboardHeader({
                 <button
                   id="play-btn"
                   className={`flex h-7 w-8 items-center justify-center border-l border-theme-btn-border text-rose-500 hover:bg-rose-500/10 ${runButtonState.hidden ? 'hidden' : ''}`}
-                  onClick={() => onRunExecute(runMode)}
+                  onClick={onRunExecute}
                   aria-label={runButtonState.text}
                   title={runButtonState.text}
                 >
@@ -643,10 +635,8 @@ export default function DashboardHeader({
             ) : (
               <button
                 id="play-btn"
-                className={`ml-2 flex h-7 items-center gap-1.5 ${
-                  runButtonState.showDropdown ? 'rounded-l' : 'rounded'
-                } bg-emerald-600 px-3 text-xs font-medium text-white hover:bg-emerald-500 ${runButtonState.hidden ? 'hidden' : ''}`}
-                onClick={() => onRunExecute(runMode)}
+                className={`ml-2 flex h-7 items-center gap-1.5 rounded bg-emerald-600 px-3 text-xs font-medium text-white hover:bg-emerald-500 ${runButtonState.hidden ? 'hidden' : ''}`}
+                onClick={onRunExecute}
               >
                 <svg className="play-icon h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
                   <use href="#icon-play"></use>
@@ -657,33 +647,6 @@ export default function DashboardHeader({
                 <span id="play-btn-text">{runButtonState.text}</span>
               </button>
             )}
-            <div className="dropdown relative">
-              <button
-                id="run-dropdown-toggle"
-                className={`h-7 items-center justify-center rounded-r border-l border-emerald-700 bg-emerald-600 px-1.5 text-white hover:bg-emerald-500 ${runButtonState.showDropdown ? 'flex' : 'hidden'}`}
-                onClick={() => setRunMenuOpen((prev) => !prev)}
-              >
-                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <use href="#icon-chevron-down"></use>
-                </svg>
-              </button>
-              <div id="run-dropdown-menu" className={`absolute right-0 z-50 mt-1 w-52 rounded border border-zinc-700 bg-zinc-900 py-1 text-xs shadow-xl ${runMenuOpen ? '' : 'hidden'}`}>
-                <button id="run-rerun-option" className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-zinc-800" onClick={() => { setRunMode('rerun'); setRunMenuOpen(false) }}>
-                  <svg className={`h-3 w-3 mt-0.5 text-emerald-400 flex-shrink-0 ${runMode === 'rerun' ? '' : 'invisible'}`} id="rerun-check"><use href="#icon-check"></use></svg>
-                  <div>
-                    <div className="text-zinc-200">Rerun</div>
-                    <div className="text-zinc-500 text-[10px]">Overwrite current run results</div>
-                  </div>
-                </button>
-                <button id="run-new-option" className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-zinc-800" onClick={() => { setRunMode('new'); setRunMenuOpen(false) }}>
-                  <svg className={`h-3 w-3 mt-0.5 text-emerald-400 flex-shrink-0 ${runMode === 'new' ? '' : 'invisible'}`} id="new-check"><use href="#icon-check"></use></svg>
-                  <div>
-                    <div className="text-zinc-200">New Run</div>
-                    <div className="text-zinc-500 text-[10px]">Create a fresh run in this session</div>
-                  </div>
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       </div>

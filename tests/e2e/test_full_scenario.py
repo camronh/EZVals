@@ -191,7 +191,6 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             assert rows.count() == expected_count, "row count should match discovered evals"
             expect(page.locator("tr[data-row='main'][data-status='not_started']")).to_have_count(expected_count)
             expect(page.locator("#play-btn-text")).to_have_text("Run")
-            expect(page.locator("#run-dropdown-toggle")).to_be_hidden()
 
             stats_expanded = page.locator("#stats-expanded")
             expect(stats_expanded).to_be_visible()
@@ -294,8 +293,7 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
                 "() => document.querySelectorAll(\"tr[data-row='main'][data-status='running'], tr[data-row='main'][data-status='pending']\").length === 0",
                 timeout=RUN_TIMEOUT_MS,
             )
-            expect(page.locator("#play-btn-text")).to_have_text("Rerun")
-            expect(page.locator("#run-dropdown-toggle")).to_be_visible()
+            expect(page.locator("#play-btn-text")).to_have_text("Run")
             expect(page.locator("tr[data-row='main'][data-status='not_started']")).to_have_count(0)
             assert page.locator("tr[data-row='main'][data-status='completed']").count() > 0, "expected completed rows"
             error_rows = page.locator("tr[data-row='main'][data-status='error']")
@@ -421,8 +419,7 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
 
             rerun_row = page.locator(f"tr[data-row='main'][data-row-id='{rerun_idx}']")
             rerun_row.locator(".row-checkbox").click()
-            expect(page.locator("#play-btn-text")).to_have_text("Rerun")
-            expect(page.locator("#run-dropdown-toggle")).to_be_visible()
+            expect(page.locator("#play-btn-text")).to_have_text("Run")
 
             # Selective rerun updates only selected row.
             page.locator("#play-btn").click()
@@ -510,16 +507,23 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
                 "() => document.querySelectorAll(\"tr[data-row='main'][data-status='running'], tr[data-row='main'][data-status='pending']\").length === 0",
                 timeout=RUN_TIMEOUT_MS,
             )
-            expect(page.locator("#play-btn-text")).to_have_text("Rerun")
+            expect(page.locator("#play-btn-text")).to_have_text("Run")
             assert page.locator("tr[data-row='main'][data-status='cancelled']").count() > 0, "stop should cancel rows"
 
             stop_run_id = run_id
             stop_run_name = previous_run_name
 
-            # New run mode creates a new run_id and new run_name.
-            page.locator("#run-dropdown-toggle").click()
-            page.locator("#run-new-option").click()
-            expect(page.locator("#play-btn-text")).to_have_text("New Run")
+            # New-run icon creates a new run_id and new run_name with discovered rows reset to not_started.
+            page.locator("#new-run-btn-expanded").click()
+            page.wait_for_function(
+                f"() => document.querySelector('#results-table')?.getAttribute('data-run-id') !== '{stop_run_id}'",
+                timeout=RUN_TIMEOUT_MS,
+            )
+            expect(page.locator("#play-btn-text")).to_have_text("Run")
+            expect(page.locator("tr[data-row='main']")).to_have_count(expected_count)
+            expect(page.locator("tr[data-row='main'][data-status='not_started']")).to_have_count(expected_count)
+            expect(page.locator("tr[data-row='main'][data-status='completed']")).to_have_count(0)
+
             page.evaluate("window.__runSeen = { progress: false, running: false };")
             page.locator("#play-btn").click()
             expect(page.locator("#play-btn-text")).to_have_text("Stop")
