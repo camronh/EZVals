@@ -1053,6 +1053,55 @@ class TestStatusChipPosition:
 
                 browser.close()
 
+    def test_running_status_uses_subtle_indicator(self, tmp_path):
+        """Running status should use a subtle spinner indicator, not a text chip."""
+        summary = {
+            "total_evaluations": 1,
+            "total_functions": 1,
+            "total_errors": 0,
+            "total_passed": 0,
+            "total_with_scores": 0,
+            "average_latency": 0.0,
+            "results": [
+                {
+                    "function": "test_running_func",
+                    "dataset": "active_dataset",
+                    "labels": [],
+                    "result": {
+                        "input": "input",
+                        "output": None,
+                        "reference": None,
+                        "scores": [],
+                        "error": None,
+                        "latency": None,
+                        "metadata": None,
+                        "status": "running",
+                    },
+                }
+            ],
+        }
+        store = ResultsStore(tmp_path / "runs")
+        run_id = store.save_run(summary, "2024-01-01T00-00-00Z")
+        app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+        with run_server(app) as url:
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page()
+                page.goto(url)
+                page.wait_for_selector("#results-table")
+
+                running_row = page.locator("tr[data-row='main']").filter(
+                    has=page.locator("td[data-col='function']", has_text="test_running_func")
+                )
+                subtext_row = running_row.locator("td[data-col='function'] div.flex.flex-col > div").nth(1)
+
+                expect(subtext_row.locator(".status-indicator-running")).to_have_count(1)
+                expect(subtext_row.locator(".status-pill")).to_have_count(0)
+                assert "running" not in (subtext_row.inner_text() or "").lower()
+
+                browser.close()
+
 
 def test_long_dataset_and_label_chips_truncate_with_tooltips(tmp_path):
     store = ResultsStore(tmp_path / "runs")

@@ -109,7 +109,13 @@ export default function ResultsTable({
             </a>
           )
           let statusPill = null
-          if (status === 'running') statusPill = <span className={`status-pill rounded px-1.5 py-0.5 text-[10px] font-medium ${pillTones.running}`}>running</span>
+          if (status === 'running') {
+            statusPill = (
+              <span className="status-indicator-running inline-flex h-3 w-3 items-center justify-center text-cyan-400" role="status" aria-label="running">
+                <span className="h-2.5 w-2.5 animate-spin rounded-full border border-cyan-500/40 border-t-cyan-400" />
+              </span>
+            )
+          }
           else if (status === 'error') statusPill = <span className={`status-pill rounded px-1.5 py-0.5 text-[10px] font-medium ${pillTones.error}`}>err</span>
 
           let outputCell

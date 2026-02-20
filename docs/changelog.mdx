@@ -5,6 +5,8 @@ description: "All notable changes to EZVals"
 
 ## Unreleased
 
+- Fixed: Running rows in the dashboard now show a subtle spinner indicator instead of a prominent "running" text chip.
+- Tests: Added E2E coverage to verify running status uses the subtle indicator and no running text chip is rendered.
 - Fixed: Publish workflow now assembles `ezvals/skills/evals/ezvals-docs/` before building the wheel, so `ezvals skills add --claude` installs bundled API reference docs from PyPI packages.
 - Fixed: Skill sync workflow now sources `docs/setup.mdx` as `quickstart.mdx`, matching current docs layout while preserving skill doc naming.
 - Tests: Publish workflow now verifies both wheel payload and installed-wheel behavior by running `ezvals skills add --claude` and asserting required `ezvals-docs` files.
