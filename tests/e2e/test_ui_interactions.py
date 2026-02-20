@@ -1,5 +1,3 @@
-import re
-
 from playwright.sync_api import sync_playwright, expect
 import requests
 
@@ -121,39 +119,15 @@ def make_scored_summary():
 
 
 
-def test_row_expand_sort_and_toggle_columns(tmp_path):
-    # Seed a run JSON
+def test_sort_and_toggle_columns(tmp_path):
     store = ResultsStore(tmp_path / "runs")
     run_id = store.save_run(make_summary(), "2024-01-01T00-00-00Z")
-
-    # Create app bound to that run
     app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
 
     with run_server(app) as url:
         with sync_playwright() as p:
             browser = p.chromium.launch()
             page = browser.new_page()
-            page.goto(url)
-            # Wait for HTMX content
-            page.wait_for_selector("#results-table")
-
-            # Click first row to expand it (not navigate)
-            first_row = page.locator("tbody tr[data-row='main']").nth(0)
-            first_row.click()
-            # Row should have expanded class
-            expect(first_row).to_have_class(re.compile(r"expanded"))
-
-            # Click again to collapse
-            first_row.click()
-            expect(first_row).not_to_have_class(re.compile(r"expanded"))
-
-            # Click function name to navigate to detail page
-            page.locator("tbody tr[data-row='main'] td[data-col='function'] a").first.click()
-            page.wait_for_url(f"**/runs/{run_id}/results/0")
-            # Detail page shows result counter in format "1/3"
-            expect(page.locator("text=1/3")).to_be_visible()
-
-            # Navigate back and test sorting
             page.goto(url)
             page.wait_for_selector("#results-table")
 
@@ -373,55 +347,10 @@ def test_detail_page_score_editing_persists(tmp_path):
     assert score_value["notes"] == "manual override value"
 
 
-def test_row_click_no_expand_when_content_fits(tmp_path):
-    store = ResultsStore(tmp_path / "runs")
-    run_id = store.save_run(
-        {
-            "total_evaluations": 1,
-            "total_functions": 1,
-            "total_errors": 0,
-            "total_passed": 0,
-            "total_with_scores": 0,
-            "average_latency": 0.0,
-            "results": [
-                {
-                    "function": "short_row",
-                    "dataset": "ds",
-                    "labels": [],
-                    "result": {
-                        "input": "short",
-                        "output": "tiny",
-                        "reference": None,
-                        "scores": None,
-                        "error": None,
-                        "latency": 0.3,
-                        "metadata": None,
-                    },
-                }
-            ],
-        },
-        "2024-01-01T00-00-00Z",
-    )
-    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
-
-    with run_server(app) as url:
-        with sync_playwright() as p:
-            browser = p.chromium.launch()
-            page = browser.new_page(viewport={"width": 2400, "height": 900})
-            page.goto(url)
-            page.wait_for_selector("#results-table")
-
-            row = page.locator("tbody tr[data-row='main']").first
-            input_cell = row.locator("td[data-col='input']")
-            assert input_cell.evaluate("el => window.getComputedStyle(el).verticalAlign") == "middle"
-            row.click()
-            assert input_cell.evaluate("el => window.getComputedStyle(el).verticalAlign") == "middle"
-
-            browser.close()
-
 
 # Sticky headers are intentionally disabled per product decision; related test removed.
 # Inline editing tests removed - editing now happens on detail page.
+# Row-click-to-expand removed - replaced with cell hover preview popover.
 
 
 def test_metadata_renders_as_key_values_with_links(tmp_path):

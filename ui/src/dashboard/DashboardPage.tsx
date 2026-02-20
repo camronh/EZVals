@@ -405,7 +405,6 @@ export default function DashboardPage() {
   const [comparisonRuns, setComparisonRuns] = useSessionStorageState<ComparisonRun[]>('ezvals:comparisonRuns', [])
   const [sortState, setSortState] = useState<SortStateItem[]>([])
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set())
-  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set())
   const [isRunningOverride, setIsRunningOverride] = useState(false)
   const [isRestartingServer, setIsRestartingServer] = useState(false)
   const [hasRunBefore, setHasRunBefore] = useState(false)
@@ -897,15 +896,6 @@ export default function DashboardPage() {
     })
   }, [sortedRows])
 
-  const handleRowToggle = useCallback((idx: number) => {
-    setExpandedRows((prev) => {
-      const next = new Set(prev)
-      if (next.has(idx)) next.delete(idx)
-      else next.add(idx)
-      return next
-    })
-  }, [])
-
   const handleResizeStart = useCallback((colKey: string, event: ReactMouseEvent<HTMLDivElement>) => {
     event.preventDefault()
     event.stopPropagation()
@@ -1380,7 +1370,6 @@ export default function DashboardPage() {
             data={data}
             rows={sortedRows}
             selectedIndices={selectedIndices}
-            expandedRows={expandedRows}
             hiddenSet={hiddenSet}
             sortState={sortState}
             colWidths={colWidths}
@@ -1390,7 +1379,6 @@ export default function DashboardPage() {
             onResizeStart={handleResizeStart}
             onSelectAll={handleSelectAll}
             onRowSelect={handleRowSelect}
-            onRowToggle={handleRowToggle}
             selectAllRef={selectAllRef}
             headerRefs={headerRefs}
           />
