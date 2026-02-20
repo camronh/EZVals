@@ -217,6 +217,15 @@ You should have everything you need to plan a good eval from here.
 - Static analysis (linting, types, security)
 - Handling non-determinism (pass@k, pass^k)
 
+### [use-cases/testing-agent-skills.md](use-cases/testing-agent-skills.md)
+**When to read:** Evaluating agent skills, CLAUDE.md/AGENTS.md configs, MCP servers, or comparing coding agents (Claude Code, Codex, Cursor, etc.)
+
+- Plan-only evals for testing skills without file mutations
+- Headless CLI agents as targets (`claude -p`, `codex exec`)
+- CLI agent as LLM judge (subscription-powered, no API key)
+- Dataset/target/evaluator reference structure
+- Judge alignment and iteration workflow
+
 ### [use-cases/testing-internals.md](use-cases/testing-internals.md)
 **When to read:** Testing tools, multi-agents, workflow nodes
 
