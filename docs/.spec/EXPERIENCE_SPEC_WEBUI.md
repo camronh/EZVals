@@ -727,6 +727,13 @@ Scenario: Result alignment across runs
   Then results are matched across runs by (function, dataset) tuple
   And rows with matching results show data from all runs
   And missing results show "—" in the respective run column
+
+Scenario: Hover preview popover in comparison table
+  Given comparison mode is active
+  When the user hovers truncated cell content in the comparison table
+  Then a preview popover appears after the same delay as single-run mode
+  And this applies to Input and Reference cells
+  And this applies to Output, Error, and Scores content within each run column
 ```
 
 ### Comparison Detail View

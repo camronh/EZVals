@@ -428,6 +428,72 @@ def test_legacy_preset_query_ignored(tmp_path):
             browser.close()
 
 
+def test_comparison_table_hover_previews(tmp_path):
+    """Comparison table should show hover preview popovers for key truncated cells."""
+    store = ResultsStore(tmp_path / "runs")
+
+    base_summary = make_run_summary("baseline")
+    final_summary = make_run_summary("final")
+    long_input = "input segment " * 12
+    long_reference = "reference segment " * 12
+    long_output_base = "baseline output segment " * 12
+    long_output_final = "final output segment " * 12
+    long_error = "comparison error details line 1\n" + ("line with extra detail " * 12)
+
+    for summary, output_text in ((base_summary, long_output_base), (final_summary, long_output_final)):
+        summary["results"][0]["result"]["input"] = long_input
+        summary["results"][0]["result"]["reference"] = long_reference
+        summary["results"][0]["result"]["output"] = output_text
+        summary["results"][0]["result"]["scores"] = [
+            {"key": "pass", "passed": True},
+            {"key": "quality", "value": 0.92, "notes": "stable"},
+        ]
+    final_summary["results"][0]["result"]["error"] = long_error
+
+    run1_id = store.save_run(base_summary, session_name="test-session", run_name="baseline")
+    run2_id = store.save_run(final_summary, session_name="test-session", run_name="final")
+
+    app = create_app(
+        results_dir=str(tmp_path / "runs"),
+        active_run_id=run1_id,
+        session_name="test-session",
+        run_name="baseline",
+    )
+
+    saved_runs = [
+        {"runId": run1_id, "runName": "baseline", "color": "#3b82f6"},
+        {"runId": run2_id, "runName": "final", "color": "#22c55e"},
+    ]
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.add_init_script(
+                f"sessionStorage.setItem('ezvals:comparisonRuns', JSON.stringify({json.dumps(saved_runs)}));"
+            )
+            page.goto(url)
+            page.wait_for_selector("#results-table")
+            page.wait_for_selector(".comparison-chips")
+
+            def hover_and_expect(locator, label_text, snippet):
+                locator.hover()
+                page.wait_for_timeout(500)
+                popover = page.locator(".cell-preview-popover")
+                expect(popover).to_be_visible()
+                expect(popover.locator(".cell-preview-label")).to_have_text(label_text)
+                expect(popover).to_contain_text(snippet)
+
+            row = page.locator("tbody tr[data-row='main']").filter(has_text="test_func_a").first
+            hover_and_expect(row.locator("td[data-col='input']").first, "Input", "input segment")
+            hover_and_expect(row.locator("td[data-col='reference']").first, "Reference", "reference segment")
+            hover_and_expect(row.locator("td.comparison-output-cell .line-clamp-3").first, "Output", "baseline output segment")
+            hover_and_expect(row.locator("td.comparison-output-cell .text-accent-error").first, "Error", "comparison error details line 1")
+            hover_and_expect(row.locator("td.comparison-output-cell .mt-2").first, "Scores", "quality")
+
+            browser.close()
+
+
 def test_comparison_table_structure(tmp_path):
     """Table should show per-run output columns in comparison mode.
 
