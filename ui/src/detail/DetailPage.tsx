@@ -37,7 +37,7 @@ type CollapsedState = {
   trace: boolean
 }
 
-type ResizeType = 'input-width' | 'ref-height' | 'sidebar-width'
+type ResizeType = 'input-width' | 'ref-height' | 'sidebar-width' | 'comparison-input-width' | 'comparison-context-height'
 
 type ResizeState = {
   type: ResizeType
@@ -166,25 +166,39 @@ function ScoreCard({ score, onEdit }: ScoreCardProps) {
 type InlineScoreBadgesProps = {
   scores: Score[]
   latency?: number | null
+  annotation?: string | null
 }
 
-function InlineScoreBadges({ scores, latency }: InlineScoreBadgesProps) {
+function InlineScoreBadges({ scores, latency, annotation }: InlineScoreBadgesProps) {
+  const annotationText = annotation?.trim()
+
   return (
-    <div className="flex flex-wrap gap-1">
+    <div className="flex flex-wrap gap-1.5">
       {(scores || []).map((score, idx) => {
         let badgeClass = 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-300'
         if (score.passed === true) badgeClass = 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
         else if (score.passed === false) badgeClass = 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
-        const val = score.value != null ? `:${typeof score.value === 'number' ? score.value.toFixed(2) : score.value}` : ''
+        const valueText = score.value != null
+          ? (typeof score.value === 'number' ? score.value.toFixed(2) : String(score.value))
+          : (score.passed === true ? 'true' : (score.passed === false ? 'false' : '—'))
+        const title = `${score.key}: ${valueText}${score.notes ? ` | notes: ${score.notes}` : ''}`
         return (
-          <span key={`${score.key}-${idx}`} className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${badgeClass}`}>
-            {score.key}{val}
+          <span key={`${score.key}-${idx}`} title={title} className={`rounded border border-current/15 px-1.5 py-0.5 text-[10px] font-medium ${badgeClass}`}>
+            {score.key}: {valueText}
           </span>
         )
       })}
       {latency != null ? (
-        <span className={`font-mono text-[10px] ${getLatencyColor(latency) || 'text-zinc-500'}`}>
+        <span className={`rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 font-mono text-[10px] dark:border-zinc-700 dark:bg-zinc-900/60 ${getLatencyColor(latency) || 'text-zinc-500'}`}>
           {latency.toFixed(2)}s
+        </span>
+      ) : null}
+      {annotationText ? (
+        <span
+          title={annotationText}
+          className="max-w-[220px] truncate rounded border border-amber-300/60 bg-amber-100/60 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300"
+        >
+          {annotationText}
         </span>
       ) : null}
     </div>
@@ -193,6 +207,11 @@ function InlineScoreBadges({ scores, latency }: InlineScoreBadgesProps) {
 
 export default function DetailPage() {
   useBodyClass(DETAIL_BODY_CLASS, 'Result Detail - EZVals')
+
+  const forceSingleDetailMode = useMemo(() => {
+    const params = new URLSearchParams(window.location.search)
+    return params.get('mode') === 'single'
+  }, [])
 
   const [{ runId, index }] = useState<{ runId: string; index: number }>(() => {
     const match = window.location.pathname.match(/\/runs\/([^/]+)\/results\/(\d+)/)
@@ -222,9 +241,14 @@ export default function DetailPage() {
   const [scoreSaving, setScoreSaving] = useState(false)
   const [scoreError, setScoreError] = useState<string | null>(null)
   const [inputWidth, setInputWidth] = useState(() => (window.innerWidth < 1100 ? 55 : 50))
+  const [comparisonInputWidth, setComparisonInputWidth] = useState(() => (window.innerWidth < 1100 ? 55 : 50))
   const [refHeight, setRefHeight] = useState(() => {
     const availableHeight = Math.max(200, window.innerHeight - DETAIL_HEADER_HEIGHT)
     return Math.max(100, Math.min(150, Math.floor(availableHeight * 0.3)))
+  })
+  const [comparisonContextHeight, setComparisonContextHeight] = useState(() => {
+    const availableHeight = Math.max(240, window.innerHeight - DETAIL_HEADER_HEIGHT)
+    return Math.max(160, Math.min(360, Math.floor(availableHeight * 0.35)))
   })
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     return Math.max(220, Math.min(320, Math.floor(window.innerWidth * 0.28)))
@@ -243,7 +267,7 @@ export default function DetailPage() {
     }
   }, [])
 
-  const isComparisonMode = comparisonRuns.length > 1
+  const isComparisonMode = !forceSingleDetailMode && comparisonRuns.length > 1
 
   const fetchDetail = useCallback(async () => {
     setLoading(true)
@@ -270,8 +294,10 @@ export default function DetailPage() {
       const maxSidebar = Math.max(220, Math.min(600, Math.floor(window.innerWidth * 0.35)))
       const availableHeight = Math.max(200, window.innerHeight - DETAIL_HEADER_HEIGHT)
       const maxRefHeight = Math.max(100, Math.min(400, Math.floor(availableHeight * 0.35)))
+      const maxComparisonContextHeight = Math.max(160, Math.min(560, Math.floor(availableHeight * 0.6)))
       setSidebarWidth((prev) => Math.min(prev, maxSidebar))
       setRefHeight((prev) => Math.min(prev, maxRefHeight))
+      setComparisonContextHeight((prev) => Math.min(prev, maxComparisonContextHeight))
     }
     handleViewportResize()
     window.addEventListener('resize', handleViewportResize)
@@ -365,10 +391,20 @@ export default function DetailPage() {
         const containerWidth = Math.max(1, container.offsetWidth - sidebarWidth)
         const newPct = Math.max(20, Math.min(80, startValue + (dx / containerWidth) * 100))
         setInputWidth(newPct)
+      } else if (type === 'comparison-input-width') {
+        const dx = e.clientX - startX
+        const containerWidth = Math.max(1, container.offsetWidth)
+        const newPct = Math.max(20, Math.min(80, startValue + (dx / containerWidth) * 100))
+        setComparisonInputWidth(newPct)
       } else if (type === 'ref-height') {
         const dy = startY - e.clientY
         const newHeight = Math.max(60, Math.min(400, startValue + dy))
         setRefHeight(newHeight)
+      } else if (type === 'comparison-context-height') {
+        const dy = startY - e.clientY
+        const maxHeight = Math.max(180, Math.min(700, Math.floor(container.offsetHeight * 0.7)))
+        const newHeight = Math.max(120, Math.min(maxHeight, startValue + dy))
+        setComparisonContextHeight(newHeight)
       } else if (type === 'sidebar-width') {
         const dx = startX - e.clientX
         const newWidth = Math.max(200, Math.min(600, startValue + dx))
@@ -395,10 +431,15 @@ export default function DetailPage() {
     let startValue = inputWidth
     if (type === 'ref-height') startValue = refHeight
     else if (type === 'sidebar-width') startValue = sidebarWidth
+    else if (type === 'comparison-input-width') startValue = comparisonInputWidth
+    else if (type === 'comparison-context-height') startValue = comparisonContextHeight
     resizingRef.current = { type, startX: e.clientX, startY: e.clientY, startValue, container }
     document.body.style.cursor = type === 'ref-height' ? 'row-resize' : 'col-resize'
+    if (type === 'comparison-context-height') {
+      document.body.style.cursor = 'row-resize'
+    }
     document.body.style.userSelect = 'none'
-  }, [inputWidth, refHeight, sidebarWidth])
+  }, [comparisonContextHeight, comparisonInputWidth, inputWidth, refHeight, sidebarWidth])
 
   const handleRerun = useCallback(async () => {
     if (!data || isRerunning) return
@@ -599,6 +640,8 @@ export default function DetailPage() {
   const runCommand = buildRunCommand(data.eval_path, resultEntry?.function)
 
   const baseForCompare = comparison?.baseResult || resultEntry
+  const comparisonBaseResult = (baseForCompare?.result || {}) as NonNullable<RunResultRow['result']>
+  const comparisonHasReference = comparisonBaseResult.reference != null && comparisonBaseResult.reference !== '—'
 
   return (
     <div className="min-h-screen bg-blue-50/40 font-sans text-zinc-800 dark:bg-neutral-950 dark:text-zinc-100">
@@ -622,20 +665,22 @@ export default function DetailPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              id="rerun-btn"
-              className="flex h-7 items-center gap-1.5 rounded border border-emerald-500/30 bg-emerald-500/10 px-2.5 text-xs font-medium text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-300 disabled:opacity-60"
-              title="Rerun this evaluation"
-              onClick={handleRerun}
-              disabled={isRerunning}
-            >
-              {isRerunning ? (
-                <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
-              ) : (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 4v6h6" /><path d="M3.51 15a9 9 0 102.13-9.36L1 10" /></svg>
-              )}
-              {isRerunning ? 'Running...' : 'Rerun'}
-            </button>
+            {!isComparisonMode ? (
+              <button
+                id="rerun-btn"
+                className="flex h-7 items-center gap-1.5 rounded border border-emerald-500/30 bg-emerald-500/10 px-2.5 text-xs font-medium text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-300 disabled:opacity-60"
+                title="Rerun this evaluation"
+                onClick={handleRerun}
+                disabled={isRerunning}
+              >
+                {isRerunning ? (
+                  <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
+                ) : (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 4v6h6" /><path d="M3.51 15a9 9 0 102.13-9.36L1 10" /></svg>
+                )}
+                {isRerunning ? 'Running...' : 'Rerun'}
+              </button>
+            ) : null}
             <span className="text-xs text-zinc-500">{data.index + 1}/{data.total}</span>
             <button
               id="prev-btn"
@@ -675,68 +720,124 @@ export default function DetailPage() {
         <div ref={containerRef} className="flex-1 flex min-h-0 overflow-hidden">
           <div id="main-panel" className="flex flex-col min-w-0 flex-1">
             {isComparisonMode && comparison ? (
-              <div className="flex flex-col min-h-0">
-                <div className="border-b border-blue-200/60 dark:border-zinc-800 px-4 py-3 bg-white dark:bg-zinc-900">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-sm font-semibold text-zinc-900 dark:text-zinc-100">{baseForCompare?.function}</span>
-                    {baseForCompare?.dataset ? (
-                      <span className="text-xs text-zinc-500">{baseForCompare.dataset}</span>
-                    ) : null}
-                    {(baseForCompare?.labels || []).map((label) => (
-                      <span key={label} className="rounded bg-zinc-200 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">{label}</span>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex min-h-0 border-b border-blue-100 dark:border-zinc-800">
-                  <div className="flex-1 min-w-0 border-r border-blue-100 dark:border-zinc-800">
-                    <div className="data-panel-header flex items-center justify-between border-b border-blue-100 bg-blue-50/50 px-3 py-1.5 dark:border-zinc-800/60 dark:bg-zinc-900/50">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">Input</span>
-                      <CopyButton
-                        getText={() => getRawText(baseForCompare?.result?.input)}
-                        className="copy-btn text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-                        title="Copy"
-                      />
-                    </div>
-                    <div className="data-panel-body p-3 bg-white dark:bg-zinc-900/30">
-                      <DataViewer content={baseForCompare?.result?.input} placeholder="—" />
-                    </div>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="data-panel-header flex items-center justify-between border-b border-amber-200/40 bg-amber-50/50 px-3 py-1.5 dark:border-amber-500/10 dark:bg-amber-500/5">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">Reference</span>
-                      <CopyButton
-                        getText={() => getRawText(baseForCompare?.result?.reference)}
-                        className="copy-btn text-amber-500 hover:text-amber-700 dark:hover:text-amber-300"
-                        title="Copy"
-                      />
-                    </div>
-                    <div className="data-panel-body p-3 bg-amber-50/30 dark:bg-amber-500/5">
-                      <DataViewer content={baseForCompare?.result?.reference} placeholder="—" />
-                    </div>
-                  </div>
-                </div>
-                <div className="flex-1 min-h-0 grid grid-cols-1 gap-3 p-4 overflow-auto">
-                  {comparison.runs.map((run) => {
-                    const runResult = (run.result?.result || {}) as NonNullable<RunResultRow['result']>
-                    return (
-                      <div key={run.runId} className="rounded border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60">
-                        <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <span className="h-2 w-2 rounded-full" style={{ background: run.color }}></span>
-                            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">{run.runName}</span>
+              <div className="flex flex-1 min-h-0 flex-col">
+                <div id="comparison-outputs" className="flex-1 min-h-0 overflow-auto p-4">
+                  <div className="grid min-h-full grid-cols-1 gap-3 lg:grid-cols-2">
+                    {comparison.runs.map((run) => {
+                      const runResult = (run.result?.result || {}) as NonNullable<RunResultRow['result']>
+                      return (
+                        <div key={run.runId} className="comparison-output-card flex min-h-[220px] flex-col overflow-hidden rounded border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/60">
+                          <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className="h-2 w-2 rounded-full" style={{ background: run.color }}></span>
+                              <span className="truncate text-xs font-semibold text-zinc-700 dark:text-zinc-200">{run.runName}</span>
+                              <span className="text-[10px] text-zinc-400">{runResult.status || '—'}</span>
+                            </div>
+                            {run.resultIndex != null ? (
+                              <a
+                                href={`/runs/${run.runId}/results/${run.resultIndex}?mode=single`}
+                                title="Open detail"
+                                onClick={() => sessionStorage.removeItem(COMPARISON_STORAGE_KEY)}
+                                className="rounded border border-zinc-300 px-1.5 py-0.5 text-[10px] text-zinc-500 hover:border-blue-300 hover:text-blue-600 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-blue-500 dark:hover:text-blue-300"
+                              >
+                                Open detail
+                              </a>
+                            ) : (
+                              <span className="text-[10px] text-zinc-400">No match</span>
+                            )}
                           </div>
-                          <span className="text-[10px] text-zinc-400">{runResult.status || '—'}</span>
-                        </div>
-                        <div className="p-3 space-y-2">
-                          <DataViewer content={runResult.output} placeholder="—" />
+                          <div className="data-panel-body flex-1 overflow-auto p-3">
+                            <DataViewer content={runResult.output} placeholder="—" />
+                          </div>
                           {runResult.error ? (
-                            <div className="text-[11px] text-rose-500">Error: {runResult.error}</div>
+                            <div className="border-t border-rose-200 bg-rose-50 px-3 py-1.5 text-[11px] text-rose-600 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
+                              Error: {runResult.error}
+                            </div>
                           ) : null}
-                          <InlineScoreBadges scores={runResult.scores || []} latency={runResult.latency} />
+                          <div className="border-t border-zinc-200 px-3 py-2 dark:border-zinc-800">
+                            <InlineScoreBadges
+                              scores={runResult.scores || []}
+                              latency={runResult.latency}
+                              annotation={runResult.annotation}
+                            />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div
+                  className="resize-handle-h h-1 cursor-row-resize bg-transparent hover:bg-blue-500/30 transition-colors"
+                  onMouseDown={(e) => startResize('comparison-context-height', e)}
+                />
+
+                <div
+                  id="comparison-context"
+                  className="flex flex-shrink-0 flex-col border-t border-blue-100 bg-white dark:border-zinc-800 dark:bg-zinc-900"
+                  style={{ height: `${comparisonContextHeight}px`, minHeight: '120px' }}
+                >
+                  {(baseForCompare?.dataset || (baseForCompare?.labels || []).length > 0) ? (
+                    <div className="flex items-center gap-2 border-b border-blue-100 px-3 py-1.5 dark:border-zinc-800">
+                      {baseForCompare?.dataset ? (
+                        <span className="text-[10px] text-zinc-500">{baseForCompare.dataset}</span>
+                      ) : null}
+                      {(baseForCompare?.labels || []).map((label) => (
+                        <span key={label} className="rounded bg-zinc-200 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">{label}</span>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {comparisonHasReference ? (
+                    <div className="flex min-h-0 flex-1">
+                      <div id="comparison-input-panel" className="flex min-w-0 flex-col" style={{ width: `${comparisonInputWidth}%` }}>
+                        <div className="data-panel-header flex items-center justify-between border-b border-blue-100 bg-blue-50/50 px-3 py-1.5 dark:border-zinc-800/60 dark:bg-zinc-900/50">
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">Input</span>
+                          <CopyButton
+                            getText={() => getRawText(comparisonBaseResult.input)}
+                            className="copy-btn text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                            title="Copy"
+                          />
+                        </div>
+                        <div className="data-panel-body flex-1 overflow-auto p-3 bg-white dark:bg-zinc-900/30">
+                          <DataViewer content={comparisonBaseResult.input} placeholder="—" />
                         </div>
                       </div>
-                    )
-                  })}
+
+                      <div
+                        className="resize-handle-v w-1 cursor-col-resize bg-transparent hover:bg-blue-500/30 transition-colors flex-shrink-0"
+                        onMouseDown={(e) => startResize('comparison-input-width', e)}
+                      />
+
+                      <div id="comparison-reference-panel" className="flex min-w-0 flex-1 flex-col">
+                        <div className="data-panel-header flex items-center justify-between border-b border-amber-200/40 bg-amber-50/50 px-3 py-1.5 dark:border-amber-500/10 dark:bg-amber-500/5">
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">Reference</span>
+                          <CopyButton
+                            getText={() => getRawText(comparisonBaseResult.reference)}
+                            className="copy-btn text-amber-500 hover:text-amber-700 dark:hover:text-amber-300"
+                            title="Copy"
+                          />
+                        </div>
+                        <div className="data-panel-body flex-1 overflow-auto p-3 bg-amber-50/30 dark:bg-amber-500/5">
+                          <DataViewer content={comparisonBaseResult.reference} placeholder="—" />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div id="comparison-input-panel" className="flex min-h-0 flex-1 flex-col">
+                      <div className="data-panel-header flex items-center justify-between border-b border-blue-100 bg-blue-50/50 px-3 py-1.5 dark:border-zinc-800/60 dark:bg-zinc-900/50">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">Input</span>
+                        <CopyButton
+                          getText={() => getRawText(comparisonBaseResult.input)}
+                          className="copy-btn text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                          title="Copy"
+                        />
+                      </div>
+                      <div className="data-panel-body flex-1 overflow-auto p-3 bg-white dark:bg-zinc-900/30">
+                        <DataViewer content={comparisonBaseResult.input} placeholder="—" />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
@@ -817,12 +918,14 @@ export default function DetailPage() {
             )}
           </div>
 
-          <div
-            className="resize-handle-v w-1 cursor-col-resize bg-transparent hover:bg-blue-500/30 transition-colors flex-shrink-0"
-            onMouseDown={(e) => startResize('sidebar-width', e)}
-          />
+          {!isComparisonMode ? (
+            <>
+              <div
+                className="resize-handle-v w-1 cursor-col-resize bg-transparent hover:bg-blue-500/30 transition-colors flex-shrink-0"
+                onMouseDown={(e) => startResize('sidebar-width', e)}
+              />
 
-          <div id="sidebar-panel" className="flex flex-col min-h-0 overflow-auto bg-zinc-50 dark:bg-zinc-900/50" style={{ width: `${sidebarWidth}px`, minWidth: '200px' }}>
+              <div id="sidebar-panel" className="flex flex-col min-h-0 overflow-auto bg-zinc-50 dark:bg-zinc-900/50" style={{ width: `${sidebarWidth}px`, minWidth: '200px' }}>
             <div className="border-b border-blue-200/60 dark:border-zinc-800 p-3 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Status</span>
@@ -1162,10 +1265,12 @@ export default function DetailPage() {
                 <span><kbd className="rounded border border-zinc-300 bg-white px-1 font-mono dark:border-zinc-600 dark:bg-zinc-800">Esc</kbd> {(editingAnnotation || editingScoreIndex != null) ? 'cancel' : 'back'}</span>
               </div>
             </div>
-          </div>
+              </div>
+            </>
+          ) : null}
         </div>
 
-        {hasMessages ? (
+        {!isComparisonMode && hasMessages ? (
           <div
             id="messages-pane"
             className={`fixed top-0 right-0 bottom-0 z-50 border-l border-zinc-200 bg-white shadow-xl transition-transform duration-200 dark:border-zinc-700 dark:bg-zinc-900 ${messagesOpen ? '' : 'translate-x-full'}`}

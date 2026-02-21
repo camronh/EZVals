@@ -31,9 +31,10 @@ def make_run_summary(run_name, avg_score=0.8):
                     "input": "input A",
                     "output": f"output A from {run_name}",
                     "reference": "ref A",
-                    "scores": [{"key": "pass", "passed": True}],
+                    "scores": [{"key": "pass", "passed": True, "notes": f"note from {run_name}"}],
                     "error": None,
                     "latency": 1.0,
+                    "annotation": f"annotation {run_name}",
                     "metadata": None,
                     "status": "completed",
                 },
@@ -488,7 +489,7 @@ def _make_run_summary_without_reference(run_name):
 
 
 def test_comparison_detail_layout(tmp_path):
-    """Comparison detail view should show input/reference and run outputs, no sidebar."""
+    """Comparison detail should prioritize run tiles and hide single-run controls."""
     store = ResultsStore(tmp_path / "runs")
 
     run1_id = store.save_run(make_run_summary("baseline"), session_name="test-session", run_name="baseline")
@@ -512,11 +513,15 @@ def test_comparison_detail_layout(tmp_path):
             page = browser.new_page()
             _open_comparison_detail(page, url, run1_id, saved_runs)
 
-            # Main panel should be visible with comparison layout
             expect(page.locator("#main-panel")).to_be_visible()
-            # Should show outputs from multiple runs
+            expect(page.locator("#comparison-outputs .comparison-output-card")).to_have_count(2)
+            expect(page.locator("#comparison-context")).to_be_visible()
             expect(page.locator("text=output A from baseline")).to_be_visible()
             expect(page.locator("text=output A from final")).to_be_visible()
+            expect(page.locator("#sidebar-panel")).to_have_count(0)
+            expect(page.locator("#rerun-btn")).to_have_count(0)
+            expect(page.locator("header").locator("text=test_func_a")).to_have_count(1)
+            expect(page.locator("#main-panel").locator("text=test_func_a")).to_have_count(0)
 
             browser.close()
 
@@ -546,9 +551,9 @@ def test_comparison_detail_input_full_width_no_reference(tmp_path):
             page = browser.new_page()
             _open_comparison_detail(page, url, run1_id, saved_runs)
 
-            # Main panel should be visible
             expect(page.locator("#main-panel")).to_be_visible()
-            # Outputs from runs should be visible
+            expect(page.locator("#comparison-input-panel")).to_be_visible()
+            expect(page.locator("#comparison-reference-panel")).to_have_count(0)
             expect(page.locator("text=output A from baseline")).to_be_visible()
             expect(page.locator("text=output A from final")).to_be_visible()
 
@@ -580,19 +585,17 @@ def test_comparison_detail_open_detail_link(tmp_path):
             page = browser.new_page()
             _open_comparison_detail(page, url, run1_id, saved_runs)
 
-            # Find and click the "Open detail" link for one of the runs
-            detail_link = page.locator("a[title='Open detail']").first
-            if detail_link.count() > 0:
-                detail_link.click()
-                page.wait_for_selector("#sidebar-panel")
-                # Should show sidebar panel in non-comparison view
-                expect(page.locator("#sidebar-panel")).to_be_visible()
+            detail_link = page.locator("a[title='Open detail']").nth(1)
+            expect(detail_link).to_be_visible()
+            detail_link.click()
+            page.wait_for_selector("#sidebar-panel")
+            expect(page.locator("#sidebar-panel")).to_be_visible()
 
             browser.close()
 
 
-def test_comparison_detail_scores_and_latency_badges(tmp_path):
-    """Scores and latency should show under outputs in comparison view."""
+def test_comparison_detail_scores_annotations_and_latency(tmp_path):
+    """Scores, annotation, and latency should be visible per run tile."""
     store = ResultsStore(tmp_path / "runs")
 
     run1_id = store.save_run(make_run_summary("baseline"), session_name="test-session", run_name="baseline")
@@ -616,15 +619,16 @@ def test_comparison_detail_scores_and_latency_badges(tmp_path):
             page = browser.new_page()
             _open_comparison_detail(page, url, run1_id, saved_runs)
 
-            # Scores and latency should be visible in the comparison view
-            expect(page.locator("#main-panel", has_text="pass")).to_be_visible()
-            expect(page.locator("#main-panel", has_text="1.00s")).to_be_visible()
+            first_tile = page.locator("#comparison-outputs .comparison-output-card").first
+            expect(first_tile.locator("span[title*='pass: true | notes: note from baseline']")).to_be_visible()
+            expect(first_tile.locator("span[title='annotation baseline']")).to_be_visible()
+            expect(first_tile.locator("text=1.00s")).to_be_visible()
 
             browser.close()
 
 
-def test_comparison_detail_no_metadata_or_trace(tmp_path):
-    """Comparison view shows run outputs instead of sidebar with metadata/trace."""
+def test_comparison_detail_resize_handles(tmp_path):
+    """Comparison detail split handles should resize context height and input width."""
     store = ResultsStore(tmp_path / "runs")
 
     run1_id = store.save_run(make_run_summary("baseline"), session_name="test-session", run_name="baseline")
@@ -648,9 +652,49 @@ def test_comparison_detail_no_metadata_or_trace(tmp_path):
             page = browser.new_page()
             _open_comparison_detail(page, url, run1_id, saved_runs)
 
-            # Comparison view should show multiple run outputs
-            expect(page.locator("text=output A from baseline")).to_be_visible()
-            expect(page.locator("text=output A from final")).to_be_visible()
+            context = page.locator("#comparison-context")
+            context_box_before = context.bounding_box()
+            assert context_box_before is not None
+
+            context_resize = page.locator("#main-panel .resize-handle-h").first
+            context_resize_box = context_resize.bounding_box()
+            assert context_resize_box is not None
+            page.mouse.move(
+                context_resize_box["x"] + (context_resize_box["width"] / 2),
+                context_resize_box["y"] + (context_resize_box["height"] / 2),
+            )
+            page.mouse.down()
+            page.mouse.move(
+                context_resize_box["x"] + (context_resize_box["width"] / 2),
+                context_resize_box["y"] - 60,
+            )
+            page.mouse.up()
+
+            context_box_after = context.bounding_box()
+            assert context_box_after is not None
+            assert context_box_after["height"] > context_box_before["height"] + 20
+
+            input_panel = page.locator("#comparison-input-panel")
+            input_box_before = input_panel.bounding_box()
+            assert input_box_before is not None
+
+            input_resize = page.locator("#comparison-context .resize-handle-v").first
+            input_resize_box = input_resize.bounding_box()
+            assert input_resize_box is not None
+            page.mouse.move(
+                input_resize_box["x"] + (input_resize_box["width"] / 2),
+                input_resize_box["y"] + (input_resize_box["height"] / 2),
+            )
+            page.mouse.down()
+            page.mouse.move(
+                input_resize_box["x"] + 80,
+                input_resize_box["y"] + (input_resize_box["height"] / 2),
+            )
+            page.mouse.up()
+
+            input_box_after = input_panel.bounding_box()
+            assert input_box_after is not None
+            assert input_box_after["width"] > input_box_before["width"] + 20
 
             browser.close()
 

@@ -729,6 +729,31 @@ Scenario: Result alignment across runs
   And missing results show "—" in the respective run column
 ```
 
+### Comparison Detail View
+
+```gherkin
+Scenario: Comparison detail layout
+  Given comparison mode is active
+  And the user opens a result detail page
+  Then the page uses a dedicated comparison layout
+  And the eval function name appears once in the top header
+  And the rerun button is hidden
+  And the single-run right sidebar is hidden
+  And run output cards are the primary top region
+  And input/reference are shown in a supporting bottom region
+  And the top/bottom and input/reference boundaries are draggable
+
+Scenario: Per-run information in comparison detail
+  Given comparison mode is active in detail view
+  Then each run output card shows:
+    - run name and status
+    - output content
+    - score chips with hoverable full score details (key, value/passed, notes)
+    - annotation (inline or hoverable when present)
+    - latency (when present)
+  And each run output card includes an "Open detail" link to that run's single-run detail page
+```
+
 ### Comparison Limits
 
 ```gherkin
