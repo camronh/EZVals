@@ -191,11 +191,9 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             assert rows.count() == expected_count, "row count should match discovered evals"
             expect(page.locator("tr[data-row='main'][data-status='not_started']")).to_have_count(expected_count)
             expect(page.locator("#play-btn-text")).to_have_text("Run")
-            expect(page.locator("#run-dropdown-toggle")).to_be_hidden()
 
             stats_expanded = page.locator("#stats-expanded")
-            if "hidden" in (stats_expanded.get_attribute("class") or ""):
-                page.locator("#stats-expand-btn").click()
+            expect(stats_expanded).to_be_visible()
 
             tests_metric = page.locator("#stats-expanded .stats-metric").first.locator(".stats-metric-value")
             expect(tests_metric).to_have_text(str(expected_count))
@@ -278,7 +276,8 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             )
             running_rows = page.locator("tr[data-row='main'][data-status='running']")
             if running_rows.count() > 0:
-                expect(running_rows.first.locator(".status-pill")).to_have_text("running")
+                expect(running_rows.first.locator(".status-indicator-running")).to_have_count(1)
+                expect(running_rows.first.locator(".status-pill", has_text="running")).to_have_count(0)
             page.wait_for_function(
                 "() => window.__skeletonSeen && window.__skeletonSeen.latency && "
                 "window.__skeletonSeen.output && window.__skeletonSeen.scores",
@@ -294,8 +293,7 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
                 "() => document.querySelectorAll(\"tr[data-row='main'][data-status='running'], tr[data-row='main'][data-status='pending']\").length === 0",
                 timeout=RUN_TIMEOUT_MS,
             )
-            expect(page.locator("#play-btn-text")).to_have_text("Rerun")
-            expect(page.locator("#run-dropdown-toggle")).to_be_visible()
+            expect(page.locator("#play-btn-text")).to_have_text("Run")
             expect(page.locator("tr[data-row='main'][data-status='not_started']")).to_have_count(0)
             assert page.locator("tr[data-row='main'][data-status='completed']").count() > 0, "expected completed rows"
             error_rows = page.locator("tr[data-row='main'][data-status='error']")
@@ -318,13 +316,6 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             for i in range(fills.count()):
                 fill_class = fills.nth(i).get_attribute("class") or ""
                 assert "vbar-" in fill_class, "score bars should be color-coded"
-
-            # Compact view reflects tests count and is togglable.
-            page.locator("#stats-collapse-btn").click()
-            expect(page.locator("#stats-compact")).to_be_visible()
-            expect(page.locator("#stats-compact")).to_contain_text("Tests")
-            page.locator("#stats-expand-btn").click()
-            expect(page.locator("#stats-expanded")).to_be_visible()
 
             def score_values():
                 raw = page.eval_on_selector_all(
@@ -428,8 +419,7 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
 
             rerun_row = page.locator(f"tr[data-row='main'][data-row-id='{rerun_idx}']")
             rerun_row.locator(".row-checkbox").click()
-            expect(page.locator("#play-btn-text")).to_have_text("Rerun")
-            expect(page.locator("#run-dropdown-toggle")).to_be_visible()
+            expect(page.locator("#play-btn-text")).to_have_text("Run")
 
             # Selective rerun updates only selected row.
             page.locator("#play-btn").click()
@@ -517,16 +507,23 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
                 "() => document.querySelectorAll(\"tr[data-row='main'][data-status='running'], tr[data-row='main'][data-status='pending']\").length === 0",
                 timeout=RUN_TIMEOUT_MS,
             )
-            expect(page.locator("#play-btn-text")).to_have_text("Rerun")
+            expect(page.locator("#play-btn-text")).to_have_text("Run")
             assert page.locator("tr[data-row='main'][data-status='cancelled']").count() > 0, "stop should cancel rows"
 
             stop_run_id = run_id
             stop_run_name = previous_run_name
 
-            # New run mode creates a new run_id and new run_name.
-            page.locator("#run-dropdown-toggle").click()
-            page.locator("#run-new-option").click()
-            expect(page.locator("#play-btn-text")).to_have_text("New Run")
+            # New-run icon creates a new run_id and new run_name with discovered rows reset to not_started.
+            page.locator("#new-run-btn-expanded").click()
+            page.wait_for_function(
+                f"() => document.querySelector('#results-table')?.getAttribute('data-run-id') !== '{stop_run_id}'",
+                timeout=RUN_TIMEOUT_MS,
+            )
+            expect(page.locator("#play-btn-text")).to_have_text("Run")
+            expect(page.locator("tr[data-row='main']")).to_have_count(expected_count)
+            expect(page.locator("tr[data-row='main'][data-status='not_started']")).to_have_count(expected_count)
+            expect(page.locator("tr[data-row='main'][data-status='completed']")).to_have_count(0)
+
             page.evaluate("window.__runSeen = { progress: false, running: false };")
             page.locator("#play-btn").click()
             expect(page.locator("#play-btn-text")).to_have_text("Stop")
@@ -708,11 +705,6 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             dataset_pill.click()
             expect(page.locator("tr[data-row='main']:not(.hidden)")).to_have_count(dataset_count)
             expect(tests_metric).to_contain_text(f"{dataset_count}/{expected_count}")
-            page.locator("#stats-collapse-btn").click()
-            expect(page.locator("#stats-compact")).to_contain_text(f"{dataset_count}/{expected_count}")
-            page.locator("#stats-expand-btn").click()
-            page.locator("#filters-toggle").click()
-            expect(page.locator("#filters-menu")).to_be_visible()
             dataset_pill = page.locator("#dataset-pills button", has_text=filter_dataset).first
             dataset_pill.click()
             expect(page.locator("tr[data-row='main']:not(.hidden)")).to_have_count(expected_count - dataset_count)
@@ -903,6 +895,7 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
 
             # Export JSON/CSV and validate schema columns.
             # Export is now in its own dropdown (not settings modal)
+            page.locator("#more-menu-toggle").click()
             page.locator("#export-toggle").click()
             page.wait_for_selector("#export-menu:not(.hidden)")
             with page.expect_download() as download_info:
@@ -917,6 +910,7 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             page.wait_for_timeout(300)
             page.click("body")  # Close if still open
             page.wait_for_timeout(100)
+            page.locator("#more-menu-toggle").click()
             page.locator("#export-toggle").click()
             page.wait_for_selector("#export-menu:not(.hidden)")
             with page.expect_download() as download_info:

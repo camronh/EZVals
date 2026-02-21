@@ -35,7 +35,6 @@ class TestCLI:
         assert '--output FILE' in result.output
         assert '--concurrency' in result.output
         assert '--verbose' in result.output
-        assert '--visual' in result.output
 
     def test_run_command_uses_sdk(self, monkeypatch):
         captured = {}
@@ -58,9 +57,38 @@ class TestCLI:
         monkeypatch.setattr("ezvals.cli.run_sdk", fake_run_sdk)
         result = self.runner.invoke(cli, ['run', 'evals.py::test_one', '--dataset', 'qa'])
         assert result.exit_code == 0
-        assert captured["path"] == "evals.py::test_one"
+        assert captured["path"] == "evals.py"
+        assert captured["function_names"] == ["test_one"]
         assert captured["dataset"] == "qa"
         assert captured["use_config"] is True
+
+    def test_run_command_with_multiple_path_selectors(self, monkeypatch):
+        captured = {}
+
+        def fake_run_sdk(**kwargs):
+            captured.update(kwargs)
+            return {
+                "summary": {
+                    "total_evaluations": 0,
+                    "total_functions": 0,
+                    "total_errors": 0,
+                    "total_with_scores": 0,
+                    "total_passed": 0,
+                    "average_latency": 0,
+                    "results": [],
+                },
+                "saved_path": "fake.json",
+            }
+
+        monkeypatch.setattr("ezvals.cli.run_sdk", fake_run_sdk)
+        result = self.runner.invoke(
+            cli,
+            ['run', 'evals.py::test_one,test_two,test_three'],
+        )
+
+        assert result.exit_code == 0
+        assert captured["path"] == "evals.py"
+        assert captured["function_names"] == ["test_one", "test_two", "test_three"]
 
     def test_run_sdk_programmatic_with_flags(self):
         with self.runner.isolated_filesystem():
@@ -126,11 +154,12 @@ def test_cli():
             assert 'Running test_eval.py' in result.output
             assert 'Results saved to' in result.output
 
-            # Visual mode: full output with summary
-            result = self.runner.invoke(cli, ['run', 'test_eval.py', '--visual'])
+            result = self.runner.invoke(cli, ['run', 'test_eval.py', '--output', 'results.json'])
             assert result.exit_code == 0
-            assert 'Total Functions: 1' in result.output
-            assert 'Total Evaluations: 1' in result.output
+            with open('results.json') as f:
+                data = json.load(f)
+            assert data['total_functions'] == 1
+            assert data['total_evaluations'] == 1
 
     def test_run_with_dataset_filter(self):
         with self.runner.isolated_filesystem():
@@ -148,10 +177,12 @@ def test_two():
     return EvalResult(input="2", output="2")
 """)
 
-            result = self.runner.invoke(cli, ['run', 'test_dataset.py', '--dataset', 'dataset1', '--visual'])
+            result = self.runner.invoke(cli, ['run', 'test_dataset.py', '--dataset', 'dataset1', '--output', 'results.json'])
             assert result.exit_code == 0
-            assert 'Total Functions: 1' in result.output
-            assert 'Total Evaluations: 1' in result.output
+            with open('results.json') as f:
+                data = json.load(f)
+            assert data['total_functions'] == 1
+            assert data['total_evaluations'] == 1
     
     def test_run_with_label_filter(self):
         with self.runner.isolated_filesystem():
@@ -169,9 +200,11 @@ def test_dev():
     return EvalResult(input="d", output="d")
 """)
 
-            result = self.runner.invoke(cli, ['run', 'test_labels.py', '--label', 'prod', '--visual'])
+            result = self.runner.invoke(cli, ['run', 'test_labels.py', '--label', 'prod', '--output', 'results.json'])
             assert result.exit_code == 0
-            assert 'Total Functions: 1' in result.output
+            with open('results.json') as f:
+                data = json.load(f)
+            assert data['total_functions'] == 1
 
     def test_run_with_multiple_labels(self):
         with self.runner.isolated_filesystem():
@@ -197,10 +230,12 @@ def test_c():
                 'run', 'test_multi_labels.py',
                 '--label', 'a',
                 '--label', 'b',
-                '--visual'
+                '--output', 'results.json',
             ])
             assert result.exit_code == 0
-            assert 'Total Functions: 2' in result.output
+            with open('results.json') as f:
+                data = json.load(f)
+            assert data['total_functions'] == 2
 
     def test_run_with_json_output(self):
         with self.runner.isolated_filesystem():
@@ -275,11 +310,13 @@ def test_2():
             result = self.runner.invoke(cli, [
                 'run', 'test_concurrent.py',
                 '--concurrency', '2',
-                '--visual'
+                '--output', 'results.json',
             ])
             assert result.exit_code == 0
-            assert 'Total Functions: 2' in result.output
-            assert 'Total Evaluations: 2' in result.output
+            with open('results.json') as f:
+                data = json.load(f)
+            assert data['total_functions'] == 2
+            assert data['total_evaluations'] == 2
 
     def test_run_no_evaluations_found(self):
         with self.runner.isolated_filesystem():
@@ -290,7 +327,7 @@ def regular_function():
     return "not an eval"
 """)
 
-            result = self.runner.invoke(cli, ['run', 'test_empty.py', '--visual'])
+            result = self.runner.invoke(cli, ['run', 'test_empty.py'])
             assert result.exit_code == 0
             assert 'No evaluations found' in result.output
 
@@ -306,9 +343,11 @@ def test_error():
     raise ValueError("Test error")
 """)
 
-            result = self.runner.invoke(cli, ['run', 'test_error.py', '--visual'])
+            result = self.runner.invoke(cli, ['run', 'test_error.py', '--output', 'results.json'])
             assert result.exit_code == 0  # Should still complete
-            assert 'Errors: 1' in result.output
+            with open('results.json') as f:
+                data = json.load(f)
+            assert data['total_errors'] == 1
 
     def test_run_nonexistent_path(self):
         result = self.runner.invoke(cli, ['run', 'nonexistent.py'])
@@ -343,9 +382,11 @@ def test_5():
     return EvalResult(input="5", output="5")
 """)
 
-            result = self.runner.invoke(cli, ['run', 'test_limit.py', '--limit', '2', '--visual'])
+            result = self.runner.invoke(cli, ['run', 'test_limit.py', '--limit', '2', '--output', 'results.json'])
             assert result.exit_code == 0
-            assert 'Total Evaluations: 2' in result.output
+            with open('results.json') as f:
+                data = json.load(f)
+            assert data['total_evaluations'] == 2
 
     def test_no_save_stdout(self):
         """--no-save outputs JSON to stdout"""
@@ -430,6 +471,32 @@ def test_runname():
                 data = json.load(f)
             assert data['run_name'] == 'baseline'
 
+    def test_run_command_help_shows_rename_mode(self):
+        result = self.runner.invoke(cli, ['run', '--help'])
+        assert result.exit_code == 0
+        assert '--rename RUN_ID NEW_NAME' in result.output
+
+    def test_rename_run_command(self):
+        with self.runner.isolated_filesystem():
+            store = ResultsStore(".ezvals/sessions")
+            summary = {"results": [], "total_evaluations": 0}
+            run_id = store.save_run(summary, run_id="run001", session_name="s1", run_name="old-name")
+
+            result = self.runner.invoke(cli, ['run', '--rename', run_id, 'new-name', '--session', 's1'])
+            assert result.exit_code == 0
+            assert "Renamed run 'run001' to 'new-name'." in result.output
+
+            loaded = store.load_run(run_id, session_name="s1")
+            assert loaded['run_name'] == 'new-name'
+            renamed_files = list(Path('.ezvals/sessions/s1').glob('new-name_*.json'))
+            assert len(renamed_files) == 1
+
+    def test_rename_run_command_missing_run(self):
+        with self.runner.isolated_filesystem():
+            result = self.runner.invoke(cli, ['run', '--rename', 'missing-run', 'new-name'])
+            assert result.exit_code == 1
+            assert "Run 'missing-run' not found." in result.output
+
     def test_comma_separated_datasets(self):
         """--dataset a,b filters with OR logic"""
         with self.runner.isolated_filesystem():
@@ -451,10 +518,12 @@ def test_gamma():
 """)
 
             # Comma-separated datasets should match alpha OR beta
-            result = self.runner.invoke(cli, ['run', 'test_comma_ds.py', '--dataset', 'alpha,beta', '--visual'])
+            result = self.runner.invoke(cli, ['run', 'test_comma_ds.py', '--dataset', 'alpha,beta', '--output', 'results.json'])
             assert result.exit_code == 0
-            assert 'Total Functions: 2' in result.output
-            assert 'Total Evaluations: 2' in result.output
+            with open('results.json') as f:
+                data = json.load(f)
+            assert data['total_functions'] == 2
+            assert data['total_evaluations'] == 2
 
     def test_exit_code_success_regardless_of_pass_fail(self):
         """Exit code 0 on completion regardless of pass/fail status"""
@@ -468,10 +537,12 @@ def test_failing():
     return EvalResult(input="x", output="y", scores=[{"key": "check", "passed": False}])
 """)
 
-            result = self.runner.invoke(cli, ['run', 'test_exitcode.py', '--visual'])
+            result = self.runner.invoke(cli, ['run', 'test_exitcode.py', '--output', 'results.json'])
             # Exit code should be 0 even when evals fail
             assert result.exit_code == 0
-            assert 'FAIL' in result.output
+            with open('results.json') as f:
+                data = json.load(f)
+            assert data['total_evaluations'] == 1
 
     def test_serve_nonexistent_json_fails(self):
         """serve command with nonexistent JSON path should fail"""

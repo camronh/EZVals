@@ -36,7 +36,6 @@ import { useDebouncedValue, useLocalStorageState, useSessionStorageState } from 
 import DashboardIcons from './components/DashboardIcons'
 import DashboardHeader from './components/DashboardHeader'
 import StatsExpanded from './components/StatsExpanded'
-import StatsCompact from './components/StatsCompact'
 import SettingsModal from './components/SettingsModal'
 import ComparisonTable from './components/ComparisonTable'
 import ResultsTable from './components/ResultsTable'
@@ -63,8 +62,7 @@ const COLUMN_DEFS: ColumnDef[] = [
   { key: 'scores', label: 'Scores', width: '140px', type: 'number', align: 'left' },
   { key: 'latency', label: 'Time', width: '70px', type: 'number', align: 'right' },
 ]
-
-const RUN_MODE_KEY = 'ezvals:runMode'
+const DEFAULT_SEARCH_COLS = COLUMN_DEFS.map((col) => col.key)
 
 type DashboardRow = {
   index: number
@@ -92,7 +90,7 @@ type ComparisonRow = {
 }
 
 type ResizeState = { colKey: string; startX: number; startWidth: number; moved: boolean }
-type SettingsFormState = { concurrency: string; results_dir: string; timeout: string }
+type SettingsFormState = { concurrency: string; results_dir: string; timeout: string; completion_notifications: boolean }
 type DashboardQueryState = {
   runId: string | null
   comparisonRuns: ComparisonRun[]
@@ -100,6 +98,7 @@ type DashboardQueryState = {
   hasFilters: boolean
   filters: FilterState
   sortState: SortStateItem[]
+  searchColumns: string[] | null
 }
 
 function parseScoreValueRule(raw: string) {
@@ -177,6 +176,10 @@ function readDashboardQuery(params: URLSearchParams): DashboardQueryState {
   const sortState = params.getAll('sort')
     .map(parseSortRule)
     .filter((v): v is NonNullable<typeof v> => !!v)
+  const searchColumnsRaw = params.getAll('search_col')
+    .map((x) => x.trim())
+    .filter((x) => DEFAULT_SEARCH_COLS.includes(x))
+  const searchColumns = searchColumnsRaw.length ? Array.from(new Set(searchColumnsRaw)) : null
 
   const runIdRaw = (params.get('run_id') || '').trim()
   const runId = runIdRaw || null
@@ -215,6 +218,7 @@ function readDashboardQuery(params: URLSearchParams): DashboardQueryState {
       hasError,
     },
     sortState,
+    searchColumns,
   }
 }
 
@@ -222,6 +226,7 @@ function writeDashboardQuery(args: {
   runId: string | null | undefined
   comparisonRuns: ComparisonRun[] | NormalizedComparisonRun[]
   search: string
+  searchColumns: string[]
   filters: FilterState
   sortState: SortStateItem[]
 }) {
@@ -237,6 +242,10 @@ function writeDashboardQuery(args: {
 
   const q = args.search.trim()
   if (q) params.set('search', q)
+  const normalizedSearchCols = Array.from(new Set(args.searchColumns.filter((key) => DEFAULT_SEARCH_COLS.includes(key))))
+  if (normalizedSearchCols.length > 0 && normalizedSearchCols.length < DEFAULT_SEARCH_COLS.length) {
+    normalizedSearchCols.forEach((key) => params.append('search_col', key))
+  }
 
   const filters = args.filters || defaultFilters()
   if (filters.annotation && filters.annotation !== 'any') params.set('annotation', filters.annotation)
@@ -288,40 +297,44 @@ function hasRunningRows(data: RunSummary | null) {
   return (data?.results || []).some((r) => r.result?.status === 'running')
 }
 
-function buildRowSearchText(row: RunResultRow) {
+function buildRowSearchText(row: RunResultRow, searchColumns: Set<string>) {
   const result = row.result || {}
   const scores = result.scores || []
-  const parts = [
-    row.function,
-    row.dataset,
-    ...(row.labels || []),
-    result.input != null ? formatValue(result.input) : '',
-    result.reference != null ? formatValue(result.reference) : '',
-    result.output != null ? formatValue(result.output) : '',
-    result.error || '',
-    result.annotation || '',
-    ...scores.map((s) => `${s.key} ${s.value ?? ''} ${s.passed ?? ''}`),
-  ]
+  const parts: string[] = []
+  if (searchColumns.has('function')) parts.push(row.function, row.dataset, ...(row.labels || []))
+  if (searchColumns.has('input')) parts.push(result.input != null ? formatValue(result.input) : '')
+  if (searchColumns.has('reference')) parts.push(result.reference != null ? formatValue(result.reference) : '')
+  if (searchColumns.has('output')) parts.push(result.output != null ? formatValue(result.output) : '')
+  if (searchColumns.has('error')) parts.push(result.error || '')
+  if (searchColumns.has('scores')) {
+    parts.push(result.annotation || '')
+    scores.forEach((s) => {
+      parts.push(`${s.key} ${s.value ?? ''} ${s.passed ?? ''}`)
+    })
+  }
+  if (searchColumns.has('latency')) parts.push(result.latency != null ? `${result.latency}` : '')
   return parts.filter(Boolean).join(' ').toLowerCase()
 }
 
-function buildComparisonSearchText(entry: ComparisonMatrixEntry, comparisonRuns: NormalizedComparisonRun[]) {
+function buildComparisonSearchText(entry: ComparisonMatrixEntry, comparisonRuns: NormalizedComparisonRun[], searchColumns: Set<string>) {
   const meta = entry?._meta as { function?: string; dataset?: string; labels?: string[] } | undefined
-  const parts = [meta?.function, meta?.dataset, ...(meta?.labels || [])]
+  const parts: string[] = []
+  if (searchColumns.has('function')) parts.push(meta?.function || '', meta?.dataset || '', ...(meta?.labels || []))
   comparisonRuns.forEach((run) => {
     const row = entry?.[run.runId] as RunResultRow | undefined
     const result = row?.result
     if (!result) return
-    parts.push(
-      result.input != null ? formatValue(result.input) : '',
-      result.reference != null ? formatValue(result.reference) : '',
-      result.output != null ? formatValue(result.output) : '',
-      result.error || '',
-      result.annotation || '',
-    )
-    ;(result.scores || []).forEach((s) => {
-      parts.push(`${s.key} ${s.value ?? ''} ${s.passed ?? ''}`)
-    })
+    if (searchColumns.has('input')) parts.push(result.input != null ? formatValue(result.input) : '')
+    if (searchColumns.has('reference')) parts.push(result.reference != null ? formatValue(result.reference) : '')
+    if (searchColumns.has('output')) parts.push(result.output != null ? formatValue(result.output) : '')
+    if (searchColumns.has('error')) parts.push(result.error || '')
+    if (searchColumns.has('scores')) {
+      parts.push(result.annotation || '')
+      ;(result.scores || []).forEach((s) => {
+        parts.push(`${s.key} ${s.value ?? ''} ${s.passed ?? ''}`)
+      })
+    }
+    if (searchColumns.has('latency')) parts.push(result.latency != null ? `${result.latency}` : '')
   })
   return parts.filter(Boolean).join(' ').toLowerCase()
 }
@@ -373,7 +386,6 @@ export default function DashboardPage() {
   const [exportOpen, setExportOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [pngExportOpen, setPngExportOpen] = useState(false)
-  const [runMenuOpen, setRunMenuOpen] = useState(false)
   const [runDropdownOpen, setRunDropdownOpen] = useState(false)
   const [compareDropdownOpen, setCompareDropdownOpen] = useState(false)
   const [addCompareOpen, setAddCompareOpen] = useState(false)
@@ -381,19 +393,18 @@ export default function DashboardPage() {
   const [runNameDraft, setRunNameDraft] = useState('')
   const [filters, setFilters] = useSessionStorageState<FilterState>('ezvals:filters', defaultFilters)
   const [search, setSearch] = useSessionStorageState<string>('ezvals:search', '')
+  const [searchColumns, setSearchColumns] = useLocalStorageState<string[]>('ezvals:search_columns', DEFAULT_SEARCH_COLS)
   const [hiddenColumns, setHiddenColumns] = useLocalStorageState<string[]>('ezvals:hidden_columns', Array.from(DEFAULT_HIDDEN_COLS))
   const [colWidths, setColWidths] = useLocalStorageState<Record<string, number>>('ezvals:col_widths', {})
-  const [statsExpanded, setStatsExpanded] = useLocalStorageState<boolean>('ezvals:statsExpanded', true)
-  const [runMode, setRunMode] = useLocalStorageState<string>(RUN_MODE_KEY, 'rerun')
   const [comparisonRuns, setComparisonRuns] = useSessionStorageState<ComparisonRun[]>('ezvals:comparisonRuns', [])
   const [sortState, setSortState] = useState<SortStateItem[]>([])
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set())
-  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set())
   const [isRunningOverride, setIsRunningOverride] = useState(false)
   const [isRestartingServer, setIsRestartingServer] = useState(false)
   const [hasRunBefore, setHasRunBefore] = useState(false)
   const [animateStats, setAnimateStats] = useState(false)
-  const [settingsForm, setSettingsForm] = useState<SettingsFormState>({ concurrency: '', results_dir: '', timeout: '' })
+  const [settingsForm, setSettingsForm] = useState<SettingsFormState>({ concurrency: '', results_dir: '', timeout: '', completion_notifications: false })
+  const [completionNotificationsEnabled, setCompletionNotificationsEnabled] = useState(false)
   const [queryActiveRunId, setQueryActiveRunId] = useState<string | null>(null)
 
   const filtersToggleRef = useRef<HTMLButtonElement | null>(null)
@@ -405,20 +416,48 @@ export default function DashboardPage() {
   const compareDropdownAnchorRef = useRef<HTMLButtonElement | null>(null)
   const addCompareAnchorRef = useRef<HTMLButtonElement | null>(null)
   const runDropdownExpandedRef = useRef<HTMLButtonElement | null>(null)
-  const runDropdownCompactRef = useRef<HTMLButtonElement | null>(null)
   const selectAllRef = useRef<HTMLInputElement | null>(null)
   const lastCheckedRef = useRef<number | null>(null)
   const resizeStateRef = useRef<ResizeState | null>(null)
   const suppressSortUntilRef = useRef<number>(0)
   const headerRefs = useRef<Record<string, HTMLElement | null>>({})
   const isHydratingFromQueryRef = useRef(false)
+  const previousRunActiveRef = useRef<boolean | null>(null)
+  const notificationsDraftRef = useRef(false)
 
   const debouncedSearch = useDebouncedValue(search, 120)
   const normalizedComparisonRuns = useMemo(() => normalizeComparisonRuns(comparisonRuns), [comparisonRuns])
   const isComparisonMode = normalizedComparisonRuns.length > 1
   const comparisonMatrix = useMemo<Record<string, ComparisonMatrixEntry>>(() => buildComparisonMatrix(comparisonData), [comparisonData])
   const comparisonDataCount = useMemo(() => Object.keys(comparisonData).length, [comparisonData])
+  const searchColumnsSet = useMemo(() => new Set(searchColumns.filter((key) => DEFAULT_SEARCH_COLS.includes(key))), [searchColumns])
   const hasFilters = isFilterActive(filters, debouncedSearch)
+
+  const loadConfigSettings = useCallback(async () => {
+    const resp = await fetch('/api/config')
+    if (!resp.ok) throw new Error(`Config load failed: HTTP ${resp.status}`)
+    const config = await resp.json() as Config
+    const notificationsEnabled = config.completion_notifications === true
+    setCompletionNotificationsEnabled(notificationsEnabled)
+    notificationsDraftRef.current = notificationsEnabled
+    setSettingsForm({
+      concurrency: config.concurrency != null ? String(config.concurrency) : '',
+      results_dir: config.results_dir ?? '',
+      timeout: config.timeout != null ? String(config.timeout) : '',
+      completion_notifications: notificationsEnabled,
+    })
+    return config
+  }, [])
+
+  const loadCompletionNotificationsSetting = useCallback(async () => {
+    const resp = await fetch('/api/config')
+    if (!resp.ok) throw new Error(`Config load failed: HTTP ${resp.status}`)
+    const config = await resp.json() as Config
+    const notificationsEnabled = config.completion_notifications === true
+    setCompletionNotificationsEnabled(notificationsEnabled)
+    notificationsDraftRef.current = notificationsEnabled
+    return notificationsEnabled
+  }, [])
 
   useEffect(() => {
     document.title = 'EZVals'
@@ -487,6 +526,68 @@ export default function DashboardPage() {
   }, [loadResults])
 
   useEffect(() => {
+    let active = true
+    async function loadInitialConfigSettings() {
+      try {
+        const notificationsEnabled = await loadCompletionNotificationsSetting()
+        if (!active) return
+        setCompletionNotificationsEnabled(notificationsEnabled)
+      } catch {
+        // ignore config load failures
+      }
+    }
+    loadInitialConfigSettings()
+    return () => { active = false }
+  }, [loadCompletionNotificationsSetting])
+
+  useEffect(() => {
+    if (!data) return
+    const isActive = hasActiveResults(data)
+    if (previousRunActiveRef.current == null) {
+      previousRunActiveRef.current = isActive
+      return
+    }
+    const justCompleted = previousRunActiveRef.current && !isActive
+    previousRunActiveRef.current = isActive
+    if (!justCompleted) return
+
+    async function maybeNotifyOnCompletion() {
+      let enabled = completionNotificationsEnabled
+      if (!enabled) {
+        try {
+          enabled = await loadCompletionNotificationsSetting()
+        } catch {
+          enabled = false
+        }
+      }
+      if (!enabled) return
+      if (typeof window === 'undefined' || !('Notification' in window)) return
+
+      const title = `${data.run_name || 'Run'} complete`
+      const body = `${data.total_evaluations || 0} eval${(data.total_evaluations || 0) === 1 ? '' : 's'} finished`
+      const notify = () => {
+        try {
+          new Notification(title, { body, icon: '/logo.png' })
+        } catch {
+          // ignore notification failures
+        }
+      }
+
+      if (Notification.permission === 'granted') {
+        notify()
+        return
+      }
+      if (Notification.permission === 'default') {
+        Notification.requestPermission().then((permission) => {
+          if (permission === 'granted') notify()
+        }).catch(() => {})
+      }
+    }
+
+    void maybeNotifyOnCompletion()
+  }, [data, completionNotificationsEnabled, loadCompletionNotificationsSetting])
+
+  useEffect(() => {
     if (!data) return
     const restored = normalizedComparisonRuns
     if (restored.length < 2) return
@@ -538,6 +639,7 @@ export default function DashboardPage() {
 
     if (query.search != null) setSearch(query.search)
     if (query.hasFilters) setFilters(query.filters)
+    if (query.searchColumns) setSearchColumns(query.searchColumns)
     if (params.has('sort')) setSortState(query.sortState)
     if (query.comparisonRuns.length) setComparisonRuns(query.comparisonRuns)
     if (query.runId) setQueryActiveRunId(query.runId)
@@ -553,7 +655,7 @@ export default function DashboardPage() {
       history.replaceState(null, '', nextUrl)
     }
     isHydratingFromQueryRef.current = false
-  }, [setComparisonRuns, setFilters, setSearch])
+  }, [setComparisonRuns, setFilters, setSearch, setSearchColumns])
 
   useEffect(() => {
     if (!data || isHydratingFromQueryRef.current) return
@@ -561,6 +663,7 @@ export default function DashboardPage() {
       runId: data.run_id,
       comparisonRuns: normalizedComparisonRuns,
       search,
+      searchColumns,
       filters,
       sortState,
     })
@@ -568,7 +671,7 @@ export default function DashboardPage() {
     const nextUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname
     const currentUrl = `${window.location.pathname}${window.location.search}`
     if (nextUrl !== currentUrl) history.replaceState(null, '', nextUrl)
-  }, [data, filters, normalizedComparisonRuns, search, sortState])
+  }, [data, filters, normalizedComparisonRuns, search, searchColumns, sortState])
 
   useEffect(() => {
     if (!queryActiveRunId || !data) return
@@ -592,7 +695,7 @@ export default function DashboardPage() {
   }, [data, loadResults, queryActiveRunId])
 
   useEffect(() => {
-    if (!filtersOpen && !columnsOpen && !exportOpen && !runMenuOpen) return
+    if (!filtersOpen && !columnsOpen && !exportOpen) return
     const handleClick = (event: MouseEvent) => {
       const target = event.target as Node
       if (filtersOpen && filtersMenuRef.current && !filtersMenuRef.current.contains(target) && !filtersToggleRef.current?.contains(target)) {
@@ -604,13 +707,10 @@ export default function DashboardPage() {
       if (exportOpen && exportMenuRef.current && !exportMenuRef.current.contains(target) && !exportToggleRef.current?.contains(target)) {
         setExportOpen(false)
       }
-      if (runMenuOpen && !document.getElementById('run-dropdown-menu')?.contains(target) && !document.getElementById('run-dropdown-toggle')?.contains(target)) {
-        setRunMenuOpen(false)
-      }
     }
     document.addEventListener('click', handleClick)
     return () => document.removeEventListener('click', handleClick)
-  }, [filtersOpen, columnsOpen, exportOpen, runMenuOpen])
+  }, [filtersOpen, columnsOpen, exportOpen])
 
   const allResultsForFilters = useMemo(() => {
     if (isComparisonMode) {
@@ -654,10 +754,10 @@ export default function DashboardPage() {
         hasMessages: !!(result.trace_data?.messages?.length),
         hasError: !!result.error,
         annotation: result.annotation || '',
-        searchText: buildRowSearchText(r),
+        searchText: buildRowSearchText(r, searchColumnsSet),
       }
     })
-  }, [data])
+  }, [data, searchColumnsSet])
 
   const filteredRows = useMemo(() => {
     if (!rows.length) return []
@@ -714,10 +814,10 @@ export default function DashboardPage() {
         linkRunId,
         linkIndex,
         firstResult,
-        searchText: buildComparisonSearchText(entry, normalizedComparisonRuns),
+        searchText: buildComparisonSearchText(entry, normalizedComparisonRuns, searchColumnsSet),
       }
     })
-  }, [comparisonMatrix, data, isComparisonMode, normalizedComparisonRuns])
+  }, [comparisonMatrix, data, isComparisonMode, normalizedComparisonRuns, searchColumnsSet])
 
   const filteredComparisonRows = useMemo(() => {
     if (!isComparisonMode) return []
@@ -800,21 +900,14 @@ export default function DashboardPage() {
     const isPaused = !!data?.is_paused
     const isRunning = isRunningOverride || hasRunningResults(data)
     const isActive = isPaused || isRunning
-    const hasSelections = selectedIndices.size > 0
     if (isComparisonMode) {
-      return { hidden: true, text: 'Run', showDropdown: false, isRunning }
+      return { hidden: true, text: 'Run' }
     }
     if (isActive) {
-      return { hidden: false, text: 'Stop', showDropdown: false, isRunning: true }
+      return { hidden: false, text: 'Stop' }
     }
-    if (!hasRunBefore) {
-      return { hidden: false, text: 'Run', showDropdown: false, isRunning }
-    }
-    if (hasSelections) {
-      return { hidden: false, text: runMode === 'new' ? 'New Run' : 'Rerun', showDropdown: true, isRunning }
-    }
-    return { hidden: false, text: runMode === 'new' ? 'New Run' : 'Rerun', showDropdown: true, isRunning }
-  }, [data, hasRunBefore, isComparisonMode, runMode, selectedIndices.size, isRunningOverride])
+    return { hidden: false, text: 'Run' }
+  }, [data, isComparisonMode, isRunningOverride])
 
   const showPauseButton = useMemo(() => {
     if (isComparisonMode) return false
@@ -876,15 +969,6 @@ export default function DashboardPage() {
       return next
     })
   }, [sortedRows])
-
-  const handleRowToggle = useCallback((idx: number) => {
-    setExpandedRows((prev) => {
-      const next = new Set(prev)
-      if (next.has(idx)) next.delete(idx)
-      else next.add(idx)
-      return next
-    })
-  }, [])
 
   const handleResizeStart = useCallback((colKey: string, event: ReactMouseEvent<HTMLDivElement>) => {
     event.preventDefault()
@@ -984,7 +1068,7 @@ export default function DashboardPage() {
     }
   }, [comparisonDataCount, comparisonRuns.length, normalizedComparisonRuns.length, setComparisonRuns])
 
-  const handleRunExecute = useCallback(async (mode: string) => {
+  const handleRunExecute = useCallback(async () => {
     const isActive = !!data?.is_paused || isRunningOverride || hasRunningResults(data)
     if (isActive) {
       try {
@@ -996,17 +1080,10 @@ export default function DashboardPage() {
       return
     }
 
-    let endpoint = '/api/runs/rerun'
-    let body: Record<string, unknown> = {}
-    if (mode === 'new') {
-      endpoint = '/api/runs/new'
-      if (selectedIndices.size > 0) body = { indices: Array.from(selectedIndices) }
-    } else if (selectedIndices.size > 0) {
-      body = { indices: Array.from(selectedIndices) }
-    }
+    const body = selectedIndices.size > 0 ? { indices: Array.from(selectedIndices) } : {}
 
     try {
-      const resp = await fetch(endpoint, {
+      const resp = await fetch('/api/runs/rerun', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -1030,6 +1107,32 @@ export default function DashboardPage() {
       alert(`Run failed: ${message}`)
     }
   }, [data, isRunningOverride, loadResults, selectedIndices])
+
+  const handleCreateNewRun = useCallback(async () => {
+    try {
+      const resp = await fetch('/api/runs/new', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ indices: [] }),
+      })
+      if (!resp.ok) {
+        const text = await resp.text()
+        let msg = text
+        try {
+          const parsed = JSON.parse(text)
+          msg = parsed?.detail || parsed?.message || text
+        } catch {
+          // ignore parse errors
+        }
+        throw new Error(msg || `HTTP ${resp.status}`)
+      }
+      setSelectedIndices(new Set())
+      await loadResults(true)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      alert(`New run failed: ${message}`)
+    }
+  }, [loadResults])
 
   const handlePauseToggle = useCallback(async () => {
     if (!hasActiveResults(data)) return
@@ -1078,20 +1181,13 @@ export default function DashboardPage() {
   }, [])
 
   const handleSettingsOpen = useCallback(async () => {
-    setSettingsOpen(true)
     try {
-      const resp = await fetch('/api/config')
-      if (!resp.ok) return
-      const config = await resp.json() as Config
-      setSettingsForm({
-        concurrency: config.concurrency != null ? String(config.concurrency) : '',
-        results_dir: config.results_dir ?? '',
-        timeout: config.timeout != null ? String(config.timeout) : '',
-      })
+      await loadConfigSettings()
     } catch {
       // ignore
     }
-  }, [])
+    setSettingsOpen(true)
+  }, [loadConfigSettings])
 
   const handleSettingsSave = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -1102,6 +1198,8 @@ export default function DashboardPage() {
     if (resultsDir) payload.results_dir = resultsDir
     const timeout = parseFloat(settingsForm.timeout)
     if (!Number.isNaN(timeout)) payload.timeout = timeout
+    const notificationsEnabled = notificationsDraftRef.current
+    payload.completion_notifications = notificationsEnabled
 
     try {
       const resp = await fetch('/api/config', {
@@ -1110,12 +1208,20 @@ export default function DashboardPage() {
         body: JSON.stringify(payload),
       })
       if (!resp.ok) throw new Error('Save failed')
+      setCompletionNotificationsEnabled(notificationsEnabled)
+      notificationsDraftRef.current = notificationsEnabled
+      setSettingsForm((prev) => ({ ...prev, completion_notifications: notificationsEnabled }))
       setSettingsOpen(false)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       alert(`Failed to save settings: ${message}`)
     }
   }, [settingsForm])
+
+  const handleNotificationsChange = useCallback((enabled: boolean) => {
+    notificationsDraftRef.current = enabled
+    setSettingsForm((prev) => ({ ...prev, completion_notifications: enabled }))
+  }, [])
 
   const handleExport = useCallback(async (format) => {
     if (format === 'png') {
@@ -1279,6 +1385,8 @@ export default function DashboardPage() {
         datasetLabels={datasetLabels}
         hiddenSet={hiddenSet}
         setHiddenColumns={setHiddenColumns}
+        searchColumns={searchColumnsSet}
+        setSearchColumns={setSearchColumns}
         columnDefs={COLUMN_DEFS}
         setSortState={setSortState}
         setColWidths={setColWidths}
@@ -1287,10 +1395,6 @@ export default function DashboardPage() {
         isRestartingServer={isRestartingServer}
         onRestartServer={handleRestartServer}
         runButtonState={runButtonState}
-        runMode={runMode}
-        setRunMode={setRunMode}
-        runMenuOpen={runMenuOpen}
-        setRunMenuOpen={setRunMenuOpen}
         isComparisonMode={isComparisonMode}
         onRunExecute={handleRunExecute}
         showPauseButton={showPauseButton}
@@ -1301,8 +1405,6 @@ export default function DashboardPage() {
       <main className="flex-1 overflow-auto px-4 py-4">
         <StatsExpanded
           stats={stats}
-          statsExpanded={statsExpanded}
-          setStatsExpanded={setStatsExpanded}
           hasFilters={hasFilters}
           displayFilteredCount={displayFilteredCount}
           displayChips={displayChips}
@@ -1318,6 +1420,7 @@ export default function DashboardPage() {
           setRunNameDraft={setRunNameDraft}
           setEditingRunName={setEditingRunName}
           onRunNameSave={handleRunNameSave}
+          onCreateNewRun={handleCreateNewRun}
           onRunDropdownToggle={() => setRunDropdownOpen((prev) => !prev)}
           onAddCompareToggle={() => setCompareDropdownOpen((prev) => !prev)}
           onAddMoreCompareToggle={() => setAddCompareOpen((prev) => !prev)}
@@ -1327,23 +1430,6 @@ export default function DashboardPage() {
           compareDropdownAnchorRef={compareDropdownAnchorRef}
           addCompareAnchorRef={addCompareAnchorRef}
           animateStats={animateStats}
-        />
-        <StatsCompact
-          stats={stats}
-          statsExpanded={statsExpanded}
-          setStatsExpanded={setStatsExpanded}
-          displayChips={displayChips}
-          displayFilteredCount={displayFilteredCount}
-          hasFilters={hasFilters}
-          sessionRuns={sessionRuns}
-          currentRunLabel={currentRunLabel}
-          editingRunName={editingRunName}
-          runNameDraft={runNameDraft}
-          setRunNameDraft={setRunNameDraft}
-          setEditingRunName={setEditingRunName}
-          onRunNameSave={handleRunNameSave}
-          onRunDropdownToggle={() => setRunDropdownOpen((prev) => !prev)}
-          runDropdownCompactRef={runDropdownCompactRef}
         />
 
         {isComparisonMode ? (
@@ -1358,7 +1444,6 @@ export default function DashboardPage() {
             data={data}
             rows={sortedRows}
             selectedIndices={selectedIndices}
-            expandedRows={expandedRows}
             hiddenSet={hiddenSet}
             sortState={sortState}
             colWidths={colWidths}
@@ -1368,7 +1453,6 @@ export default function DashboardPage() {
             onResizeStart={handleResizeStart}
             onSelectAll={handleSelectAll}
             onRowSelect={handleRowSelect}
-            onRowToggle={handleRowToggle}
             selectAllRef={selectAllRef}
             headerRefs={headerRefs}
           />
@@ -1399,6 +1483,7 @@ export default function DashboardPage() {
         onSave={handleSettingsSave}
         settingsForm={settingsForm}
         setSettingsForm={setSettingsForm}
+        onNotificationsChange={handleNotificationsChange}
         onToggleTheme={handleThemeToggle}
       />
 
@@ -1415,7 +1500,7 @@ export default function DashboardPage() {
         sessionName={data?.session_name || ''}
       />
 
-      <FloatingMenu anchorRef={statsExpanded ? runDropdownExpandedRef : runDropdownCompactRef} open={runDropdownOpen} onClose={() => setRunDropdownOpen(false)}>
+      <FloatingMenu anchorRef={runDropdownExpandedRef} open={runDropdownOpen} onClose={() => setRunDropdownOpen(false)}>
         {sessionRuns.map((run) => {
           const isCurrent = run.run_id === data?.run_id
           return (

@@ -121,10 +121,10 @@ def test_stats_bar_tests_count(tmp_path):
             page.goto(url)
             page.wait_for_selector("#results-table")
 
-            # Tests count should be visible (shows "3" for our 3 tests)
-            page_content = page.content()
-            assert "Tests" in page_content
-            assert ">3<" in page_content or ">3 " in page_content or " 3<" in page_content
+            # Tests count should be visible (expanded stats uses lowercase "tests")
+            tests_metric = page.locator("#stats-expanded .stats-metric").first
+            expect(tests_metric.locator(".stats-metric-label")).to_have_text("tests")
+            expect(tests_metric.locator(".stats-metric-value")).to_have_text("3")
 
             browser.close()
 

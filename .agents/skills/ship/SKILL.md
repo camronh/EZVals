@@ -21,6 +21,7 @@ Follow these steps in order:
 - Suggest the next version (based on existing versions in the changelog)
 - Update `docs/changelog.mdx`: change `## Unreleased` to `## <version> - <today's date>`
 - Update `pyproject.toml` version to match
+- Summarize the changes for this version in a human friendly way. Focus on impactful changes and user facing changes.
 
 ## 4. Update Skill Version
 

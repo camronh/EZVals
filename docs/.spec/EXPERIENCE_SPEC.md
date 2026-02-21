@@ -162,7 +162,7 @@ EZVals is a **pytest-inspired, code-first evaluation framework** for LLM applica
 | Keyboard shortcut 'f' (filter) | **Not implemented** in React UI (lost during JSX-to-React migration) |
 | Keyboard shortcut 'r' (refresh) | **Not implemented** in React UI (lost during JSX-to-React migration; E2E test only checks key press doesn't crash) |
 | Score editing in detail view | Backend PATCH endpoint exists; **UI not implemented** in React (no edit controls for scores) |
-| Compact/expanded stats bar toggle | **Implemented** (both `#stats-compact` and `#stats-expanded` exist with collapse/expand button) |
+| Compact/expanded stats bar toggle | **Removed** (stats bar is expanded-only; no collapse/expand toggle) |
 | Copy session/run name | **Implemented** via `CopyableText` component with clipboard + "Copied!" tooltip |
 
 ---

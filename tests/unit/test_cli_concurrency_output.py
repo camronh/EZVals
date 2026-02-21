@@ -1,5 +1,4 @@
 
-import pytest
 from click.testing import CliRunner
 from ezvals.cli import cli
 
@@ -9,8 +8,7 @@ class TestCLIConcurrencyOutput:
 
     def test_concurrent_output_not_swallowed(self):
         """
-        Regression test: Ensure that running with concurrency > 0 (and verbose=False)
-        does not swallow the final output table/summary due to stdout redirection issues.
+        Regression test: Ensure running with concurrency > 0 still prints completion output.
         """
         with self.runner.isolated_filesystem():
             with open('test_conc.py', 'w') as f:
@@ -29,13 +27,8 @@ async def test_async_2():
     return EvalResult(input="2", output="2")
 """)
 
-            # Run with concurrency enabled and visual mode for table/summary
-            result = self.runner.invoke(cli, ['run', 'test_conc.py', '--concurrency', '2', '--visual'])
+            result = self.runner.invoke(cli, ['run', 'test_conc.py', '--concurrency', '2'])
 
             assert result.exit_code == 0
-            # The table and summary should be present in the output
-            # If stdout was corrupted/swallowed, these would be missing
-            assert 'Evaluation Results' in result.output
-            assert 'Evaluation Summary' in result.output
-            assert 'Total Evaluations: 2' in result.output
-
+            assert 'Running test_conc.py' in result.output
+            assert 'Results saved to' in result.output

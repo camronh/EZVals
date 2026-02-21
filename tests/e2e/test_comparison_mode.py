@@ -97,13 +97,13 @@ def test_compare_button_visible_with_multiple_runs(tmp_path):
             # Compare button should be visible
             compare_btn = page.locator("#add-compare-btn")
             expect(compare_btn).to_be_visible()
-            expect(compare_btn).to_have_text("+ Compare")
+            expect(compare_btn).to_have_attribute("title", "Compare runs")
 
             browser.close()
 
 
-def test_compare_button_hidden_with_single_run(tmp_path):
-    """Compare button should not appear when session has only one run."""
+def test_compare_button_disabled_with_single_run(tmp_path):
+    """Compare button should be disabled when session has only one run."""
     store = ResultsStore(tmp_path / "runs")
 
     # Save only one run
@@ -123,9 +123,11 @@ def test_compare_button_hidden_with_single_run(tmp_path):
             page.goto(url)
             page.wait_for_selector("#results-table")
 
-            # Compare button should not exist
+            # Compare button should be present but disabled
             compare_btn = page.locator("#add-compare-btn")
-            expect(compare_btn).to_have_count(0)
+            expect(compare_btn).to_have_count(1)
+            expect(compare_btn).to_be_disabled()
+            expect(compare_btn).to_have_attribute("title", "Need at least 2 runs to compare")
 
             browser.close()
 

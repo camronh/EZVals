@@ -719,11 +719,21 @@ class TestDetailLayoutDefaults:
                     () => {
                       const sidebar = document.querySelector('#sidebar-panel')?.getBoundingClientRect();
                       const ref = document.querySelector('#ref-panel')?.getBoundingClientRect();
+                      const input = document.querySelector('#input-panel')?.getBoundingClientRect();
+                      const output = document.querySelector('#output-panel')?.getBoundingClientRect();
                       const main = document.querySelector('#main-panel')?.getBoundingClientRect();
                       return {
                         sidebarWidth: sidebar?.width || 0,
                         refHeight: ref?.height || 0,
+                        refX: ref?.x || 0,
+                        refWidth: ref?.width || 0,
+                        refY: ref?.y || 0,
+                        inputX: input?.x || 0,
+                        inputWidth: input?.width || 0,
+                        inputY: input?.y || 0,
+                        outputX: output?.x || 0,
                         mainHeight: main?.height || 0,
+                        mainWidth: main?.width || 0,
                         viewportWidth: window.innerWidth,
                       };
                     }
@@ -732,6 +742,11 @@ class TestDetailLayoutDefaults:
 
                 assert dims["sidebarWidth"] <= dims["viewportWidth"] * 0.35
                 assert dims["refHeight"] <= dims["mainHeight"] * 0.35
+                assert abs(dims["refX"] - dims["inputX"]) < 2
+                assert abs(dims["refWidth"] - dims["inputWidth"]) < 2
+                assert dims["refY"] > dims["inputY"]
+                assert dims["refWidth"] < dims["mainWidth"] * 0.8
+                assert dims["refX"] + dims["refWidth"] <= dims["outputX"] + 2
 
                 browser.close()
 
@@ -857,11 +872,11 @@ class TestPercentageDisplay:
                 page.goto(url)
                 page.wait_for_selector("#results-table")
 
-                # Check that percentage format is shown in compact stats
-                compact_stats = page.locator("#stats-compact").text_content()
-                # Should show percentage format like "67% (2/3)"
-                assert "%" in compact_stats, f"Compact stats should show percentage: {compact_stats}"
-                assert "2/3" in compact_stats, f"Compact stats should show ratio: {compact_stats}"
+                # Check that percentage format is shown in expanded stats
+                expanded_stats = page.locator("#stats-expanded .stats-chart-values").text_content()
+                # Should show percentage format like "67% 2/3"
+                assert "%" in expanded_stats, f"Expanded stats should show percentage: {expanded_stats}"
+                assert "2/3" in expanded_stats, f"Expanded stats should show ratio: {expanded_stats}"
 
                 browser.close()
 
@@ -905,7 +920,7 @@ class TestRunDropdown:
                 time.sleep(0.5)
 
                 # Check that run dropdown button exists (custom button dropdown, not <select>)
-                dropdown = page.locator(".stats-run-dropdown, .stats-run-dropdown-compact")
+                dropdown = page.locator(".stats-run-dropdown")
                 assert dropdown.count() > 0, "Run dropdown should appear with multiple runs"
 
                 # Check dropdown button shows current run name
@@ -927,7 +942,7 @@ class TestRunDropdown:
                 page.wait_for_selector("#results-table")
 
                 # With only one run, dropdown should not appear
-                dropdown = page.locator(".stats-run-dropdown, .stats-run-dropdown-compact")
+                dropdown = page.locator(".stats-run-dropdown")
                 assert dropdown.count() == 0, "Run dropdown should not appear with single run"
 
                 browser.close()
@@ -968,7 +983,7 @@ class TestRunDropdown:
                 page.wait_for_selector("#results-table")
                 time.sleep(0.5)
 
-                dropdown = page.locator(".stats-run-dropdown, .stats-run-dropdown-compact")
+                dropdown = page.locator(".stats-run-dropdown")
                 assert dropdown.count() > 0, "Run dropdown should appear when one existing session run can be switched to"
 
                 browser.close()
@@ -1050,6 +1065,97 @@ class TestStatusChipPosition:
                 # First row (function name row) should NOT contain the status pill
                 func_name_row = func_cell.locator("div.flex.flex-col > div").nth(0)
                 expect(func_name_row.locator(".status-pill")).to_have_count(0)
+
+                browser.close()
+
+    def test_running_status_uses_subtle_indicator(self, tmp_path):
+        """Running status should use the subtle spinner indicator in the subtext row."""
+        summary = {
+            "total_evaluations": 1,
+            "total_functions": 1,
+            "total_errors": 0,
+            "total_passed": 0,
+            "total_with_scores": 0,
+            "average_latency": 0.0,
+            "results": [
+                {
+                    "function": "test_running_func",
+                    "dataset": "active_dataset",
+                    "labels": [],
+                    "result": {
+                        "input": "input",
+                        "output": None,
+                        "reference": None,
+                        "scores": [],
+                        "error": None,
+                        "latency": None,
+                        "metadata": None,
+                        "status": "running",
+                    },
+                }
+            ],
+        }
+        store = ResultsStore(tmp_path / "runs")
+        run_id = store.save_run(summary, "2024-01-01T00-00-00Z")
+        app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+        with run_server(app) as url:
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page()
+                page.goto(url)
+                page.wait_for_selector("#results-table")
+
+                running_row = page.locator("tr[data-row='main']").filter(
+                    has=page.locator("td[data-col='function']", has_text="test_running_func")
+                )
+                subtext_row = running_row.locator("td[data-col='function'] div.flex.flex-col > div").nth(1)
+
+                expect(subtext_row.locator(".status-indicator-running")).to_have_count(1)
+                expect(subtext_row.locator(".status-pill")).to_have_count(0)
+
+                browser.close()
+
+    def test_detail_output_shows_loading_state_while_running(self, tmp_path):
+        """Detail page should show loading indicator in output panel during running status."""
+        summary = {
+            "total_evaluations": 1,
+            "total_functions": 1,
+            "total_errors": 0,
+            "total_passed": 0,
+            "total_with_scores": 0,
+            "average_latency": 0.0,
+            "results": [
+                {
+                    "function": "test_running_detail_output",
+                    "dataset": "active_dataset",
+                    "labels": [],
+                    "result": {
+                        "input": "input payload",
+                        "output": "stale output that should not be shown",
+                        "reference": None,
+                        "scores": [],
+                        "error": None,
+                        "latency": None,
+                        "metadata": None,
+                        "status": "running",
+                    },
+                }
+            ],
+        }
+        store = ResultsStore(tmp_path / "runs")
+        run_id = store.save_run(summary, "2024-01-01T00-00-00Z")
+        app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+        with run_server(app) as url:
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page()
+                page.goto(f"{url}/runs/{run_id}/results/0")
+                page.wait_for_selector("#output-panel")
+
+                expect(page.locator("#output-loading-indicator")).to_be_visible()
+                expect(page.locator("#output-panel")).not_to_contain_text("stale output that should not be shown")
 
                 browser.close()
 

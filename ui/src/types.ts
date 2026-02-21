@@ -121,6 +121,7 @@ export interface Config {
   results_dir?: string | null
   timeout?: number | null
   verbose?: boolean | null
+  completion_notifications?: boolean | null
 }
 
 export interface ColumnDef {
@@ -140,8 +141,6 @@ export interface SortStateItem {
 export interface RunButtonState {
   hidden: boolean
   text: string
-  showDropdown: boolean
-  isRunning: boolean
 }
 
 export interface StatsSummary {

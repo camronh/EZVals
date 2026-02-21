@@ -9,6 +9,7 @@ DEFAULT_CONFIG = {
     "concurrency": 1,
     "results_dir": ".ezvals/sessions",
     "overwrite": True,
+    "completion_notifications": False,
 }
 
 

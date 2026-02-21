@@ -156,7 +156,6 @@ tr[data-row="main"] {
   border-bottom: 1px solid var(--border);
   background: transparent;
 }
-.stats-expanded.hidden { display: none; }
 
 .stats-layout {
   display: flex;
@@ -164,32 +163,18 @@ tr[data-row="main"] {
   position: relative;
 }
 
-.stats-collapse-btn {
-  position: absolute;
-  top: 0;
-  right: 0;
-  z-index: 10;
-  display: flex;
-  width: 32px;
-  height: 32px;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: color 0.15s;
-}
-.stats-collapse-btn:hover { color: var(--text); }
-
 /* Left panel: details + Y-axis labels */
 .stats-left {
-  width: 25%;
+  flex: 0 0 clamp(300px, 28%, 460px);
+  min-width: 300px;
+  max-width: 460px;
   display: flex;
+  overflow: hidden;
   border-right: 1px solid var(--border-subtle); /* This IS the Y-axis */
 }
 .stats-left-content {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -208,6 +193,11 @@ tr[data-row="main"] {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-width: 0;
+}
+.stats-run-actions-row {
+  gap: 0;
+  padding-left: 0;
 }
 .stats-info-label {
   font-size: 10px;
@@ -294,7 +284,13 @@ tr[data-row="main"] {
   border-radius: 4px;
   padding: 2px 6px;
   cursor: pointer;
-  max-width: 200px;
+  min-width: 0;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   text-align: left;
 }
 .stats-run-dropdown:hover { border-color: var(--accent-link); }
@@ -303,25 +299,6 @@ tr[data-row="main"] {
   font-size: 9px;
   margin-left: 4px;
 }
-.stats-run-dropdown-compact {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  color: var(--accent-link);
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 1px 4px;
-  cursor: pointer;
-  max-width: 180px;
-  text-align: left;
-}
-.stats-run-dropdown-compact:hover { border-color: var(--accent-link); }
-.stats-run-dropdown-compact .dropdown-arrow {
-  color: var(--text-muted);
-  font-size: 9px;
-  margin-left: 4px;
-}
-
 /* Progress bar for expanded stats - inline with tests */
 .stats-metric-row-main {
   display: flex;
@@ -390,24 +367,10 @@ tr[data-row="main"] {
   white-space: nowrap;
 }
 
-.stats-toggle-btn {
-  display: flex;
-  width: 24px;
-  height: 24px;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--btn-border);
-  border-radius: 4px;
-  background: var(--btn-bg);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.stats-toggle-btn:hover { background: var(--btn-bg-hover); color: var(--text); }
-
 /* Right panel - chart + X-axis */
 .stats-right {
-  width: 75%;
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   padding: 1rem 1.5rem 1rem 0;
@@ -703,7 +666,52 @@ tr[data-row="main"] {
   text-overflow: ellipsis;
 }
 
-/* + Compare button styling - matches run dropdown width */
+/* Run action buttons (new run + compare) */
+.stats-run-actions {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  max-width: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.stats-run-action-btn {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #71717a;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+
+.stats-run-action-btn:hover {
+  color: #a1a1aa;
+  border-color: #3f3f46;
+  background: rgba(39, 39, 42, 0.35);
+}
+
+.stats-run-action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.stats-run-row-main {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  flex: 1;
+}
+
+/* Legacy compare button styling (kept for compatibility in older markup) */
 .add-compare-btn {
   width: 200px;
   max-width: 200px;
@@ -773,11 +781,14 @@ tr[data-row="main"] {
 
 /* Adjust stats-right width in comparison mode for more horizontal space */
 .stats-expanded.comparison-mode .stats-right {
-  width: 80%;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .stats-expanded.comparison-mode .stats-left {
-  width: 20%;
+  flex: 0 0 clamp(280px, 22%, 380px);
+  min-width: 280px;
+  max-width: 380px;
 }
 
 /* Expand chart elements in comparison mode */
@@ -805,6 +816,42 @@ tr[data-row="main"] {
 .stats-expanded.comparison-mode .stats-chart-value {
   max-width: 160px;
 }
+/* ═══════════════════════════════════════════════════════════════
+   CELL HOVER PREVIEW POPOVER
+   ═══════════════════════════════════════════════════════════════ */
+.cell-preview-popover {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  animation: cell-preview-in 0.15s ease-out;
+}
+.dark .cell-preview-popover {
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+.cell-preview-label {
+  padding: 6px 12px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+}
+.cell-preview-content {
+  padding: 10px 12px;
+  overflow-y: auto;
+  max-height: 340px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+@keyframes cell-preview-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .data-viewer { min-height: auto; }
 .data-surface { padding: 0; background: transparent; border: none; border-radius: 0; }
 .data-pre {

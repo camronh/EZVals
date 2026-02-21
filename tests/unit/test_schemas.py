@@ -5,6 +5,11 @@ from ezvals.schemas import Score, EvalResult
 
 
 class TestScore:
+    def test_score_key_too_long(self):
+        with pytest.raises(ValidationError) as exc_info:
+            Score(key=("a" * 33), passed=True)
+        assert "at most 32 characters" in str(exc_info.value)
+
     def test_score_with_value(self):
         score = Score(key="accuracy", value=0.95)
         assert score.key == "accuracy"

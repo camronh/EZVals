@@ -82,6 +82,18 @@ ezvals run evals/
 # Creates: .ezvals/runs/swift-falcon_2024-01-15T10-30-00Z.json
 ```
 
+### Rename an Existing Saved Run
+
+Use run-id based rename mode when you want to update a run name from scripts or terminal workflows.
+
+```bash
+# Rename by run_id
+ezvals run --rename run123 better-name
+
+# Restrict lookup to one session
+ezvals run --rename run123 better-name --session model-comparison
+```
+
 ## Running Evals
 
 ### Basic Run
@@ -95,6 +107,12 @@ ezvals run evals/customer_service.py
 
 # Run a specific function
 ezvals run evals/customer_service.py::test_refund
+
+# Run a specific list of evals (no label hacks)
+ezvals run evals/customer_service.py::test_refund,test_escalation
+
+# Run specific case IDs with intuitive selectors
+ezvals run evals/customer_service.py::test_math@low,test_math@high
 ```
 
 ### Filtering
@@ -122,8 +140,8 @@ ezvals run evals/ --timeout 60.0
 # Show verbose output
 ezvals run evals/ --verbose
 
-# Rich visual output with progress table
-ezvals run evals/ --visual
+# Save to a custom path
+ezvals run evals/ --output results.json
 ```
 
 ### Output Options
@@ -317,6 +335,7 @@ Each item in `results` has run metadata plus a `result` object that matches `Eva
 - `latency` (`number | null`) seconds for this eval
 - `metadata` (`object | null`) user-defined structured metadata
 - `trace_data` (`object | null`) trace payload (often `messages`, `trace_url`, and extras)
+- `correction_history` (`list | null`) append-only manual edit history for score/note edits (`field`, `before`, `after`, `timestamp`)
 
 `Score` shape:
 
@@ -389,6 +408,20 @@ for row in results:
 avg_pass = (sum(vals) / len(vals)) if vals else None
 ```
 
+Find rows with manual corrections:
+
+```python
+corrected = [row for row in results if row["result"].get("correction_history")]
+```
+
+Inspect the latest correction per row:
+
+```python
+for row in corrected:
+    latest = row["result"]["correction_history"][-1]
+    print(row["function"], latest["field"], latest["before"], "->", latest["after"])
+```
+
 ## Workflow: Agent Runs, User Reviews
 
 A typical workflow when an agent runs evals for a user:
@@ -442,7 +475,7 @@ ezvals export .ezvals/runs/baseline.json -f csv -o results.csv
 
 ### From Web UI
 
-Click the download icon in the header to export:
+Open the overflow (three-dot) menu in the header, then hover **Download** to export:
 - **JSON**: Raw results file
 - **CSV**: Flat format for spreadsheets
 - **Markdown**: ASCII charts + table (respects current filters)
@@ -467,5 +500,5 @@ CLI flags always override config values.
 2. **Use descriptive run names** - You'll thank yourself later
 3. **Serve results for user review** - Don't just dump JSON
 4. **Run with concurrency** - `--concurrency 4` speeds up large suites
-5. **Use `--visual` during development** - Easier to see what's happening
+5. **Use `--verbose` during development** - Surface eval stdout/logging quickly
 6. **Commit the session name** - Include it in PR descriptions for traceability

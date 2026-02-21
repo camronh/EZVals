@@ -3,6 +3,66 @@ title: "Changelog"
 description: "All notable changes to EZVals"
 ---
 
+## 0.1.8 - 2026-02-20
+
+- Changed: Removed `--visual` from `ezvals run`; headless runs now use the minimal output flow plus JSON results output (`--output` or `--no-save`).
+- Changed: Simplified `ezvals run` internals by deleting rich progress/table reporting code that was only used by `--visual`.
+- Tests: Updated CLI unit coverage to validate run behavior via JSON output files and removed obsolete visual-progress tests.
+- Changed: `ezvals run` now uses selector-first path syntax for targeted runs (for example, `ezvals run evals.py::test_a,test_b`) instead of a dedicated extra flag.
+- Added: Case-target selectors now support `@case_id` shorthand (for example, `ezvals run evals.py::test_math@low,test_math@high`) as an intuitive alias for bracketed case variants.
+- Changed: Evals skill docs now guide agents to use path selectors (`::...`) and `@case_id` for rerunning specific failures without label workarounds.
+- Tests: Added unit and CLI coverage for comma-separated selector lists and `function@case_id` selection behavior.
+- Changed: Dashboard stats/status panel is now expanded-only; compact mode and the collapse/expand toggle have been removed.
+- Fixed: Run-switch dropdown anchoring now consistently uses the expanded stats bar run selector.
+- Tests: Updated E2E coverage to validate expanded-only stats behavior and removed compact-mode toggle expectations.
+- Added: "Testing Agent Skills" use-case guide in the evals skill covering plan-only evals, headless CLI agents as targets, and CLI agent as LLM judge for evaluating skills, CLAUDE.md/AGENTS.md configs, and MCP servers.
+- Added: Settings now includes a `Notifications` toggle that controls run-complete alerts from the config menu.
+- Changed: Completion alerts now use a softer two-note chime and include the EZVals logo as the notification icon.
+- Changed: Notification preference is persisted as `completion_notifications` in `ezvals.json` and defaults to disabled.
+- Fixed: Notifications toggle state now saves reliably from the settings modal and persists as `completion_notifications` in config on submit.
+- Fixed: Browser completion notifications now trigger when an active run transitions from pending/running to done with notifications enabled.
+- Tests: Added E2E coverage for saving notification settings and triggering a completion notification when a run finishes.
+- Changed: Dashboard run controls are now a single stable `Run`/`Stop` action (no run-mode switching between rerun/new-run).
+- Added: Stats panel now includes a dedicated new-run icon beside run controls that creates a fresh auto-named run with no completed results.
+- Fixed: Creating a new run with an empty selection now preserves discovered evaluations as `not_started` rows instead of saving an empty `0 tests` run.
+- Changed: Stats-panel run actions are now icon-first controls with tooltips, including a compact compare action in the same row.
+- Fixed: Stats-panel left-column sizing and action-row layout now stay constrained so controls no longer push/overlap chart grid content.
+- Tests: Updated E2E run-controls/stats coverage and added integration coverage for empty-selection new-run behavior.
+- Added: Cell hover preview popover on dashboard content columns (input, output, reference, error, scores) replaces row-click-to-expand with a scrollable, interactive preview on hover.
+- Fixed: Detail view output now shows a subtle animated loading state while a result is `pending` or `running`, instead of showing stale output content.
+- Tests: Added E2E coverage to verify the detail output loading state is visible during running status and stale output text remains hidden.
+- Fixed: Long score key names no longer cause the score filter select control to overflow outside the filters panel.
+- Changed: Score keys are now validated with a maximum length of 32 characters.
+- Tests: Added unit and E2E regression coverage for score key max-length validation and long-key filter layout containment.
+- Added: Column settings now include per-column search scope controls, so search can be limited to specific table columns.
+- Changed: Column visibility and search scope are now configured independently in the same Columns submenu using separate Show and Search toggles.
+- Tests: Added E2E coverage to verify search-column scoping and that hiding a column does not disable searching that column unless Search is toggled off.
+- Added: Result PATCH edits for `scores`, `annotation`, and `annotations` now append `result.correction_history` entries with `field`, `before`, `after`, and UTC `timestamp`.
+- Changed: Evals skill guidance now tells agents to inspect `result.correction_history` whenever users mention notes, corrections, or manual edits.
+- Added: Evals skill now includes a Phoenix Arize -> EZVals migration quick map that translates common Arize eval patterns into EZVals concepts and workflows.
+- Tests: Added integration coverage for correction history persistence, including guard behavior that skips duplicate entries when values are unchanged.
+- Changed: Dashboard `Columns` and `Download` actions now live in the overflow (three-dot) menu instead of dedicated header buttons.
+- Changed: Overflow submenu behavior now uses hover-open side flyouts with directional carets and improved spacing/layering for clearer navigation.
+- Tests: Updated E2E UI interaction and full-scenario coverage to open column/export controls from the overflow menu.
+- Changed: Detail view annotation editing now uses a single explicit control (the pencil icon), and the empty state shows `No annotation` instead of a secondary add button.
+- Fixed: The annotation edit pencil in detail view is always visible instead of appearing only on hover.
+- Added: Detail sidebar dataset values now link back to the dashboard with the current run selected and the dataset filter pre-applied.
+- Changed: In detail view, the reference pane is stacked under input in the left column, while output remains in the right column.
+- Tests: Added and updated E2E coverage for dataset-link filtering, always-visible annotation edit control, and left-column reference pane layout geometry.
+- Fixed: Not-started evaluation titles in the dashboard are now clickable links to detail pages while retaining their gray not-started styling.
+- Fixed: Detail routes now load synthesized not-started results for the active run when no run file has been saved yet, preventing pre-run "Run not found" errors.
+- Tests: Added E2E coverage for clicking a not-started title and navigating to its detail page.
+- Tests: Added integration coverage for pre-run detail page/API behavior when results are sourced from discovered functions.
+- Changed: `ezvals run` now supports `--rename <run_id> <new_name>` to rename saved runs by ID from scripts and terminal workflows.
+- Changed: Evals skill docs now document run-id rename mode under `ezvals run --rename`.
+- Tests: Added CLI unit coverage for `ezvals run --rename` help text, successful rename, and missing-run failure.
+- Fixed: Running rows in the dashboard now show a subtle spinner indicator instead of a prominent "running" text chip.
+- Tests: Added E2E coverage to verify running status uses the subtle indicator and no running text chip is rendered.
+- Fixed: Publish workflow now assembles `ezvals/skills/evals/ezvals-docs/` before building the wheel, so `ezvals skills add --claude` installs bundled API reference docs from PyPI packages.
+- Fixed: Skill sync workflow now sources `docs/setup.mdx` as `quickstart.mdx`, matching current docs layout while preserving skill doc naming.
+- Tests: Publish workflow now verifies both wheel payload and installed-wheel behavior by running `ezvals skills add --claude` and asserting required `ezvals-docs` files.
+- Changed: EZVals logo in the web UI header now links to ezvals.com.
+
 ## 0.1.7 - 2026-02-17
 
 - Added: SDK `run(...)` API for programmatic eval execution with `ezvals run` option parity; CLI `ezvals run` now calls this shared core path.

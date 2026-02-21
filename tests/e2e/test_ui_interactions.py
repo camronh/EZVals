@@ -1,3 +1,4 @@
+import json
 import re
 
 from playwright.sync_api import sync_playwright, expect
@@ -121,39 +122,15 @@ def make_scored_summary():
 
 
 
-def test_row_expand_sort_and_toggle_columns(tmp_path):
-    # Seed a run JSON
+def test_sort_and_toggle_columns(tmp_path):
     store = ResultsStore(tmp_path / "runs")
     run_id = store.save_run(make_summary(), "2024-01-01T00-00-00Z")
-
-    # Create app bound to that run
     app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
 
     with run_server(app) as url:
         with sync_playwright() as p:
             browser = p.chromium.launch()
             page = browser.new_page()
-            page.goto(url)
-            # Wait for HTMX content
-            page.wait_for_selector("#results-table")
-
-            # Click first row to expand it (not navigate)
-            first_row = page.locator("tbody tr[data-row='main']").nth(0)
-            first_row.click()
-            # Row should have expanded class
-            expect(first_row).to_have_class(re.compile(r"expanded"))
-
-            # Click again to collapse
-            first_row.click()
-            expect(first_row).not_to_have_class(re.compile(r"expanded"))
-
-            # Click function name to navigate to detail page
-            page.locator("tbody tr[data-row='main'] td[data-col='function'] a").first.click()
-            page.wait_for_url(f"**/runs/{run_id}/results/0")
-            # Detail page shows result counter in format "1/3"
-            expect(page.locator("text=1/3")).to_be_visible()
-
-            # Navigate back and test sorting
             page.goto(url)
             page.wait_for_selector("#results-table")
 
@@ -163,6 +140,7 @@ def test_row_expand_sort_and_toggle_columns(tmp_path):
             expect(first_func).to_contain_text("b")  # 0.1s row should be first
 
             # Toggle Output column visibility off
+            page.locator("#more-menu-toggle").click()
             page.locator("#columns-toggle").click()
             cb = page.locator("#columns-menu input[data-col='output']")
             # Ensure checked then uncheck
@@ -171,6 +149,53 @@ def test_row_expand_sort_and_toggle_columns(tmp_path):
             # Some cells should have hidden class
             hidden_outputs = page.locator("tbody td[data-col='output'].hidden")
             assert hidden_outputs.count() > 0
+            browser.close()
+
+
+def test_not_started_function_name_navigates_to_detail(tmp_path):
+    store = ResultsStore(tmp_path / "runs")
+    run_id = store.save_run(
+        {
+            "total_evaluations": 1,
+            "total_functions": 1,
+            "total_errors": 0,
+            "total_passed": 0,
+            "total_with_scores": 0,
+            "average_latency": 0.0,
+            "results": [
+                {
+                    "function": "pending_eval",
+                    "dataset": "ds",
+                    "labels": [],
+                    "result": {
+                        "status": "not_started",
+                        "input": "i1",
+                        "output": None,
+                        "reference": None,
+                        "scores": None,
+                        "error": None,
+                        "latency": None,
+                        "metadata": None,
+                    },
+                }
+            ],
+        },
+        "2024-01-01T00-00-00Z",
+    )
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(url)
+            page.wait_for_selector("#results-table")
+
+            pending_link = page.locator("tr[data-row='main'][data-status='not_started'] td[data-col='function'] a").first
+            expect(pending_link).to_be_visible()
+            expect(pending_link).to_have_attribute("href", re.compile(r"/runs/.+/results/0"))
+            pending_link.click()
+            page.wait_for_url(f"**/runs/{run_id}/results/0")
             browser.close()
 
 
@@ -235,6 +260,7 @@ def test_detail_page_navigation(tmp_path):
             expect(page.locator("text=1/3")).to_be_visible()
             # Function name should be visible in the header
             expect(page.locator("span.font-mono.font-semibold")).to_contain_text("a")
+            expect(page.locator("button[title='Edit annotation']")).to_be_visible()
 
             # Use arrow key to navigate to next
             page.keyboard.press("ArrowDown")
@@ -250,6 +276,30 @@ def test_detail_page_navigation(tmp_path):
             page.keyboard.press("Escape")
             page.wait_for_url("**/")
             page.wait_for_selector("#results-table")
+
+            browser.close()
+
+
+def test_detail_page_dataset_link_opens_filtered_dashboard(tmp_path):
+    store = ResultsStore(tmp_path / "runs")
+    run_id = store.save_run(make_summary(), "2024-01-01T00-00-00Z")
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+
+            page.goto(f"{url}/runs/{run_id}/results/0")
+            page.wait_for_selector("#sidebar-panel a[href*='dataset_in=ds']")
+            dataset_link = page.locator("#sidebar-panel a[href*='dataset_in=ds']").first
+            expect(dataset_link).to_have_text("ds")
+            dataset_link.click()
+
+            page.wait_for_url("**/?**")
+            page.wait_for_selector("#results-table")
+            assert page.evaluate("new URLSearchParams(window.location.search).get('dataset_in')") == "ds"
+            assert page.evaluate("new URLSearchParams(window.location.search).get('run_id')") == run_id
 
             browser.close()
 
@@ -300,55 +350,10 @@ def test_detail_page_score_editing_persists(tmp_path):
     assert score_value["notes"] == "manual override value"
 
 
-def test_row_click_no_expand_when_content_fits(tmp_path):
-    store = ResultsStore(tmp_path / "runs")
-    run_id = store.save_run(
-        {
-            "total_evaluations": 1,
-            "total_functions": 1,
-            "total_errors": 0,
-            "total_passed": 0,
-            "total_with_scores": 0,
-            "average_latency": 0.0,
-            "results": [
-                {
-                    "function": "short_row",
-                    "dataset": "ds",
-                    "labels": [],
-                    "result": {
-                        "input": "short",
-                        "output": "tiny",
-                        "reference": None,
-                        "scores": None,
-                        "error": None,
-                        "latency": 0.3,
-                        "metadata": None,
-                    },
-                }
-            ],
-        },
-        "2024-01-01T00-00-00Z",
-    )
-    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
-
-    with run_server(app) as url:
-        with sync_playwright() as p:
-            browser = p.chromium.launch()
-            page = browser.new_page(viewport={"width": 2400, "height": 900})
-            page.goto(url)
-            page.wait_for_selector("#results-table")
-
-            row = page.locator("tbody tr[data-row='main']").first
-            input_cell = row.locator("td[data-col='input']")
-            assert input_cell.evaluate("el => window.getComputedStyle(el).verticalAlign") == "middle"
-            row.click()
-            assert input_cell.evaluate("el => window.getComputedStyle(el).verticalAlign") == "middle"
-
-            browser.close()
-
 
 # Sticky headers are intentionally disabled per product decision; related test removed.
 # Inline editing tests removed - editing now happens on detail page.
+# Row-click-to-expand removed - replaced with cell hover preview popover.
 
 
 def test_metadata_renders_as_key_values_with_links(tmp_path):
@@ -414,6 +419,125 @@ def test_reload_server_button_posts_restart_endpoint(tmp_path):
             browser.close()
 
 
+def test_settings_modal_saves_completion_notifications_to_config(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    store = ResultsStore(tmp_path / "runs")
+    run_id = store.save_run(make_summary(), "2024-01-01T00-00-00Z")
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            context = browser.new_context(permissions=["notifications"])
+            page = context.new_page()
+            page.goto(url)
+            page.wait_for_selector("#results-table")
+
+            page.locator("#settings-toggle").click()
+            page.wait_for_selector("#settings-modal")
+            notifications_toggle = page.locator("#settings-completion-notifications")
+            expect(notifications_toggle).not_to_be_checked()
+
+            notifications_toggle.check()
+            page.locator("#settings-form button[type='submit']").click()
+            expect(page.locator("#settings-modal")).to_have_class(re.compile(r"hidden"))
+
+            cfg_resp = requests.get(f"{url}/api/config", timeout=5)
+            assert cfg_resp.status_code == 200
+            cfg = cfg_resp.json()
+            assert cfg["completion_notifications"] is True
+
+            context.close()
+            browser.close()
+
+
+def test_run_completion_sends_browser_notification_when_enabled(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "ezvals.json").write_text(json.dumps({
+        "concurrency": 1,
+        "results_dir": str(tmp_path / "runs"),
+        "overwrite": True,
+        "completion_notifications": True,
+    }))
+
+    running_summary = {
+        "total_evaluations": 1,
+        "total_functions": 1,
+        "total_errors": 0,
+        "total_passed": 0,
+        "total_with_scores": 0,
+        "average_latency": 0.0,
+        "results": [
+            {
+                "function": "eval_running",
+                "dataset": "ds",
+                "labels": [],
+                "result": {
+                    "status": "running",
+                    "input": "i",
+                    "output": None,
+                    "reference": None,
+                    "scores": None,
+                    "error": None,
+                    "latency": None,
+                    "metadata": None,
+                },
+            }
+        ],
+    }
+    completed_summary = {
+        **running_summary,
+        "total_passed": 1,
+        "results": [
+            {
+                **running_summary["results"][0],
+                "result": {
+                    **running_summary["results"][0]["result"],
+                    "status": "completed",
+                    "output": "ok",
+                    "latency": 0.1,
+                },
+            }
+        ],
+    }
+
+    store = ResultsStore(tmp_path / "runs")
+    run_id = store.save_run(running_summary, run_id="run-notify")
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.add_init_script(
+                """
+                class FakeNotification {
+                    static permission = 'granted'
+                    static requestPermission() { return Promise.resolve('granted') }
+                    constructor(title, options) {
+                        window.__notifCount = (window.__notifCount || 0) + 1
+                        window.__notifTitle = title
+                        window.__notifBody = options?.body || ''
+                        window.__notifIcon = options?.icon || ''
+                    }
+                }
+                window.Notification = FakeNotification
+                window.__notifCount = 0
+                """
+            )
+            page.goto(url)
+            page.wait_for_selector("#results-table")
+            assert page.evaluate("window.__notifCount") == 0
+
+            run_file = store._find_run_file(run_id)
+            run_file.write_text(json.dumps(completed_summary))
+
+            page.wait_for_function("() => window.__notifCount === 1")
+            assert "complete" in page.evaluate("window.__notifTitle").lower()
+            assert page.evaluate("window.__notifIcon") == "/logo.png"
+            browser.close()
+
+
 def test_png_export_modal_allows_configurable_preview(tmp_path):
     store = ResultsStore(tmp_path / "runs")
     run_a = store.save_run(
@@ -437,6 +561,7 @@ def test_png_export_modal_allows_configurable_preview(tmp_path):
             page.goto(f"{url}?compare_run_id={run_a}&compare_run_id={run_b}")
             page.wait_for_selector("#results-table")
 
+            page.locator("#more-menu-toggle").click()
             page.locator("#export-toggle").click()
             page.locator("#export-png-btn").click()
             page.wait_for_selector("#png-export-modal")

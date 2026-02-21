@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from ezvals.discovery import EvalDiscovery
 from ezvals.server import create_app
 from ezvals.storage import ResultsStore
 
@@ -93,6 +94,40 @@ def test_patch_endpoint_updates_json(tmp_path: Path):
     # Verify the scores were persisted
     data = store.load_run(run_id)
     assert data["results"][1]["result"]["scores"] == [{"key": "metric", "value": 1.0}]
+
+
+def test_patch_tracks_correction_history(tmp_path: Path):
+    store = ResultsStore(tmp_path / "runs")
+    summary = make_summary()
+    run_id = store.save_run(summary, "2024-01-01T00-00-00Z")
+
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+    client = TestClient(app)
+
+    score_update = [{"key": "metric", "value": 1.0, "notes": "human correction"}]
+    first = client.patch(f"/api/runs/{run_id}/results/1", json={"result": {"scores": score_update}})
+    assert first.status_code == 200
+
+    second = client.patch(f"/api/runs/{run_id}/results/1", json={"result": {"annotation": "judge missed detail"}})
+    assert second.status_code == 200
+
+    # Same value should not add duplicate history entries.
+    third = client.patch(f"/api/runs/{run_id}/results/1", json={"result": {"annotation": "judge missed detail"}})
+    assert third.status_code == 200
+
+    data = store.load_run(run_id)
+    history = data["results"][1]["result"]["correction_history"]
+    assert len(history) == 2
+
+    assert history[0]["field"] == "scores"
+    assert history[0]["before"] is None
+    assert history[0]["after"] == score_update
+    assert isinstance(history[0]["timestamp"], str) and history[0]["timestamp"]
+
+    assert history[1]["field"] == "annotation"
+    assert history[1]["before"] is None
+    assert history[1]["after"] == "judge missed detail"
+    assert isinstance(history[1]["timestamp"], str) and history[1]["timestamp"]
 
 
 def test_annotation_via_patch(tmp_path: Path):
@@ -763,6 +798,44 @@ def test_result_index_out_of_range_404(tmp_path: Path):
     assert "Result not found" in response.json()["detail"]
 
 
+def test_not_started_detail_routes_without_saved_run(tmp_path: Path):
+    eval_file = tmp_path / "pending_evals.py"
+    eval_file.write_text("""
+from ezvals import eval, EvalResult
+
+@eval(dataset="ds")
+def pending_a():
+    return EvalResult(input="i1", output="o1")
+
+@eval(dataset="ds")
+def pending_b():
+    return EvalResult(input="i2", output="o2")
+""")
+
+    discovered = EvalDiscovery().discover(path=str(eval_file))
+    app = create_app(
+        results_dir=str(tmp_path / "runs"),
+        active_run_id="pending-run",
+        path=str(eval_file),
+        discovered_functions=discovered,
+    )
+    client = TestClient(app)
+
+    dashboard = client.get("/results")
+    assert dashboard.status_code == 200
+    assert dashboard.json()["run_id"] == "pending-run"
+
+    page_response = client.get("/runs/pending-run/results/0")
+    assert page_response.status_code == 200
+
+    api_response = client.get("/api/runs/pending-run/results/1")
+    assert api_response.status_code == 200
+    payload = api_response.json()
+    assert payload["run_id"] == "pending-run"
+    assert payload["result"]["result"]["status"] == "not_started"
+    assert payload["result"]["result"]["output"] is None
+
+
 def test_readonly_fields_not_editable(tmp_path: Path):
     """PATCH ignores input, output, reference, dataset, labels, metadata, trace_data, latency, error"""
     store = ResultsStore(tmp_path / "runs")
@@ -1023,3 +1096,51 @@ def case3():
     assert results[2]["function"] == "case3"
     assert results[2]["result"]["output"] == "output3"  # New output from execution
     assert results[2]["result"]["status"] == "completed"
+
+
+def test_new_run_with_empty_indices_keeps_not_started_rows(tmp_path: Path):
+    """New run with no selected indices should still persist discovered rows as not_started."""
+    eval_dir = tmp_path / "evals"
+    eval_dir.mkdir()
+    f = eval_dir / "test_new_run_empty_selection.py"
+    f.write_text(
+        """
+from ezvals import eval, EvalResult
+
+@eval(dataset="selective_ds")
+def case1():
+    return EvalResult(input="input1", output="output1")
+
+@eval(dataset="selective_ds")
+def case2():
+    return EvalResult(input="input2", output="output2")
+
+@eval(dataset="selective_ds")
+def case3():
+    return EvalResult(input="input3", output="output3")
+"""
+    )
+
+    store = ResultsStore(tmp_path / "runs")
+    old_run_id = store.save_run({"total_evaluations": 0, "results": []}, "2024-01-01T00-00-00Z")
+
+    app = create_app(
+        results_dir=str(tmp_path / "runs"),
+        active_run_id=old_run_id,
+        path=str(f),
+    )
+    client = TestClient(app)
+
+    response = client.post("/api/runs/new", json={"indices": []})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload.get("ok") is True
+
+    new_run_id = payload["run_id"]
+    assert new_run_id != old_run_id
+
+    data = store.load_run(new_run_id)
+    assert data["total_evaluations"] == 3
+    assert len(data["results"]) == 3
+    assert all(r["result"]["status"] == "not_started" for r in data["results"])
+    assert all(r["result"]["output"] is None for r in data["results"])

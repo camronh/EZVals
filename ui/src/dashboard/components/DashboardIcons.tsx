@@ -78,6 +78,16 @@ export default function DashboardIcons() {
       <symbol id="icon-pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path>
       </symbol>
+      <symbol id="icon-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M12 5v14"></path>
+        <path d="M5 12h14"></path>
+      </symbol>
+      <symbol id="icon-compare" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M10 7H4"></path>
+        <path d="M7 4l-3 3 3 3"></path>
+        <path d="M14 17h6"></path>
+        <path d="M17 14l3 3-3 3"></path>
+      </symbol>
     </svg>
   )
 }

@@ -35,9 +35,17 @@ Scenario: Run a specific function
   When the user runs `ezvals run evals.py::test_refund`
   Then only test_refund runs
 
+Scenario: Run a specific list of functions
+  When the user runs `ezvals run evals.py::test_refund,test_escalation`
+  Then only test_refund and test_escalation run
+
 Scenario: Run a case variant
   When the user runs `ezvals run evals.py::test_math[2][3][5]`
   Then only that specific variant runs
+
+Scenario: Run specific case IDs with intuitive selectors
+  When the user runs `ezvals run evals.py::test_math@low,test_math@high`
+  Then only case variants `test_math[low]` and `test_math[high]` run
 ```
 
 ### Filtering Options
@@ -89,13 +97,6 @@ Scenario: Default minimal output
     - "Running {path}"
     - "Results saved to {file}"
 
-Scenario: Visual output
-  When the user runs `ezvals run evals/ --visual`
-  Then output includes:
-    - Progress dots (. for pass, F for fail)
-    - Rich results table
-    - Summary statistics
-
 Scenario: Verbose output
   When the user runs `ezvals run evals/ --verbose`
   Then print statements from eval functions appear in output
@@ -138,6 +139,22 @@ Scenario: No overwrite (when disabled)
   Given overwrite=false in ezvals.json
   When the user runs `ezvals run evals/ --session upgrade --run-name gpt5` twice
   Then both runs are kept as separate files with different timestamps
+
+Scenario: Rename an existing run by ID
+  Given run "run123" exists
+  When the user runs `ezvals run --rename run123 better-name`
+  Then the run file is renamed to include "better-name"
+  And run metadata field `run_name` becomes "better-name"
+
+Scenario: Rename with explicit session
+  Given run "run123" exists in session "model-upgrade"
+  When the user runs `ezvals run --rename run123 better-name --session model-upgrade`
+  Then only that session is searched for the run
+  And the run is renamed in-place
+
+Scenario: Rename run not found
+  When the user runs `ezvals run --rename missing-id better-name`
+  Then CLI exits non-zero with a clear "run not found" error
 ```
 
 ### Output Formats
@@ -146,23 +163,6 @@ Scenario: No overwrite (when disabled)
 ```
 Running evals.py
 Results saved to .ezvals/sessions/default/swift-falcon_1705312200.json
-```
-
-**Visual (`--visual`) Example:**
-```
-Running evals.py
-customer_service.py ..F
-
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃                     customer_service                           ┃
-┣━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┫
-┃ ...                ┃ ...      ┃ ...      ┃ ...               ┃
-└─────────────────────┴──────────┴──────────┴───────────────────┘
-
-Total Functions: 2
-Total Evaluations: 2
-Passed: 1
-Errors: 1
 ```
 
 ---
@@ -375,6 +375,7 @@ Scenario: Concurrency set to zero
 | `--no-save` | flag | false | JSON to stdout only |
 | `--session` | str | auto | Session name |
 | `--run-name` | str | auto | Run name |
+| `--rename` | str str | none | Rename existing run by `run_id` and new name |
 
 ### `ezvals serve`
 

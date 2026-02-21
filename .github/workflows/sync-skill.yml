@@ -17,7 +17,7 @@ jobs:
 
           # Copy docs, flattening the directory structure
           cp docs/introduction.mdx ezvals/skills/evals/ezvals-docs/
-          cp docs/quickstart.mdx ezvals/skills/evals/ezvals-docs/
+          cp docs/setup.mdx ezvals/skills/evals/ezvals-docs/quickstart.mdx
           cp docs/examples/*.mdx ezvals/skills/evals/ezvals-docs/
           cp docs/core-concepts/*.mdx ezvals/skills/evals/ezvals-docs/
           cp docs/guides/*.mdx ezvals/skills/evals/ezvals-docs/

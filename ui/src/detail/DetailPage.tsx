@@ -414,9 +414,9 @@ export default function DetailPage() {
           const r = await fetch(`/api/runs/${encodeURIComponent(runId)}/results/${data.index}`)
           if (r.ok) {
             const next = await r.json() as ResultDetailPayload
+            setData(next)
             const status = next.result?.result?.status
             if (status === 'completed' || status === 'error') {
-              setData(next)
               setIsRerunning(false)
               return
             }
@@ -580,6 +580,7 @@ export default function DetailPage() {
   const resultEntry = data.result
   const result = (resultEntry?.result || {}) as NonNullable<RunResultRow['result']>
   const status = result.status || 'completed'
+  const isOutputLoading = isRerunning || status === 'pending' || status === 'running'
   const hasReference = result.reference != null && result.reference !== '—'
   const hasMetadata = result.metadata != null && result.metadata !== '—'
   const metadataEntries = hasMetadata
@@ -741,18 +742,42 @@ export default function DetailPage() {
             ) : (
               <>
                 <div id="io-row" className="flex min-h-0" style={{ flex: '1 1 auto' }}>
-                  <div id="input-panel" className="flex flex-col min-w-0" style={{ width: `${inputWidth}%` }}>
-                    <div className="data-panel-header flex items-center justify-between border-b border-blue-100 bg-blue-50/50 px-3 py-1.5 dark:border-zinc-800/60 dark:bg-zinc-900/50">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">Input</span>
-                      <CopyButton
-                        getText={() => getRawText(result.input)}
-                        className="copy-btn text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-                        title="Copy"
-                      />
+                  <div id="input-column" className="flex min-w-0 flex-col" style={{ width: `${inputWidth}%` }}>
+                    <div id="input-panel" className="flex min-h-0 flex-1 flex-col min-w-0">
+                      <div className="data-panel-header flex items-center justify-between border-b border-blue-100 bg-blue-50/50 px-3 py-1.5 dark:border-zinc-800/60 dark:bg-zinc-900/50">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">Input</span>
+                        <CopyButton
+                          getText={() => getRawText(result.input)}
+                          className="copy-btn text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                          title="Copy"
+                        />
+                      </div>
+                      <div className="data-panel-body p-3 bg-white dark:bg-zinc-900/30 overflow-auto flex-1">
+                        <DataViewer content={result.input} placeholder="—" />
+                      </div>
                     </div>
-                    <div className="data-panel-body p-3 bg-white dark:bg-zinc-900/30 overflow-auto flex-1">
-                      <DataViewer content={result.input} placeholder="—" />
-                    </div>
+
+                    {hasReference ? (
+                      <>
+                        <div
+                          className="resize-handle-h h-1 cursor-row-resize bg-transparent hover:bg-amber-500/30 transition-colors flex-shrink-0"
+                          onMouseDown={(e) => startResize('ref-height', e)}
+                        />
+                        <div id="ref-panel" className="flex flex-col flex-shrink-0" style={{ height: `${refHeight}px`, minHeight: '60px' }}>
+                          <div className="data-panel-header flex items-center justify-between border-b border-amber-200/40 bg-amber-50/50 px-3 py-1.5 dark:border-amber-500/10 dark:bg-amber-500/5">
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">Reference</span>
+                            <CopyButton
+                              getText={() => getRawText(result.reference)}
+                              className="copy-btn text-amber-500 hover:text-amber-700 dark:hover:text-amber-300"
+                              title="Copy"
+                            />
+                          </div>
+                          <div className="data-panel-body p-3 overflow-auto bg-amber-50/30 dark:bg-amber-500/5 flex-1">
+                            <DataViewer content={result.reference} placeholder="—" />
+                          </div>
+                        </div>
+                      </>
+                    ) : null}
                   </div>
 
                   <div
@@ -764,38 +789,30 @@ export default function DetailPage() {
                     <div className="data-panel-header flex items-center justify-between border-b border-blue-100 bg-emerald-50/50 px-3 py-1.5 dark:border-zinc-800/60 dark:bg-zinc-900/50">
                       <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Output</span>
                       <CopyButton
-                        getText={() => getRawText(result.output)}
+                        getText={() => getRawText(isOutputLoading ? null : result.output)}
                         className="copy-btn text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
                         title="Copy"
                       />
                     </div>
                     <div className="data-panel-body p-3 bg-white dark:bg-zinc-900/30 overflow-auto flex-1">
-                      <DataViewer content={result.output} placeholder="—" />
+                      {isOutputLoading ? (
+                        <div
+                          id="output-loading-indicator"
+                          className="output-loading-state"
+                          role="status"
+                          aria-live="polite"
+                          aria-label="Output is loading"
+                        >
+                          <div className="output-loading-line output-loading-line-1" />
+                          <div className="output-loading-line output-loading-line-2" />
+                          <div className="output-loading-line output-loading-line-3" />
+                        </div>
+                      ) : (
+                        <DataViewer content={result.output} placeholder="—" />
+                      )}
                     </div>
                   </div>
                 </div>
-
-                {hasReference ? (
-                  <>
-                  <div
-                    className="resize-handle-h h-1 cursor-row-resize bg-transparent hover:bg-amber-500/30 transition-colors flex-shrink-0"
-                    onMouseDown={(e) => startResize('ref-height', e)}
-                  />
-                  <div id="ref-panel" className="flex flex-col flex-shrink-0" style={{ height: `${refHeight}px`, minHeight: '60px' }}>
-                    <div className="data-panel-header flex items-center justify-between border-b border-amber-200/40 bg-amber-50/50 px-3 py-1.5 dark:border-amber-500/10 dark:bg-amber-500/5">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">Reference</span>
-                      <CopyButton
-                        getText={() => getRawText(result.reference)}
-                        className="copy-btn text-amber-500 hover:text-amber-700 dark:hover:text-amber-300"
-                        title="Copy"
-                      />
-                    </div>
-                    <div className="data-panel-body p-3 overflow-auto bg-amber-50/30 dark:bg-amber-500/5 flex-1">
-                      <DataViewer content={result.reference} placeholder="—" />
-                    </div>
-                  </div>
-                  </>
-                ) : null}
               </>
             )}
           </div>
@@ -820,9 +837,13 @@ export default function DetailPage() {
               {resultEntry?.dataset ? (
                 <div className="flex min-w-0 items-center justify-between gap-2">
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Dataset</span>
-                  <span className="max-w-[70%] truncate text-right text-xs text-zinc-600 dark:text-zinc-300" title={resultEntry.dataset}>
+                  <a
+                    className="max-w-[70%] truncate text-right text-xs text-zinc-600 underline underline-offset-2 hover:text-blue-600 dark:text-zinc-300 dark:hover:text-blue-400"
+                    title={`Open dashboard filtered to dataset: ${resultEntry.dataset}`}
+                    href={`/?run_id=${encodeURIComponent(runId)}&dataset_in=${encodeURIComponent(resultEntry.dataset)}`}
+                  >
                     {resultEntry.dataset}
-                  </span>
+                  </a>
                 </div>
               ) : null}
               {resultEntry?.labels?.length ? (
@@ -1057,11 +1078,11 @@ export default function DetailPage() {
             ) : null}
 
             <div className="flex-1">
-              <div className="group flex items-center justify-between px-3 py-2 bg-zinc-100/50 dark:bg-zinc-800/30">
+              <div className="flex items-center justify-between px-3 py-2 bg-zinc-100/50 dark:bg-zinc-800/30">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Annotation</span>
                 {!editingAnnotation && (
                   <button
-                    className="flex h-5 w-5 items-center justify-center rounded text-zinc-400 opacity-0 transition-opacity hover:bg-zinc-200 hover:text-zinc-600 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-zinc-700 dark:hover:text-zinc-300"
+                    className="flex h-5 w-5 items-center justify-center rounded text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-300"
                     title="Edit annotation"
                     onClick={() => {
                       setAnnotationDraft(result.annotation || '')
@@ -1130,16 +1151,7 @@ export default function DetailPage() {
                 ) : result.annotation ? (
                   <div className="whitespace-pre-wrap text-xs text-zinc-700 dark:text-zinc-300">{result.annotation}</div>
                 ) : (
-                  <button
-                    className="text-xs italic text-zinc-400 dark:text-zinc-500 hover:text-blue-500 dark:hover:text-blue-400"
-                    onClick={() => {
-                      setAnnotationDraft('')
-                      setEditingAnnotation(true)
-                      setAnnotationError(null)
-                    }}
-                  >
-                    + Add annotation
-                  </button>
+                  <div className="text-xs italic text-zinc-400 dark:text-zinc-500">No annotation</div>
                 )}
               </div>
             </div>
