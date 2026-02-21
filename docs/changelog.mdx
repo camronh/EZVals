@@ -11,6 +11,8 @@ description: "All notable changes to EZVals"
 - Tests: Expanded comparison-detail E2E coverage for layout behavior, hidden controls, per-run badges/annotations, deep-link navigation, and draggable split handles.
 - Added: Comparison-mode table cells now support the same hover preview popover behavior as single-run mode for input, reference, output, error, and scores content.
 - Tests: Added E2E coverage for comparison-table hover previews across input, reference, output, error, and scores.
+- Fixed: Detail view now keeps the `Trace Data` section collapsed by default, so verbose trace payloads do not push higher-signal sidebar content out of view.
+- Tests: Updated full-scenario E2E coverage to assert `Trace Data` starts collapsed and expands only when toggled open.
 
 ## 0.1.8 - 2026-02-20
 

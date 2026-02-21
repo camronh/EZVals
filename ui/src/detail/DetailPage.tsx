@@ -226,7 +226,7 @@ export default function DetailPage() {
   const [error, setError] = useState<Error | null>(null)
   const [isRerunning, setIsRerunning] = useState(false)
   const [messagesOpen, setMessagesOpen] = useState(false)
-  const [collapsed, setCollapsed] = useState<CollapsedState>({ metadata: false, trace: false })
+  const [collapsed, setCollapsed] = useState<CollapsedState>({ metadata: false, trace: true })
   const [comparison, setComparison] = useState<ComparisonState | null>(null)
   const [editingAnnotation, setEditingAnnotation] = useState(false)
   const [annotationDraft, setAnnotationDraft] = useState('')
