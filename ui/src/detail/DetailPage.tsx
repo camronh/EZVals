@@ -220,6 +220,21 @@ export default function DetailPage() {
       index: match ? parseInt(match[2], 10) : 0,
     }
   })
+  const comparisonRunIdsFromQuery = useMemo(() => {
+    const ids = Array.from(new Set(new URLSearchParams(window.location.search).getAll('compare_run_id').map((x) => x.trim()).filter(Boolean)))
+    if (ids.length === 1 && ids[0] !== runId) return [runId, ids[0]]
+    return ids
+  }, [runId])
+  const detailSearchSuffix = useMemo(() => {
+    const params = new URLSearchParams(window.location.search)
+    params.delete('compare_run_id')
+    comparisonRunIdsFromQuery.forEach((id) => params.append('compare_run_id', id))
+    const query = params.toString()
+    return query ? `?${query}` : ''
+  }, [comparisonRunIdsFromQuery])
+  const buildDetailHref = useCallback((targetRunId: string, targetIndex: number) => {
+    return `/runs/${targetRunId}/results/${targetIndex}${detailSearchSuffix}`
+  }, [detailSearchSuffix])
 
   const [data, setData] = useState<ResultDetailPayload | null>(null)
   const [loading, setLoading] = useState(true)
@@ -257,6 +272,11 @@ export default function DetailPage() {
   const containerRef = useRef<HTMLDivElement | null>(null)
 
   const comparisonRuns = useMemo<NormalizedComparisonRun[]>(() => {
+    if (comparisonRunIdsFromQuery.length) {
+      const normalized = normalizeComparisonRuns(comparisonRunIdsFromQuery.map((id) => ({ runId: id, runName: id })))
+      sessionStorage.setItem(COMPARISON_STORAGE_KEY, JSON.stringify(normalized))
+      return normalized
+    }
     try {
       const saved = sessionStorage.getItem(COMPARISON_STORAGE_KEY)
       if (!saved) return []
@@ -265,7 +285,7 @@ export default function DetailPage() {
     } catch {
       return []
     }
-  }, [])
+  }, [comparisonRunIdsFromQuery])
 
   const isComparisonMode = !forceSingleDetailMode && comparisonRuns.length > 1
 
@@ -373,14 +393,14 @@ export default function DetailPage() {
       if (event.key === 'Escape') {
         window.location.href = '/'
       } else if (event.key === 'ArrowUp') {
-        if (data && data.index > 0) window.location.href = `/runs/${runId}/results/${data.index - 1}`
+        if (data && data.index > 0) window.location.href = buildDetailHref(runId, data.index - 1)
       } else if (event.key === 'ArrowDown') {
-        if (data && data.index < data.total - 1) window.location.href = `/runs/${runId}/results/${data.index + 1}`
+        if (data && data.index < data.total - 1) window.location.href = buildDetailHref(runId, data.index + 1)
       }
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [data, runId, editingAnnotation, editingScoreIndex])
+  }, [data, runId, editingAnnotation, editingScoreIndex, buildDetailHref])
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -687,7 +707,7 @@ export default function DetailPage() {
               className="flex h-7 w-7 items-center justify-center rounded border border-zinc-200 text-zinc-500 hover:border-blue-300 hover:text-blue-600 disabled:opacity-40 dark:border-zinc-700 dark:hover:border-blue-500"
               title="Up"
               disabled={data.index <= 0}
-              onClick={() => window.location.href = `/runs/${runId}/results/${data.index - 1}`}
+              onClick={() => window.location.href = buildDetailHref(runId, data.index - 1)}
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 15l-6-6-6 6" /></svg>
             </button>
@@ -696,7 +716,7 @@ export default function DetailPage() {
               className="flex h-7 w-7 items-center justify-center rounded border border-zinc-200 text-zinc-500 hover:border-blue-300 hover:text-blue-600 disabled:opacity-40 dark:border-zinc-700 dark:hover:border-blue-500"
               title="Down"
               disabled={data.index >= data.total - 1}
-              onClick={() => window.location.href = `/runs/${runId}/results/${data.index + 1}`}
+              onClick={() => window.location.href = buildDetailHref(runId, data.index + 1)}
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
             </button>
@@ -737,7 +757,6 @@ export default function DetailPage() {
                               <a
                                 href={`/runs/${run.runId}/results/${run.resultIndex}?mode=single`}
                                 title="Open detail"
-                                onClick={() => sessionStorage.removeItem(COMPARISON_STORAGE_KEY)}
                                 className="rounded border border-zinc-300 px-1.5 py-0.5 text-[10px] text-zinc-500 hover:border-blue-300 hover:text-blue-600 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-blue-500 dark:hover:text-blue-300"
                               >
                                 Open detail

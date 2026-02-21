@@ -69,6 +69,11 @@ These controls are independent, so you can keep a column hidden but still search
 
 Click a function name to open the full-page detail view with its own URL (`/runs/{run_id}/results/{index}`). Navigate between results with arrow keys (↑/↓) or press Escape to return to the table.
 
+When opening detail from comparison mode, URLs keep repeated `compare_run_id` query params. This makes comparison detail links shareable/bookmarkable and restores the same run set when opened in a new tab:
+
+- `/runs/{run_id}/results/{index}?compare_run_id=runA&compare_run_id=runB`
+- `/runs/{run_id}/results/{index}?compare_run_id=runB` (auto-includes the current detail run as base)
+
 When `input`, `output`, `reference`, or trace `messages` contain chat-style message arrays (OpenAI, Anthropic, or similar `{role, content}` variants), the detail view auto-renders them in a chat-style layout. Use the **Pretty**/**Raw** toggle in each section to switch between formatted message boxes and raw JSON.
 
 ## Inline Editing
@@ -151,6 +156,10 @@ Compare results across multiple runs side-by-side. When you have 2+ runs in a se
 Each run gets a color-coded chip. The chart shows pass rates and latency for each run. The table aligns results by function name and dataset, making it easy to spot regressions or improvements.
 
 To exit comparison mode, click the × on run chips until only one remains.
+
+Comparison mode also has a shareable URL format based on repeated query params:
+
+`/?compare_run_id=runA&compare_run_id=runB`
 
 ## Run Selector
 

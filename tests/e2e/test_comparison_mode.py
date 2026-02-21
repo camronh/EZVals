@@ -339,6 +339,40 @@ def test_comparison_mode_from_query_params(tmp_path):
             browser.close()
 
 
+def test_comparison_mode_table_links_include_compare_query_params(tmp_path):
+    """Comparison row links should preserve compare_run_id params for shareable detail URLs."""
+    store = ResultsStore(tmp_path / "runs")
+
+    run1_id = store.save_run(make_run_summary("baseline"), session_name="test-session", run_name="baseline")
+    run2_id = store.save_run(make_run_summary("final"), session_name="test-session", run_name="final")
+
+    app = create_app(
+        results_dir=str(tmp_path / "runs"),
+        active_run_id=run1_id,
+        session_name="test-session",
+        run_name="baseline",
+    )
+
+    query = f"run_id={run1_id}&compare_run_id={run1_id}&compare_run_id={run2_id}"
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(f"{url}?{query}")
+            page.wait_for_selector("#results-table")
+            page.wait_for_selector(".comparison-chips")
+
+            link = page.locator("tbody tr[data-row='main'] td[data-col='function'] a").first
+            href = link.get_attribute("href")
+            assert href is not None
+            parsed = urllib.parse.urlparse(href)
+            params = urllib.parse.parse_qs(parsed.query)
+            assert params.get("compare_run_id") == [run1_id, run2_id]
+
+            browser.close()
+
+
 def test_comparison_mode_from_single_compare_query_param(tmp_path):
     """run_id + single compare_run_id should hydrate two-run comparison mode."""
     store = ResultsStore(tmp_path / "runs")
@@ -534,6 +568,62 @@ def test_comparison_detail_shows_multiple_outputs(tmp_path):
             page.wait_for_selector("#main-panel")
 
             # Should show outputs from both runs (use specific text to avoid ambiguity)
+            expect(page.locator("text=output A from baseline")).to_be_visible()
+            expect(page.locator("text=output A from final")).to_be_visible()
+
+            browser.close()
+
+
+def test_comparison_detail_shows_multiple_outputs_from_query_params(tmp_path):
+    """Comparison detail should hydrate from compare_run_id query params."""
+    store = ResultsStore(tmp_path / "runs")
+
+    run1_id = store.save_run(make_run_summary("baseline"), session_name="test-session", run_name="baseline")
+    run2_id = store.save_run(make_run_summary("final"), session_name="test-session", run_name="final")
+
+    app = create_app(
+        results_dir=str(tmp_path / "runs"),
+        active_run_id=run1_id,
+        session_name="test-session",
+        run_name="baseline",
+    )
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(f"{url}/runs/{run1_id}/results/0?compare_run_id={run1_id}&compare_run_id={run2_id}")
+            page.wait_for_selector("#main-panel")
+
+            expect(page.locator("#comparison-outputs .comparison-output-card")).to_have_count(2)
+            expect(page.locator("text=output A from baseline")).to_be_visible()
+            expect(page.locator("text=output A from final")).to_be_visible()
+
+            browser.close()
+
+
+def test_comparison_detail_shows_multiple_outputs_from_single_compare_query_param(tmp_path):
+    """Single compare_run_id param should include current detail run as base."""
+    store = ResultsStore(tmp_path / "runs")
+
+    run1_id = store.save_run(make_run_summary("baseline"), session_name="test-session", run_name="baseline")
+    run2_id = store.save_run(make_run_summary("final"), session_name="test-session", run_name="final")
+
+    app = create_app(
+        results_dir=str(tmp_path / "runs"),
+        active_run_id=run1_id,
+        session_name="test-session",
+        run_name="baseline",
+    )
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(f"{url}/runs/{run1_id}/results/0?compare_run_id={run2_id}")
+            page.wait_for_selector("#main-panel")
+
+            expect(page.locator("#comparison-outputs .comparison-output-card")).to_have_count(2)
             expect(page.locator("text=output A from baseline")).to_be_visible()
             expect(page.locator("text=output A from final")).to_be_visible()
 

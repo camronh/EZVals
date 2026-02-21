@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import type { NormalizedComparisonRun, RunResultRow } from '../../types'
 import type { ComparisonMatrixEntry } from '../utils'
 import InlineScoreBadges from './InlineScoreBadges'
@@ -91,6 +91,15 @@ export default function ComparisonTable({ sortedRows, normalizedComparisonRuns, 
     }, 150)
   }, [])
 
+  const comparisonQuerySuffix = useMemo(() => {
+    if (normalizedComparisonRuns.length < 2) return ''
+    const params = new URLSearchParams()
+    normalizedComparisonRuns.forEach((run) => {
+      params.append('compare_run_id', run.runId)
+    })
+    return `?${params.toString()}`
+  }, [normalizedComparisonRuns])
+
   return (
     <>
       <table id="results-table" className="w-full table-fixed border-collapse text-sm text-theme-text comparison-table">
@@ -139,7 +148,7 @@ export default function ComparisonTable({ sortedRows, normalizedComparisonRuns, 
                   <div className="flex flex-col gap-0.5">
                     {row.linkIndex != null ? (
                       <a
-                        href={`/runs/${row.linkRunId || currentRunId}/results/${row.linkIndex}`}
+                        href={`/runs/${row.linkRunId || currentRunId}/results/${row.linkIndex}${comparisonQuerySuffix}`}
                         className="font-mono text-[12px] font-medium text-accent-link hover:text-accent-link-hover"
                         onClick={() => sessionStorage.setItem('ezvals:scrollY', window.scrollY.toString())}
                       >
