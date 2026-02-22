@@ -256,6 +256,7 @@ Scenario: Access run metadata in eval function
 | `session_name` | str \| None | Session name for the run, read-only |
 | `run_name` | str \| None | Human-readable run name, read-only |
 | `eval_path` | str \| None | Path to eval file(s) being run, read-only |
+| `config` | dict | Config profile dict from `--config`, read-only. Defaults to `{}` |
 
 **Per-eval metadata** (from the decorated function):
 

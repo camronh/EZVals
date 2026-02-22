@@ -203,6 +203,7 @@ def cli():
 @click.option('--annotation', type=click.Choice(['any', 'yes', 'no']), default='any', help='Initial annotation filter')
 @click.option('--run', 'auto_run', is_flag=True, help='Automatically run all evals on startup')
 @click.option('--open/--no-open', 'open_browser', default=True, help='Open the UI in your browser on startup')
+@click.option('--config', 'config_name', default=None, help='Named config profile from ezvals.json')
 def serve_cmd(
     path: str,
     dataset: Optional[str],
@@ -219,6 +220,7 @@ def serve_cmd(
     annotation: str,
     auto_run: bool,
     open_browser: bool = True,
+    config_name: Optional[str] = None,
 ):
     """Start the web UI to browse and run evaluations."""
     from pathlib import Path as PathLib
@@ -268,6 +270,10 @@ def serve_cmd(
         if restart_port is not None:
             _restart_current_process(port=restart_port)
         return
+
+    # Auto-default run_name to config name when --config used without --run-name
+    if config_name and not run_name:
+        run_name = config_name
 
     labels = list(label) if label else None
     store = ResultsStore(results_dir)
@@ -341,6 +347,7 @@ def serve_cmd(
         query_params=query_params,
         auto_run=auto_run,
         open_browser=open_browser,
+        config_name=config_name,
     )
     if restart_port is not None:
         _restart_current_process(port=restart_port)
@@ -359,6 +366,7 @@ def serve_cmd(
 @click.option('--run-name', default=None, help='Name for this specific run')
 @click.option('--no-save', is_flag=True, help='Skip saving results to file')
 @click.option('--rename', nargs=2, type=str, metavar='RUN_ID NEW_NAME', help='Rename an existing saved run by run ID')
+@click.option('--config', 'config_name', default=None, help='Named config profile from ezvals.json')
 def run_cmd(
     path: Optional[str],
     dataset: Optional[str],
@@ -372,6 +380,7 @@ def run_cmd(
     run_name: Optional[str],
     no_save: bool,
     rename: Optional[tuple[str, str]],
+    config_name: Optional[str],
 ):
     """Run evaluations headless. Optimized for LLM agents by default."""
     if rename:
@@ -400,6 +409,10 @@ def run_cmd(
         path, path_selector = path.rsplit('::', 1)
         function_names = [name.strip() for name in path_selector.split(",") if name.strip()]
 
+    # Auto-default run_name to config name when --config used without --run-name
+    if config_name and not run_name:
+        run_name = config_name
+
     display_path = path
 
     def on_complete_callback(func, result_dict):
@@ -425,6 +438,7 @@ def run_cmd(
             run_name=run_name,
             no_save=no_save,
             use_config=True,
+            config_name=config_name,
             on_complete=on_complete_callback if verbose else None,
         )
         summary = run_result["summary"]
@@ -605,6 +619,7 @@ def _serve(
     query_params: Optional[List[tuple[str, str]]] = None,
     auto_run: bool = False,
     open_browser: bool = True,
+    config_name: Optional[str] = None,
 ) -> Optional[int]:
     """Serve a web UI to browse and run evaluations."""
     try:
@@ -640,6 +655,7 @@ def _serve(
         discovered_functions=functions,
         session_name=session_name,
         run_name=run_name,
+        config_name=config_name,
     )
 
     if not path:

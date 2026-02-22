@@ -813,6 +813,220 @@ def test_failing():
             assert "not found in session 's1'" in result.output
 
 
+class TestRunConfigs:
+    """Tests for --config flag (run configs feature)"""
+
+    def setup_method(self):
+        self.runner = CliRunner()
+
+    def test_run_config_flag_in_help(self):
+        result = self.runner.invoke(cli, ['run', '--help'])
+        assert '--config' in result.output
+
+    def test_serve_config_flag_in_help(self):
+        result = self.runner.invoke(cli, ['serve', '--help'])
+        assert '--config' in result.output
+
+    def test_run_with_config_passes_to_sdk(self, monkeypatch):
+        captured = {}
+
+        def fake_run_sdk(**kwargs):
+            captured.update(kwargs)
+            return {
+                "summary": {
+                    "total_evaluations": 0, "total_functions": 0,
+                    "total_errors": 0, "total_with_scores": 0,
+                    "total_passed": 0, "average_latency": 0, "results": [],
+                },
+                "saved_path": "fake.json",
+            }
+
+        monkeypatch.setattr("ezvals.cli.run_sdk", fake_run_sdk)
+        result = self.runner.invoke(cli, ['run', 'evals.py', '--config', 'gpt-4'])
+        assert result.exit_code == 0
+        assert captured["config_name"] == "gpt-4"
+
+    def test_run_config_auto_defaults_run_name(self, monkeypatch):
+        """--config without --run-name should auto-default run_name to config name"""
+        captured = {}
+
+        def fake_run_sdk(**kwargs):
+            captured.update(kwargs)
+            return {
+                "summary": {
+                    "total_evaluations": 0, "total_functions": 0,
+                    "total_errors": 0, "total_with_scores": 0,
+                    "total_passed": 0, "average_latency": 0, "results": [],
+                },
+                "saved_path": "fake.json",
+            }
+
+        monkeypatch.setattr("ezvals.cli.run_sdk", fake_run_sdk)
+        result = self.runner.invoke(cli, ['run', 'evals.py', '--config', 'gpt-4'])
+        assert result.exit_code == 0
+        assert captured["run_name"] == "gpt-4"
+
+    def test_run_config_explicit_run_name_wins(self, monkeypatch):
+        """--run-name overrides --config auto-default"""
+        captured = {}
+
+        def fake_run_sdk(**kwargs):
+            captured.update(kwargs)
+            return {
+                "summary": {
+                    "total_evaluations": 0, "total_functions": 0,
+                    "total_errors": 0, "total_with_scores": 0,
+                    "total_passed": 0, "average_latency": 0, "results": [],
+                },
+                "saved_path": "fake.json",
+            }
+
+        monkeypatch.setattr("ezvals.cli.run_sdk", fake_run_sdk)
+        result = self.runner.invoke(cli, ['run', 'evals.py', '--config', 'gpt-4', '--run-name', 'baseline'])
+        assert result.exit_code == 0
+        assert captured["run_name"] == "baseline"
+
+    def test_run_without_config_passes_none(self, monkeypatch):
+        """No --config should pass config_name=None"""
+        captured = {}
+
+        def fake_run_sdk(**kwargs):
+            captured.update(kwargs)
+            return {
+                "summary": {
+                    "total_evaluations": 0, "total_functions": 0,
+                    "total_errors": 0, "total_with_scores": 0,
+                    "total_passed": 0, "average_latency": 0, "results": [],
+                },
+                "saved_path": "fake.json",
+            }
+
+        monkeypatch.setattr("ezvals.cli.run_sdk", fake_run_sdk)
+        result = self.runner.invoke(cli, ['run', 'evals.py'])
+        assert result.exit_code == 0
+        assert captured["config_name"] is None
+
+    def test_run_config_invalid_name_errors(self):
+        """Invalid config name should error with available configs listed"""
+        with self.runner.isolated_filesystem():
+            Path('ezvals.json').write_text(json.dumps({
+                "configs": {"gpt-4": {"model": "gpt-4"}, "claude": {"model": "claude"}}
+            }))
+            Path('test_cfg.py').write_text("""
+from ezvals import eval, EvalResult
+
+@eval()
+def test_cfg():
+    return EvalResult(input="x", output="y")
+""")
+            result = self.runner.invoke(cli, ['run', 'test_cfg.py', '--config', 'nonexistent'])
+            assert result.exit_code != 0
+            assert 'nonexistent' in result.output
+
+    def test_run_config_populates_ctx_config(self):
+        """End-to-end: --config makes ctx.config available in eval functions"""
+        with self.runner.isolated_filesystem():
+            Path('ezvals.json').write_text(json.dumps({
+                "configs": {"gpt-4": {"model": "gpt-4", "temperature": 0.7}}
+            }))
+            Path('test_cfg.py').write_text("""
+from ezvals import eval, EvalContext
+
+@eval()
+def test_config_access(ctx: EvalContext):
+    assert ctx.config["model"] == "gpt-4"
+    assert ctx.config["temperature"] == 0.7
+    ctx.store(output="ok", scores=True)
+""")
+            result = self.runner.invoke(cli, ['run', 'test_cfg.py', '--config', 'gpt-4', '--output', 'results.json'])
+            assert result.exit_code == 0
+            with open('results.json') as f:
+                data = json.load(f)
+            assert data['total_evaluations'] == 1
+            assert data['total_errors'] == 0
+            assert data.get('config_name') == 'gpt-4'
+
+    def test_run_without_config_ctx_config_is_empty(self):
+        """Backward compat: no --config means ctx.config is {}"""
+        with self.runner.isolated_filesystem():
+            Path('test_noconfig.py').write_text("""
+from ezvals import eval, EvalContext
+
+@eval()
+def test_no_config(ctx: EvalContext):
+    assert ctx.config == {}
+    ctx.store(output="ok", scores=True)
+""")
+            result = self.runner.invoke(cli, ['run', 'test_noconfig.py', '--output', 'results.json'])
+            assert result.exit_code == 0
+            with open('results.json') as f:
+                data = json.load(f)
+            assert data['total_evaluations'] == 1
+            assert data['total_errors'] == 0
+
+    def test_serve_config_passes_to_serve(self, monkeypatch):
+        """serve --config passes config_name through"""
+        captured = {}
+
+        def fake_serve(**kwargs):
+            captured.update(kwargs)
+
+        monkeypatch.setattr('ezvals.cli._serve', fake_serve)
+
+        with self.runner.isolated_filesystem():
+            Path('evals.py').write_text('def x():\n    return 1\n')
+            result = self.runner.invoke(cli, ['serve', 'evals.py', '--config', 'gpt-4'])
+            assert result.exit_code == 0
+            assert captured["config_name"] == "gpt-4"
+
+
+class TestResolveRunConfig:
+    """Tests for resolve_run_config()"""
+
+    def test_none_returns_empty_dict(self):
+        from ezvals.config import resolve_run_config
+        assert resolve_run_config(None) == {}
+
+    def test_valid_config_name(self, tmp_path, monkeypatch):
+        from ezvals.config import resolve_run_config
+        config_file = tmp_path / "ezvals.json"
+        config_file.write_text(json.dumps({
+            "configs": {"gpt-4": {"model": "gpt-4", "temperature": 0.7}}
+        }))
+        monkeypatch.chdir(tmp_path)
+        result = resolve_run_config("gpt-4")
+        assert result == {"model": "gpt-4", "temperature": 0.7}
+
+    def test_missing_config_name_raises(self, tmp_path, monkeypatch):
+        from ezvals.config import resolve_run_config
+        config_file = tmp_path / "ezvals.json"
+        config_file.write_text(json.dumps({
+            "configs": {"gpt-4": {"model": "gpt-4"}}
+        }))
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(ValueError, match="nonexistent"):
+            resolve_run_config("nonexistent")
+
+    def test_no_configs_key_raises(self, tmp_path, monkeypatch):
+        from ezvals.config import resolve_run_config
+        config_file = tmp_path / "ezvals.json"
+        config_file.write_text(json.dumps({"concurrency": 1}))
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(ValueError, match="none defined"):
+            resolve_run_config("gpt-4")
+
+    def test_error_lists_available_configs(self, tmp_path, monkeypatch):
+        from ezvals.config import resolve_run_config
+        config_file = tmp_path / "ezvals.json"
+        config_file.write_text(json.dumps({
+            "configs": {"claude": {"model": "claude"}, "gpt-4": {"model": "gpt-4"}}
+        }))
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(ValueError, match="claude") as exc_info:
+            resolve_run_config("missing")
+        assert "gpt-4" in str(exc_info.value)
+
+
 class TestSkillsCommands:
     """Tests for ezvals skills subcommands"""
 

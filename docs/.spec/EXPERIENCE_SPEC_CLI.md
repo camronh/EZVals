@@ -318,7 +318,11 @@ Scenario: Export to Markdown
   "timeout": null,
   "verbose": false,
   "results_dir": ".ezvals/sessions",
-  "overwrite": true
+  "overwrite": true,
+  "configs": {
+    "gpt-4": {"model": "gpt-4", "temperature": 0.7},
+    "claude": {"model": "claude-3-opus", "temperature": 0.5}
+  }
 }
 ```
 
@@ -329,8 +333,35 @@ Scenario: Export to Markdown
 | `verbose` | bool | false | Show eval stdout |
 | `results_dir` | string | `.ezvals/sessions` | Storage directory |
 | `overwrite` | bool | true | Replace runs with same session + run name |
+| `configs` | dict | `{}` | Named config profiles selectable via `--config` |
 
 **Precedence:** CLI flags > Config file > Defaults
+
+### Run Configs
+
+**Intent:** User wants to run the same evals against different configurations (models, temperatures, etc.) without changing code.
+
+```gherkin
+Scenario: Run with named config
+  Given ezvals.json has configs.gpt-4 = {"model": "gpt-4", "temperature": 0.7}
+  When the user runs `ezvals run evals/ --config gpt-4`
+  Then ctx.config contains {"model": "gpt-4", "temperature": 0.7} in all eval functions
+  And run_name defaults to "gpt-4" when --run-name is not specified
+  And saved run JSON includes config_name: "gpt-4"
+
+Scenario: Run with config and explicit run name
+  When the user runs `ezvals run evals/ --config gpt-4 --run-name baseline`
+  Then run_name is "baseline" (explicit --run-name wins)
+
+Scenario: Invalid config name
+  When the user runs `ezvals run evals/ --config nonexistent`
+  Then error lists available config names from ezvals.json
+
+Scenario: No config specified (backward compat)
+  When the user runs `ezvals run evals/`
+  Then ctx.config is {} in all eval functions
+  And behavior is unchanged from before
+```
 
 ---
 
@@ -376,6 +407,7 @@ Scenario: Concurrency set to zero
 | `--session` | str | auto | Session name |
 | `--run-name` | str | auto | Run name |
 | `--rename` | str str | none | Rename existing run by `run_id` and new name |
+| `--config` | str | none | Named config profile from ezvals.json |
 
 ### `ezvals serve`
 
@@ -395,3 +427,4 @@ Scenario: Concurrency set to zero
 | `--results-dir` | path | .ezvals/sessions | Results directory |
 | `--run` | flag | false | Auto-run all evals on startup |
 | `--open/--no-open` | bool | open | Open browser automatically on startup |
+| `--config` | str | none | Named config profile from ezvals.json |

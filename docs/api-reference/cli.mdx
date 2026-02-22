@@ -142,6 +142,14 @@ ezvals serve evals/ --annotation yes --has-error
 ezvals serve evals/ --run
 ```
 
+<ParamField path="--config" type="string">
+  Named config profile from `ezvals.json`. When set, auto-defaults `--run-name` to the config name if no explicit `--run-name` is provided.
+</ParamField>
+
+```bash
+ezvals serve evals/ --config gpt-4
+```
+
 <ParamField path="--open/--no-open" type="boolean" default="open">
   Control whether `ezvals serve` automatically opens your browser.
 </ParamField>
@@ -259,6 +267,15 @@ ezvals run evals/ --session model-comparison
 
 ```bash
 ezvals run evals/ --session model-comparison --run-name gpt4-baseline
+```
+
+<ParamField path="--config" type="string">
+  Named config profile from `ezvals.json`. The config dict is available as `ctx.config` in eval functions. When set, auto-defaults `--run-name` to the config name.
+</ParamField>
+
+```bash
+ezvals run evals/ --config gpt-4
+ezvals run evals/ --config claude
 ```
 
 ## ezvals export
@@ -418,6 +435,7 @@ EZVals supports a `ezvals.json` config file for persisting default CLI options. 
 | `verbose` | boolean | Show stdout from eval functions | `run` |
 | `results_dir` | string | Directory for results storage | `serve` |
 | `port` | integer | Web UI server port | `serve` |
+| `configs` | object | Named config profiles selectable via `--config` | `run`, `serve` |
 
 ### Precedence
 

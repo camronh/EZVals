@@ -17,6 +17,9 @@ description: "All notable changes to EZVals"
 - Tests: Added E2E coverage for comparison-table hover previews across input, reference, output, error, and scores.
 - Fixed: Detail view now keeps the `Trace Data` section collapsed by default, so verbose trace payloads do not push higher-signal sidebar content out of view.
 - Tests: Updated full-scenario E2E coverage to assert `Trace Data` starts collapsed and expands only when toggled open.
+- Added: Run configs — named configuration profiles in `ezvals.json` (`configs` key) selectable via `--config` flag on both `run` and `serve`, with the config dict available as `ctx.config` in eval code. Auto-defaults `run_name` to the config name for easy side-by-side comparison.
+- Added: Settings modal now includes a Run Config dropdown when configs are defined in `ezvals.json`.
+- Tests: Added unit and integration tests for `resolve_run_config()`, `ctx.config`, `--config` CLI flag, and config auto-naming.
 
 ## 0.1.8 - 2026-02-20
 

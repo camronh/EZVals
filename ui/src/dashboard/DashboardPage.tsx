@@ -406,6 +406,8 @@ export default function DashboardPage() {
   const [settingsForm, setSettingsForm] = useState<SettingsFormState>({ concurrency: '', results_dir: '', timeout: '', completion_notifications: false })
   const [completionNotificationsEnabled, setCompletionNotificationsEnabled] = useState(false)
   const [queryActiveRunId, setQueryActiveRunId] = useState<string | null>(null)
+  const [configNames, setConfigNames] = useState<string[]>([])
+  const [activeConfig, setActiveConfig] = useState<string | null>(null)
 
   const filtersToggleRef = useRef<HTMLButtonElement | null>(null)
   const filtersMenuRef = useRef<HTMLDivElement | null>(null)
@@ -457,6 +459,33 @@ export default function DashboardPage() {
     setCompletionNotificationsEnabled(notificationsEnabled)
     notificationsDraftRef.current = notificationsEnabled
     return notificationsEnabled
+  }, [])
+
+  const loadConfigs = useCallback(async () => {
+    try {
+      const resp = await fetch('/api/configs')
+      if (!resp.ok) return
+      const data = await resp.json()
+      setConfigNames(data.names || [])
+      setActiveConfig(data.active || null)
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  const handleConfigSelect = useCallback(async (name: string | null) => {
+    try {
+      const resp = await fetch('/api/configs/select', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      if (!resp.ok) return
+      const result = await resp.json()
+      setActiveConfig(result.active || null)
+    } catch {
+      // ignore
+    }
   }, [])
 
   useEffect(() => {
@@ -523,7 +552,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadResults()
-  }, [loadResults])
+    loadConfigs()
+  }, [loadResults, loadConfigs])
 
   useEffect(() => {
     let active = true
@@ -1080,7 +1110,8 @@ export default function DashboardPage() {
       return
     }
 
-    const body = selectedIndices.size > 0 ? { indices: Array.from(selectedIndices) } : {}
+    const body: Record<string, unknown> = selectedIndices.size > 0 ? { indices: Array.from(selectedIndices) } : {}
+    if (activeConfig) body.config_name = activeConfig
 
     try {
       const resp = await fetch('/api/runs/rerun', {
@@ -1106,7 +1137,7 @@ export default function DashboardPage() {
       const message = err instanceof Error ? err.message : String(err)
       alert(`Run failed: ${message}`)
     }
-  }, [data, isRunningOverride, loadResults, selectedIndices])
+  }, [activeConfig, data, isRunningOverride, loadResults, selectedIndices])
 
   const handleCreateNewRun = useCallback(async () => {
     try {
@@ -1530,6 +1561,9 @@ export default function DashboardPage() {
         setSettingsForm={setSettingsForm}
         onNotificationsChange={handleNotificationsChange}
         onToggleTheme={handleThemeToggle}
+        configNames={configNames}
+        activeConfig={activeConfig}
+        onConfigSelect={handleConfigSelect}
       />
 
       <PngExportModal

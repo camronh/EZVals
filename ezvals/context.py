@@ -20,6 +20,7 @@ class EvalContext:
         session_name: Optional[str] = None,
         run_name: Optional[str] = None,
         eval_path: Optional[str] = None,
+        config: Optional[Dict[str, Any]] = None,
         # Per-eval metadata (for observability/tagging)
         function_name: Optional[str] = None,
         dataset: Optional[str] = None,
@@ -45,6 +46,7 @@ class EvalContext:
         self._session_name = session_name
         self._run_name = run_name
         self._eval_path = eval_path
+        self._config = config if config is not None else {}
         # Per-eval metadata
         self.function_name = function_name
         self.dataset = dataset
@@ -65,6 +67,10 @@ class EvalContext:
     @property
     def eval_path(self) -> Optional[str]:
         return self._eval_path
+
+    @property
+    def config(self) -> Dict[str, Any]:
+        return self._config
 
     def store(
         self,

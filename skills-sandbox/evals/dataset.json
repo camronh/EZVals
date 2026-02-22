@@ -146,12 +146,12 @@
         "Use programmatic evaluators if possible, otherwise use an LLM judge with 'should' statements"
       ],
       "target": [
-        "Parameterize the target to swap the model (e.g., pass model name via metadata or config)",
-        "Run the same evals with each model configuration"
+        "Use run configs in ezvals.json to define named profiles (e.g., configs.gpt-4, configs.claude-sonnet) and access via ctx.config in the target",
+        "Run the same evals with --config gpt-4 then --config claude-sonnet"
       ],
       "evaluator": [
         "Same evaluators for both models so the comparison is apples-to-apples",
-        "Use run naming to label each model (e.g., --run-name gpt-4o vs --run-name claude-sonnet)",
+        "--config auto-names each run after the config, making comparison easy",
         "Use ezvals serve to compare runs side by side"
       ]
     }

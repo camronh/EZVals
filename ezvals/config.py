@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from typing import Optional
 
 CONFIG_FILENAME = "ezvals.json"
 
@@ -34,3 +35,17 @@ def save_config(config: dict) -> None:
     path = get_config_path()
     with open(path, "w") as f:
         json.dump(config, f, indent=2)
+
+
+def resolve_run_config(config_name: Optional[str]) -> dict:
+    """Resolve a named config profile from ezvals.json. Returns {} if no name given."""
+    if not config_name:
+        return {}
+    config = load_config()
+    configs = config.get("configs", {})
+    if config_name not in configs:
+        available = ", ".join(sorted(configs.keys())) if configs else "(none defined)"
+        raise ValueError(
+            f"Config '{config_name}' not found in ezvals.json. Available: {available}"
+        )
+    return configs[config_name]
