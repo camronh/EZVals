@@ -523,9 +523,60 @@ def test_comparison_table_hover_previews(tmp_path):
             hover_and_expect(row.locator("td[data-col='reference']").first, "Reference", "reference segment")
             hover_and_expect(row.locator("td.comparison-output-cell .line-clamp-3").first, "Output", "baseline output segment")
             hover_and_expect(row.locator("td.comparison-output-cell .text-accent-error").first, "Error", "comparison error details line 1")
-            hover_and_expect(row.locator("td.comparison-output-cell .mt-2").first, "Scores", "quality")
+            hover_and_expect(row.locator("[data-preview-target='scores']").first, "Scores", "quality")
+            hover_and_expect(row.locator("[data-preview-target='annotation']").first, "Annotation", "annotation baseline")
 
             browser.close()
+
+
+def test_comparison_annotation_popover_edit_and_save(tmp_path):
+    store = ResultsStore(tmp_path / "runs")
+    run1_id = store.save_run(make_run_summary("baseline"), session_name="test-session", run_name="baseline")
+    run2_id = store.save_run(make_run_summary("final"), session_name="test-session", run_name="final")
+
+    app = create_app(
+        results_dir=str(tmp_path / "runs"),
+        active_run_id=run1_id,
+        session_name="test-session",
+        run_name="baseline",
+    )
+
+    saved_runs = [
+        {"runId": run1_id, "runName": "baseline", "color": "#3b82f6"},
+        {"runId": run2_id, "runName": "final", "color": "#22c55e"},
+    ]
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.add_init_script(
+                f"sessionStorage.setItem('ezvals:comparisonRuns', JSON.stringify({json.dumps(saved_runs)}));"
+            )
+            page.goto(url)
+            page.wait_for_selector("#results-table")
+            page.wait_for_selector(".comparison-chips")
+
+            row = page.locator("tbody tr[data-row='main']").filter(has_text="test_func_a").first
+            annotation_icon = row.locator("[data-preview-target='annotation']").first
+            annotation_icon.hover()
+            page.wait_for_timeout(500)
+
+            popover = page.locator(".cell-preview-popover")
+            expect(popover).to_be_visible()
+            expect(popover).to_contain_text("annotation baseline")
+
+            annotation_icon.click()
+            editor = popover.locator("textarea[data-annotation-editor='true']")
+            expect(editor).to_be_visible()
+            editor.fill("comparison note updated")
+            popover.locator("button[data-annotation-save='true']").click()
+            expect(popover).to_contain_text("comparison note updated")
+
+            browser.close()
+
+    baseline_data = store.load_run(run1_id)
+    assert baseline_data["results"][0]["result"]["annotation"] == "comparison note updated"
 
 
 def test_comparison_table_structure(tmp_path):

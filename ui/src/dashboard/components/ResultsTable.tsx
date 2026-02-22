@@ -20,7 +20,7 @@ type ResultRowView = {
   searchText: string
 }
 
-const PREVIEWABLE_COLS = new Set(['input', 'output', 'reference', 'error', 'scores'])
+const PREVIEWABLE_COLS = new Set(['input', 'output', 'reference', 'error', 'scores', 'annotation'])
 const HOVER_DELAY = 400
 
 type ResultsTableProps = {
@@ -36,6 +36,7 @@ type ResultsTableProps = {
   onResizeStart: (colKey: string, event: MouseEvent<HTMLDivElement>) => void
   onSelectAll: (checked: boolean) => void
   onRowSelect: (idx: number, checked: boolean, shiftKey: boolean) => void
+  onSaveAnnotation: (runId: string, resultIndex: number, annotation: string | null) => Promise<void>
   selectAllRef: RefObject<HTMLInputElement>
   headerRefs: RefObject<Record<string, HTMLElement | null>>
 }
@@ -53,6 +54,7 @@ export default function ResultsTable({
   onResizeStart,
   onSelectAll,
   onRowSelect,
+  onSaveAnnotation,
   selectAllRef,
   headerRefs,
 }: ResultsTableProps) {
@@ -81,7 +83,7 @@ export default function ResultsTable({
     }
   }, [])
 
-  const handleCellMouseEnter = useCallback((rowIdx: number, col: string, result: ResultData, td: HTMLTableCellElement) => {
+  const handleCellMouseEnter = useCallback((rowIdx: number, col: string, result: ResultData, element: HTMLElement) => {
     if (!PREVIEWABLE_COLS.has(col)) return
 
     // Cancel any pending dismiss
@@ -102,10 +104,11 @@ export default function ResultsTable({
       // Verify still hovering the same cell
       if (activeHoverRef.current?.rowIdx !== rowIdx || activeHoverRef.current?.col !== col) return
 
-      const rect = td.getBoundingClientRect()
+      const rect = element.getBoundingClientRect()
       const content = col === 'input' ? result.input
         : col === 'output' ? result.output
         : col === 'reference' ? result.reference
+        : col === 'annotation' ? result.annotation
         : col === 'error' ? result.error
         : null
 
@@ -115,9 +118,11 @@ export default function ResultsTable({
         content,
         scores: col === 'scores' ? (result.scores || []) : undefined,
         error: col === 'error' ? result.error : undefined,
+        runId: data?.run_id,
+        resultIndex: rowIdx,
       })
     }, HOVER_DELAY)
-  }, [cancelDismiss])
+  }, [cancelDismiss, data?.run_id])
 
   const handleCellMouseLeave = useCallback(() => {
     if (hoverTimerRef.current) {
@@ -130,6 +135,28 @@ export default function ResultsTable({
       setPreviewTarget(null)
     }, 150)
   }, [])
+
+  const handleAnnotationClick = useCallback((rowIdx: number, result: ResultData, element: HTMLElement) => {
+    cancelDismiss()
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current)
+      hoverTimerRef.current = null
+    }
+    if (dismissTimerRef.current) {
+      clearTimeout(dismissTimerRef.current)
+      dismissTimerRef.current = null
+    }
+    activeHoverRef.current = { rowIdx, col: 'annotation' }
+    const rect = element.getBoundingClientRect()
+    setPreviewTarget({
+      col: 'annotation',
+      rect,
+      content: result.annotation,
+      runId: data?.run_id,
+      resultIndex: rowIdx,
+      editMode: true,
+    })
+  }, [cancelDismiss, data?.run_id])
 
   return (
     <>
@@ -170,6 +197,7 @@ export default function ResultsTable({
       <tbody className="divide-y divide-theme-border-subtle">
         {rows.map((row) => {
           const result = row.result
+          const annotationText = result.annotation?.trim()
           const status = result.status || 'completed'
           const isRunning = status === 'running'
           const isNotStarted = status === 'not_started'
@@ -317,10 +345,36 @@ export default function ResultsTable({
                 <td
                   data-col="output"
                   className={`px-3 py-3 align-middle ${hiddenSet.has('output') ? 'hidden' : ''}`}
-                  onMouseEnter={(e) => handleCellMouseEnter(row.index, 'output', result, e.currentTarget)}
-                  onMouseLeave={handleCellMouseLeave}
                 >
-                  {outputCell}
+                  <div className="flex items-start justify-between gap-2">
+                    <div
+                      className="min-w-0 flex-1"
+                      onMouseEnter={(e) => handleCellMouseEnter(row.index, 'output', result, e.currentTarget)}
+                      onMouseLeave={handleCellMouseLeave}
+                    >
+                      {outputCell}
+                    </div>
+                    {annotationText ? (
+                      <button
+                        type="button"
+                        data-annotation-indicator="true"
+                        data-preview-target="annotation"
+                        className="annotation-indicator group/icon inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+                        title="Show annotation"
+                        onMouseEnter={(e) => handleCellMouseEnter(row.index, 'annotation', result, e.currentTarget)}
+                        onMouseLeave={handleCellMouseLeave}
+                        onClick={(e) => handleAnnotationClick(row.index, result, e.currentTarget)}
+                      >
+                        <svg className="h-3 w-3 group-hover/icon:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+                        </svg>
+                        <svg className="hidden h-3 w-3 group-hover/icon:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                          <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                        </svg>
+                      </button>
+                    ) : null}
+                  </div>
                 </td>
                 <td
                   data-col="error"
@@ -351,7 +405,12 @@ export default function ResultsTable({
           })}
         </tbody>
       </table>
-      <CellPreviewPopover target={previewTarget} onMouseEnter={cancelDismiss} onMouseLeave={clearHover} />
+      <CellPreviewPopover
+        target={previewTarget}
+        onMouseEnter={cancelDismiss}
+        onMouseLeave={clearHover}
+        onSaveAnnotation={onSaveAnnotation}
+      />
     </>
   )
 }

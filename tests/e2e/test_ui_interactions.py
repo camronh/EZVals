@@ -380,6 +380,80 @@ def test_metadata_renders_as_key_values_with_links(tmp_path):
             browser.close()
 
 
+def test_results_table_annotation_indicator_hover_preview(tmp_path):
+    store = ResultsStore(tmp_path / "runs")
+    summary = make_summary()
+    summary["results"][0]["result"]["annotation"] = "Single-run note shown in popover."
+    run_id = store.save_run(summary, "2024-01-01T00-00-00Z")
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(url)
+            page.wait_for_selector("#results-table")
+
+            row = page.locator("tbody tr[data-row='main']").filter(
+                has=page.locator("td[data-col='function'] a", has_text="a")
+            ).first
+            indicator = row.locator("td[data-col='output'] [data-preview-target='annotation']").first
+            expect(indicator).to_be_visible()
+            indicator.hover()
+            page.wait_for_timeout(500)
+
+            popover = page.locator(".cell-preview-popover")
+            expect(popover).to_be_visible()
+            expect(popover.locator(".cell-preview-label")).to_have_text("Annotation")
+            expect(popover).to_contain_text("Single-run note shown in popover.")
+
+            browser.close()
+
+
+def test_results_table_annotation_popover_edit_and_save(tmp_path):
+    store = ResultsStore(tmp_path / "runs")
+    summary = make_summary()
+    summary["results"][0]["result"]["annotation"] = "Original annotation"
+    run_id = store.save_run(summary, "2024-01-01T00-00-00Z")
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(url)
+            page.wait_for_selector("#results-table")
+
+            row = page.locator("tbody tr[data-row='main']").filter(
+                has=page.locator("td[data-col='function'] a", has_text="a")
+            ).first
+            indicator = row.locator("td[data-col='output'] [data-preview-target='annotation']").first
+            indicator.hover()
+            page.wait_for_timeout(500)
+
+            popover = page.locator(".cell-preview-popover")
+            expect(popover).to_be_visible()
+            expect(popover).to_contain_text("Original annotation")
+
+            indicator.click()
+            editor = popover.locator("textarea[data-annotation-editor='true']")
+            expect(editor).to_be_visible()
+            editor.fill("Updated from popover")
+            popover.locator("button[data-annotation-save='true']").click()
+
+            page.reload()
+            page.wait_for_selector("#results-table")
+            row = page.locator("tbody tr[data-row='main']").filter(
+                has=page.locator("td[data-col='function'] a", has_text="a")
+            ).first
+            expect(row).to_have_attribute("data-annotation", "Updated from popover")
+
+            browser.close()
+
+    persisted = store.load_run(run_id)
+    assert persisted["results"][0]["result"]["annotation"] == "Updated from popover"
+
+
 def test_restart_endpoint_sets_restart_requested_flag(tmp_path):
     store = ResultsStore(tmp_path / "runs")
     run_id = store.save_run(make_summary(), "2024-01-01T00-00-00Z")

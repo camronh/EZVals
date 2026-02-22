@@ -1223,6 +1223,49 @@ export default function DashboardPage() {
     setSettingsForm((prev) => ({ ...prev, completion_notifications: enabled }))
   }, [])
 
+  const handleSaveAnnotation = useCallback(async (runId: string, resultIndex: number, annotation: string | null) => {
+    const resp = await fetch(`/api/runs/${encodeURIComponent(runId)}/results/${resultIndex}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ result: { annotation } }),
+    })
+    if (!resp.ok) {
+      let message = 'Failed to save annotation'
+      try {
+        const err = await resp.json() as { detail?: string }
+        if (err.detail) message = err.detail
+      } catch {
+        // ignore non-json errors
+      }
+      throw new Error(message)
+    }
+
+    setData((prev) => {
+      if (!prev || prev.run_id !== runId) return prev
+      const results = [...(prev.results || [])]
+      const row = results[resultIndex]
+      if (!row?.result) return prev
+      results[resultIndex] = {
+        ...row,
+        result: { ...row.result, annotation },
+      }
+      return { ...prev, results }
+    })
+
+    setComparisonData((prev) => {
+      const runData = prev[runId]
+      if (!runData) return prev
+      const results = [...(runData.results || [])]
+      const row = results[resultIndex]
+      if (!row?.result) return prev
+      results[resultIndex] = {
+        ...row,
+        result: { ...row.result, annotation },
+      }
+      return { ...prev, [runId]: { ...runData, results } }
+    })
+  }, [])
+
   const handleExport = useCallback(async (format) => {
     if (format === 'png') {
       setExportOpen(false)
@@ -1437,6 +1480,7 @@ export default function DashboardPage() {
             sortedRows={sortedComparisonRows}
             normalizedComparisonRuns={normalizedComparisonRuns}
             onToggleSort={handleToggleSort}
+            onSaveAnnotation={handleSaveAnnotation}
             currentRunId={data?.run_id}
           />
         ) : (
@@ -1453,6 +1497,7 @@ export default function DashboardPage() {
             onResizeStart={handleResizeStart}
             onSelectAll={handleSelectAll}
             onRowSelect={handleRowSelect}
+            onSaveAnnotation={handleSaveAnnotation}
             selectAllRef={selectAllRef}
             headerRefs={headerRefs}
           />

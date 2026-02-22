@@ -35,6 +35,14 @@ Scenario: Sort by scores column
   When the user clicks the Scores column header
   Then rows sort by aggregate score (pass ratio or average value)
   And clicking again reverses the sort order
+
+Scenario: Annotation indicator in results table
+  Given results are displayed in the table
+  When a row has a non-empty annotation
+  Then a subtle annotation indicator icon appears in the Output cell
+  And hovering the icon changes it to an edit affordance
+  And hovering that indicator shows the full annotation in the hover preview popover
+  And the popover has an edit action that switches to textarea mode with Save/Cancel
 ```
 
 ### Run Button (Single Action)
@@ -734,6 +742,8 @@ Scenario: Hover preview popover in comparison table
   Then a preview popover appears after the same delay as single-run mode
   And this applies to Input and Reference cells
   And this applies to Output, Error, and Scores content within each run column
+  And this applies to annotation indicators within run columns when annotations are present
+  And annotation popovers can switch to edit mode and save updates inline
 ```
 
 ### Comparison Detail View

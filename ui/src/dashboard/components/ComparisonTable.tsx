@@ -19,12 +19,13 @@ type ComparisonTableProps = {
   sortedRows: ComparisonRow[]
   normalizedComparisonRuns: NormalizedComparisonRun[]
   onToggleSort: (col: string, type: string, multi: boolean) => void
+  onSaveAnnotation: (runId: string, resultIndex: number, annotation: string | null) => Promise<void>
   currentRunId?: string
 }
 
 const HOVER_DELAY = 400
 
-export default function ComparisonTable({ sortedRows, normalizedComparisonRuns, onToggleSort, currentRunId }: ComparisonTableProps) {
+export default function ComparisonTable({ sortedRows, normalizedComparisonRuns, onToggleSort, onSaveAnnotation, currentRunId }: ComparisonTableProps) {
   const [previewTarget, setPreviewTarget] = useState<CellPreviewTarget>(null)
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -53,9 +54,11 @@ export default function ComparisonTable({ sortedRows, normalizedComparisonRuns, 
   const handleCellMouseEnter = useCallback((
     rowIdx: number,
     hoverKey: string,
-    col: 'input' | 'reference' | 'output' | 'error' | 'scores',
+    col: 'input' | 'reference' | 'output' | 'error' | 'scores' | 'annotation',
     result: RunResultRow['result'] | null | undefined,
     element: HTMLElement,
+    runId?: string,
+    resultIndex?: number | null,
   ) => {
     cancelDismiss()
     if (activeHoverRef.current?.rowIdx === rowIdx && activeHoverRef.current?.key === hoverKey) return
@@ -73,9 +76,19 @@ export default function ComparisonTable({ sortedRows, normalizedComparisonRuns, 
       setPreviewTarget({
         col,
         rect,
-        content: col === 'input' ? result?.input : col === 'reference' ? result?.reference : col === 'output' ? result?.output : null,
+        content: col === 'input'
+          ? result?.input
+          : col === 'reference'
+            ? result?.reference
+            : col === 'output'
+              ? result?.output
+              : col === 'annotation'
+                ? result?.annotation
+                : null,
         scores: col === 'scores' ? (result?.scores || []) : undefined,
         error: col === 'error' ? result?.error : undefined,
+        runId,
+        resultIndex,
       })
     }, HOVER_DELAY)
   }, [cancelDismiss])
@@ -99,6 +112,34 @@ export default function ComparisonTable({ sortedRows, normalizedComparisonRuns, 
     })
     return `?${params.toString()}`
   }, [normalizedComparisonRuns])
+
+  const handleAnnotationClick = useCallback((
+    rowIdx: number,
+    result: RunResultRow['result'] | null | undefined,
+    element: HTMLElement,
+    runId?: string,
+    resultIndex?: number | null,
+  ) => {
+    cancelDismiss()
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current)
+      hoverTimerRef.current = null
+    }
+    if (dismissTimerRef.current) {
+      clearTimeout(dismissTimerRef.current)
+      dismissTimerRef.current = null
+    }
+    activeHoverRef.current = { rowIdx, key: `${runId || 'run'}-annotation` }
+    const rect = element.getBoundingClientRect()
+    setPreviewTarget({
+      col: 'annotation',
+      rect,
+      content: result?.annotation,
+      runId,
+      resultIndex,
+      editMode: true,
+    })
+  }, [cancelDismiss])
 
   return (
     <>
@@ -191,6 +232,7 @@ export default function ComparisonTable({ sortedRows, normalizedComparisonRuns, 
                 {normalizedComparisonRuns.map((run) => {
                   const outputCol = `output-${run.runId}`
                   const entry = row.entry?.[run.runId] as RunResultRow | undefined
+                  const resultIndex = row.entry?._indices?.[run.runId]
                   const result = entry?.result
                   if (!result) {
                     return (
@@ -209,25 +251,51 @@ export default function ComparisonTable({ sortedRows, normalizedComparisonRuns, 
                       Error: {result.error.split('\n')[0]}
                     </div>
                   ) : null
+                  const annotationText = result.annotation?.trim()
                   return (
                     <td key={run.runId} data-col={outputCol} className="px-3 py-3 comparison-output-cell" style={{ borderLeft: `2px solid ${run.color}20` }}>
                       <div className="comparison-output-content">
-                        <div>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div
+                              className="line-clamp-3 text-[12px] text-theme-text"
+                              onMouseEnter={(e) => handleCellMouseEnter(row.index, outputCol, 'output', result, e.currentTarget, run.runId, resultIndex)}
+                              onMouseLeave={handleCellMouseLeave}
+                            >
+                              {result.output != null ? formatValue(result.output) : '--'}
+                            </div>
+                            {errorHtml}
+                          </div>
+                          {annotationText ? (
+                            <button
+                              type="button"
+                              data-annotation-indicator="true"
+                              data-preview-target="annotation"
+                              className="annotation-indicator group/icon inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+                              title="Show annotation"
+                              onMouseEnter={(e) => handleCellMouseEnter(row.index, `${outputCol}-annotation`, 'annotation', result, e.currentTarget, run.runId, resultIndex)}
+                              onMouseLeave={handleCellMouseLeave}
+                              onClick={(e) => handleAnnotationClick(row.index, result, e.currentTarget, run.runId, resultIndex)}
+                            >
+                              <svg className="h-3 w-3 group-hover/icon:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+                              </svg>
+                              <svg className="hidden h-3 w-3 group-hover/icon:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                              </svg>
+                            </button>
+                          ) : null}
+                        </div>
+                        <div className="mt-2 flex items-start justify-between gap-2">
                           <div
-                            className="line-clamp-3 text-[12px] text-theme-text"
-                            onMouseEnter={(e) => handleCellMouseEnter(row.index, outputCol, 'output', result, e.currentTarget)}
+                            data-preview-target="scores"
+                            className="flex flex-wrap gap-1"
+                            onMouseEnter={(e) => handleCellMouseEnter(row.index, `${outputCol}-scores`, 'scores', result, e.currentTarget, run.runId, resultIndex)}
                             onMouseLeave={handleCellMouseLeave}
                           >
-                            {result.output != null ? formatValue(result.output) : '--'}
+                            <InlineScoreBadges scores={result.scores || []} latency={result.latency} />
                           </div>
-                          {errorHtml}
-                        </div>
-                        <div
-                          className="flex flex-wrap gap-1 mt-2"
-                          onMouseEnter={(e) => handleCellMouseEnter(row.index, `${outputCol}-scores`, 'scores', result, e.currentTarget)}
-                          onMouseLeave={handleCellMouseLeave}
-                        >
-                          <InlineScoreBadges scores={result.scores || []} latency={result.latency} />
                         </div>
                       </div>
                     </td>
@@ -239,7 +307,12 @@ export default function ComparisonTable({ sortedRows, normalizedComparisonRuns, 
           })}
         </tbody>
       </table>
-      <CellPreviewPopover target={previewTarget} onMouseEnter={cancelDismiss} onMouseLeave={clearHover} />
+      <CellPreviewPopover
+        target={previewTarget}
+        onMouseEnter={cancelDismiss}
+        onMouseLeave={clearHover}
+        onSaveAnnotation={onSaveAnnotation}
+      />
     </>
   )
 }
