@@ -14,7 +14,7 @@ from ezvals.decorators import EvalFunction, run_metadata_var
 from ezvals.discovery import EvalDiscovery
 from ezvals.runner import EvalRunner
 from ezvals.storage import ResultsStore
-from ezvals.config import load_config, save_config
+from ezvals.config import load_config, save_config, resolve_run_config
 
 console = Console()
 
@@ -85,6 +85,7 @@ class ResultUpdateBody(BaseModel):
 
 class RerunRequest(BaseModel):
     indices: Optional[List[int]] = None
+    config_name: Optional[str] = None
 
 
 def create_app(
@@ -100,6 +101,7 @@ def create_app(
     run_name: Optional[str] = None,
     # Discovered functions for display (NOT auto-run)
     discovered_functions: Optional[List[EvalFunction]] = None,
+    config_name: Optional[str] = None,
 ) -> FastAPI:
     """Create a FastAPI application serving evaluation results from JSON files."""
 
@@ -131,6 +133,7 @@ def create_app(
     app.state.run_thread = None
     app.state.selected_total = None  # Track count for selective reruns
     app.state.restart_requested = False
+    app.state.config_name = config_name
 
     def start_run(
         functions: List[EvalFunction],
@@ -152,6 +155,10 @@ def create_app(
         config = load_config()
         # Use CLI-resolved results_dir (CLI override → config → default, resolved at startup)
         run_store = ResultsStore(results_dir)
+        try:
+            run_config = resolve_run_config(app.state.config_name)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
 
         if not functions:
             if existing_results is not None:
@@ -210,6 +217,8 @@ def create_app(
         summary["dataset"] = app.state.dataset
         summary["labels"] = app.state.labels
         summary["function_name"] = app.state.function_name
+        if app.state.config_name:
+            summary["config_name"] = app.state.config_name
         run_store.save_run(summary, run_id=run_id, session_name=app.state.session_name, run_name=app.state.run_name, overwrite=overwrite)
 
         def _persist():
@@ -221,6 +230,8 @@ def create_app(
             s["dataset"] = app.state.dataset
             s["labels"] = app.state.labels
             s["function_name"] = app.state.function_name
+            if app.state.config_name:
+                s["config_name"] = app.state.config_name
             run_store.save_run(s, run_id=run_id, session_name=app.state.session_name, run_name=app.state.run_name)
 
         def _on_start(func: EvalFunction):
@@ -259,6 +270,7 @@ def create_app(
                 'session_name': app.state.session_name,
                 'run_name': app.state.run_name,
                 'eval_path': str(app.state.path) if app.state.path else None,
+                'config': run_config,
             })
             try:
                 asyncio.run(runner.run_all_async(
@@ -512,6 +524,15 @@ def create_app(
     def rerun(request: RerunRequest = RerunRequest()):
         app.state.cancel_event.clear()
         app.state.pause_event.clear()
+
+        # Apply config from request body (atomic with this run)
+        if request.config_name is not None:
+            try:
+                resolve_run_config(request.config_name)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc))
+            app.state.config_name = request.config_name
+            app.state.run_name = request.config_name
 
         if not app.state.path:
             raise HTTPException(status_code=400, detail="Rerun unavailable: missing eval path")
@@ -858,9 +879,11 @@ def create_app(
         if not path_obj.exists():
             raise HTTPException(status_code=400, detail=f"Eval path not found: {path_obj}")
 
-        # Update run_name if provided
+        # Update run_name: explicit > config_name > auto-generate
         if request.run_name:
             app.state.run_name = request.run_name
+        elif app.state.config_name:
+            app.state.run_name = app.state.config_name
         else:
             from ezvals.storage import _generate_friendly_name
             app.state.run_name = _generate_friendly_name()
@@ -939,6 +962,29 @@ def create_app(
         config.update(body)
         save_config(config)
         return {"ok": True, "config": config}
+
+    @app.get("/api/configs")
+    def list_configs():
+        """List available config profiles and active selection."""
+        config = load_config()
+        configs = config.get("configs", {})
+        return {
+            "names": sorted(configs.keys()),
+            "active": app.state.config_name,
+        }
+
+    @app.post("/api/configs/select")
+    def select_config(body: dict):
+        """Switch the active config profile."""
+        name = body.get("name")
+        if name:
+            config = load_config()
+            configs = config.get("configs", {})
+            if name not in configs:
+                available = ", ".join(sorted(configs.keys())) if configs else "(none defined)"
+                raise HTTPException(status_code=400, detail=f"Config '{name}' not found. Available: {available}")
+        app.state.config_name = name or None
+        return {"ok": True, "active": app.state.config_name}
 
     @app.get("/{asset_path:path}")
     def spa_fallback(asset_path: str):

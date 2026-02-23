@@ -10,12 +10,16 @@ type CellPreviewTarget = {
   content: unknown
   scores?: Score[]
   error?: string | null
+  runId?: string
+  resultIndex?: number | null
+  editMode?: boolean
 } | null
 
 type CellPreviewPopoverProps = {
   target: CellPreviewTarget
   onMouseEnter?: () => void
   onMouseLeave?: () => void
+  onSaveAnnotation?: (runId: string, resultIndex: number, annotation: string | null) => Promise<void>
 }
 
 function ScorePreviewCard({ score }: { score: Score }) {
@@ -61,11 +65,17 @@ const COLUMN_LABELS: Record<string, string> = {
   reference: 'Reference',
   error: 'Error',
   scores: 'Scores',
+  annotation: 'Annotation',
 }
 
-export default function CellPreviewPopover({ target, onMouseEnter, onMouseLeave }: CellPreviewPopoverProps) {
+export default function CellPreviewPopover({ target, onMouseEnter, onMouseLeave, onSaveAnnotation }: CellPreviewPopoverProps) {
   const popoverRef = useRef<HTMLDivElement>(null)
   const [position, setPosition] = useState<{ top: number; left: number; placement: 'below' | 'above' } | null>(null)
+  const [annotationText, setAnnotationText] = useState('')
+  const [annotationDraft, setAnnotationDraft] = useState('')
+  const [editingAnnotation, setEditingAnnotation] = useState(false)
+  const [annotationSaving, setAnnotationSaving] = useState(false)
+  const [annotationError, setAnnotationError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!target) {
@@ -92,30 +102,64 @@ export default function CellPreviewPopover({ target, onMouseEnter, onMouseLeave 
     setPosition({ top, left, placement })
   }, [target])
 
+  useEffect(() => {
+    if (target?.col !== 'annotation') return
+    const next = typeof target.content === 'string' ? target.content : String(target.content || '')
+    setAnnotationText(next)
+    setAnnotationDraft(next)
+    setEditingAnnotation(!!target.editMode && !!onSaveAnnotation)
+    setAnnotationSaving(false)
+    setAnnotationError(null)
+  }, [onSaveAnnotation, target])
+
   if (!target || !position) return null
 
+  const canEditAnnotation = target.col === 'annotation' && !!onSaveAnnotation
+  const annotationValue = target.col === 'annotation' ? annotationText.trim() : ''
   const hasContent = target.col === 'scores'
     ? (target.scores && target.scores.length > 0)
     : target.col === 'error'
       ? !!target.error
-      : target.content != null && target.content !== ''
+      : target.col === 'annotation'
+        ? editingAnnotation || annotationValue.length > 0
+        : target.content != null && target.content !== ''
 
   if (!hasContent) return null
 
   // Skip preview for very short content that's fully visible in the cell
-  if (target.col !== 'scores') {
+  if (target.col !== 'scores' && target.col !== 'annotation') {
     const text = target.col === 'error' ? (target.error || '') : formatValue(target.content)
     if (text.length < 80 && !text.includes('\n')) return null
   }
 
   const label = COLUMN_LABELS[target.col] || target.col
+  const saveAnnotation = async () => {
+    if (!canEditAnnotation || !onSaveAnnotation) return
+    if (typeof target.runId !== 'string' || typeof target.resultIndex !== 'number') {
+      setAnnotationError('Unable to save this annotation from the current context')
+      return
+    }
+    const next = annotationDraft.trim()
+    setAnnotationSaving(true)
+    setAnnotationError(null)
+    try {
+      await onSaveAnnotation(target.runId, target.resultIndex, next || null)
+      setAnnotationText(next)
+      setAnnotationDraft(next)
+      setEditingAnnotation(false)
+    } catch (err) {
+      setAnnotationError(err instanceof Error ? err.message : 'Failed to save annotation')
+    } finally {
+      setAnnotationSaving(false)
+    }
+  }
 
   return createPortal(
     <div
       ref={popoverRef}
       className="cell-preview-popover"
       onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
+      onMouseLeave={editingAnnotation ? undefined : onMouseLeave}
       style={{
         position: 'fixed',
         top: position.placement === 'above' ? undefined : position.top,
@@ -126,7 +170,9 @@ export default function CellPreviewPopover({ target, onMouseEnter, onMouseLeave 
         zIndex: 60,
       }}
     >
-      <div className="cell-preview-label">{label}</div>
+      <div className="cell-preview-label flex items-center justify-between gap-2">
+        <span>{label}</span>
+      </div>
       <div className="cell-preview-content">
         {target.col === 'scores' && target.scores ? (
           <div className="space-y-1.5">
@@ -136,6 +182,45 @@ export default function CellPreviewPopover({ target, onMouseEnter, onMouseLeave 
           </div>
         ) : target.col === 'error' ? (
           <pre className="whitespace-pre-wrap break-words font-mono text-xs text-rose-600 dark:text-rose-300">{target.error}</pre>
+        ) : target.col === 'annotation' ? (
+          editingAnnotation ? (
+            <div className="space-y-2">
+              <textarea
+                data-annotation-editor="true"
+                className="w-full min-h-[110px] rounded border border-zinc-300 bg-white px-2 py-1.5 text-xs text-zinc-700 placeholder-zinc-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:placeholder-zinc-500 dark:focus:border-blue-500"
+                value={annotationDraft}
+                onChange={(e) => setAnnotationDraft(e.target.value)}
+                disabled={annotationSaving}
+                placeholder="Add annotation..."
+              />
+              {annotationError ? <div className="text-[11px] text-rose-500">{annotationError}</div> : null}
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  className="rounded border border-zinc-300 bg-white px-2 py-1 text-[11px] text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600"
+                  onClick={() => {
+                    setEditingAnnotation(false)
+                    setAnnotationDraft(annotationText)
+                    setAnnotationError(null)
+                  }}
+                  disabled={annotationSaving}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  data-annotation-save="true"
+                  className="rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-600 hover:bg-emerald-500/20 disabled:opacity-50 dark:text-emerald-400"
+                  onClick={saveAnnotation}
+                  disabled={annotationSaving}
+                >
+                  {annotationSaving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <pre className="whitespace-pre-wrap break-words font-mono text-xs text-zinc-700 dark:text-zinc-300">{annotationText}</pre>
+          )
         ) : (
           <DataViewer content={target.content} placeholder="--" />
         )}

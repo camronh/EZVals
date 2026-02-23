@@ -77,15 +77,24 @@ The expanded stats panel shows the current session and run on the left, with tes
 
 <AccordionGroup>
   <Accordion title="Model Comparison">
-    Compare performance across different models or configurations:
+    Compare performance across different models or configurations using run configs:
 
-    ```bash
-    ezvals run evals/ --session model-comparison --run-name gpt4-baseline
-    ezvals run evals/ --session model-comparison --run-name claude-3
-    ezvals run evals/ --session model-comparison --run-name gemini-pro
+    ```json
+    // ezvals.json
+    {
+      "configs": {
+        "gpt-4": {"model": "gpt-4", "temperature": 0.7},
+        "claude": {"model": "claude-3-opus", "temperature": 0.5}
+      }
+    }
     ```
 
-    Each run's JSON file contains the full results for that model, all grouped under the same session.
+    ```bash
+    ezvals run evals/ --session model-comparison --config gpt-4
+    ezvals run evals/ --session model-comparison --config claude
+    ```
+
+    Each run auto-names itself after the config, and the config dict is available as `ctx.config` in your eval code. Use `ezvals serve` to compare runs side by side.
   </Accordion>
 
   <Accordion title="Iterative Development">

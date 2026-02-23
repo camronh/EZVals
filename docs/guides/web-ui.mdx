@@ -24,16 +24,18 @@ ezvals serve evals.py
 
 The UI discovers all `@eval` decorated functions in your file but doesn't run them until you click **Run**. Results stream in real-time as each evaluation completes.
 
-Results are saved to `.ezvals/runs/` as JSON files. The UI loads from `latest.json` by default, which is a copy of the most recent run.
+Results are saved to `.ezvals/sessions/` as JSON files, organized by session subdirectories.
 
 ## Results Storage
 
 ```
 .ezvals/
-├── runs/
-│   ├── gpt5-baseline_2024-01-15T10-30-00Z.json
-│   ├── swift-falcon_2024-01-15T14-45-00Z.json
-│   └── latest.json
+├── sessions/
+│   ├── model-comparison/
+│   │   ├── baseline_a1b2c3d4.json
+│   │   └── improved_e5f6g7h8.json
+│   └── default/
+│       └── swift-falcon_i9j0k1l2.json
 └── ezvals.json  # Configuration
 ```
 
@@ -68,6 +70,11 @@ These controls are independent, so you can keep a column hidden but still search
 ## Detail Page
 
 Click a function name to open the full-page detail view with its own URL (`/runs/{run_id}/results/{index}`). Navigate between results with arrow keys (↑/↓) or press Escape to return to the table.
+
+When opening detail from comparison mode, URLs keep repeated `compare_run_id` query params. This makes comparison detail links shareable/bookmarkable and restores the same run set when opened in a new tab:
+
+- `/runs/{run_id}/results/{index}?compare_run_id=runA&compare_run_id=runB`
+- `/runs/{run_id}/results/{index}?compare_run_id=runB` (auto-includes the current detail run as base)
 
 When `input`, `output`, `reference`, or trace `messages` contain chat-style message arrays (OpenAI, Anthropic, or similar `{role, content}` variants), the detail view auto-renders them in a chat-style layout. Use the **Pretty**/**Raw** toggle in each section to switch between formatted message boxes and raw JSON.
 
@@ -112,9 +119,6 @@ Markdown uses ASCII progress bars with color indicators:
 
 | Key | Action |
 |-----|--------|
-| `r` | Refresh results |
-| `e` | Export menu |
-| `f` | Focus filter |
 | `↑/↓` | Navigate results (detail page) |
 | `Esc` | Back to table |
 
@@ -151,6 +155,10 @@ Compare results across multiple runs side-by-side. When you have 2+ runs in a se
 Each run gets a color-coded chip. The chart shows pass rates and latency for each run. The table aligns results by function name and dataset, making it easy to spot regressions or improvements.
 
 To exit comparison mode, click the × on run chips until only one remains.
+
+Comparison mode also has a shareable URL format based on repeated query params:
+
+`/?compare_run_id=runA&compare_run_id=runB`
 
 ## Run Selector
 

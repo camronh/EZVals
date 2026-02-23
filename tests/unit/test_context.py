@@ -556,3 +556,70 @@ class TestRunMetadataInjection:
             assert isinstance(result, EvalResult)
         finally:
             run_metadata_var.reset(token)
+
+
+class TestConfigProperty:
+    """Test ctx.config for run configs feature"""
+
+    def test_config_defaults_to_empty_dict(self):
+        ctx = EvalContext()
+        assert ctx.config == {}
+
+    def test_config_with_provided_dict(self):
+        ctx = EvalContext(config={"model": "gpt-4", "temperature": 0.7})
+        assert ctx.config == {"model": "gpt-4", "temperature": 0.7}
+        assert ctx.config["model"] == "gpt-4"
+
+    def test_config_is_read_only(self):
+        ctx = EvalContext(config={"model": "gpt-4"})
+        with pytest.raises(AttributeError):
+            ctx.config = {"model": "claude"}
+
+    def test_config_none_becomes_empty_dict(self):
+        ctx = EvalContext(config=None)
+        assert ctx.config == {}
+
+    def test_config_injected_via_run_metadata_var(self):
+        """Config flows through run_metadata_var like other run metadata"""
+        from ezvals.decorators import run_metadata_var
+
+        @eval(default_score_key="test")
+        def test_func(ctx: EvalContext):
+            assert ctx.config == {"model": "gpt-4", "temperature": 0.7}
+            ctx.store(scores=True)
+
+        token = run_metadata_var.set({
+            "run_id": "test-run",
+            "session_name": "default",
+            "run_name": "test",
+            "eval_path": "evals/",
+            "config": {"model": "gpt-4", "temperature": 0.7},
+        })
+
+        try:
+            result = test_func()
+            assert isinstance(result, EvalResult)
+        finally:
+            run_metadata_var.reset(token)
+
+    def test_config_empty_when_not_in_run_metadata(self):
+        """When run_metadata_var has no config key, ctx.config is {}"""
+        from ezvals.decorators import run_metadata_var
+
+        @eval(default_score_key="test")
+        def test_func(ctx: EvalContext):
+            assert ctx.config == {}
+            ctx.store(scores=True)
+
+        token = run_metadata_var.set({
+            "run_id": "test-run",
+            "session_name": "default",
+            "run_name": "test",
+            "eval_path": "evals/",
+        })
+
+        try:
+            result = test_func()
+            assert isinstance(result, EvalResult)
+        finally:
+            run_metadata_var.reset(token)

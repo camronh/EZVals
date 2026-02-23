@@ -31,9 +31,10 @@ def make_run_summary(run_name, avg_score=0.8):
                     "input": "input A",
                     "output": f"output A from {run_name}",
                     "reference": "ref A",
-                    "scores": [{"key": "pass", "passed": True}],
+                    "scores": [{"key": "pass", "passed": True, "notes": f"note from {run_name}"}],
                     "error": None,
                     "latency": 1.0,
+                    "annotation": f"annotation {run_name}",
                     "metadata": None,
                     "status": "completed",
                 },
@@ -338,6 +339,40 @@ def test_comparison_mode_from_query_params(tmp_path):
             browser.close()
 
 
+def test_comparison_mode_table_links_include_compare_query_params(tmp_path):
+    """Comparison row links should preserve compare_run_id params for shareable detail URLs."""
+    store = ResultsStore(tmp_path / "runs")
+
+    run1_id = store.save_run(make_run_summary("baseline"), session_name="test-session", run_name="baseline")
+    run2_id = store.save_run(make_run_summary("final"), session_name="test-session", run_name="final")
+
+    app = create_app(
+        results_dir=str(tmp_path / "runs"),
+        active_run_id=run1_id,
+        session_name="test-session",
+        run_name="baseline",
+    )
+
+    query = f"run_id={run1_id}&compare_run_id={run1_id}&compare_run_id={run2_id}"
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(f"{url}?{query}")
+            page.wait_for_selector("#results-table")
+            page.wait_for_selector(".comparison-chips")
+
+            link = page.locator("tbody tr[data-row='main'] td[data-col='function'] a").first
+            href = link.get_attribute("href")
+            assert href is not None
+            parsed = urllib.parse.urlparse(href)
+            params = urllib.parse.parse_qs(parsed.query)
+            assert params.get("compare_run_id") == [run1_id, run2_id]
+
+            browser.close()
+
+
 def test_comparison_mode_from_single_compare_query_param(tmp_path):
     """run_id + single compare_run_id should hydrate two-run comparison mode."""
     store = ResultsStore(tmp_path / "runs")
@@ -427,6 +462,123 @@ def test_legacy_preset_query_ignored(tmp_path):
             browser.close()
 
 
+def test_comparison_table_hover_previews(tmp_path):
+    """Comparison table should show hover preview popovers for key truncated cells."""
+    store = ResultsStore(tmp_path / "runs")
+
+    base_summary = make_run_summary("baseline")
+    final_summary = make_run_summary("final")
+    long_input = "input segment " * 12
+    long_reference = "reference segment " * 12
+    long_output_base = "baseline output segment " * 12
+    long_output_final = "final output segment " * 12
+    long_error = "comparison error details line 1\n" + ("line with extra detail " * 12)
+
+    for summary, output_text in ((base_summary, long_output_base), (final_summary, long_output_final)):
+        summary["results"][0]["result"]["input"] = long_input
+        summary["results"][0]["result"]["reference"] = long_reference
+        summary["results"][0]["result"]["output"] = output_text
+        summary["results"][0]["result"]["scores"] = [
+            {"key": "pass", "passed": True},
+            {"key": "quality", "value": 0.92, "notes": "stable"},
+        ]
+    final_summary["results"][0]["result"]["error"] = long_error
+
+    run1_id = store.save_run(base_summary, session_name="test-session", run_name="baseline")
+    run2_id = store.save_run(final_summary, session_name="test-session", run_name="final")
+
+    app = create_app(
+        results_dir=str(tmp_path / "runs"),
+        active_run_id=run1_id,
+        session_name="test-session",
+        run_name="baseline",
+    )
+
+    saved_runs = [
+        {"runId": run1_id, "runName": "baseline", "color": "#3b82f6"},
+        {"runId": run2_id, "runName": "final", "color": "#22c55e"},
+    ]
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.add_init_script(
+                f"sessionStorage.setItem('ezvals:comparisonRuns', JSON.stringify({json.dumps(saved_runs)}));"
+            )
+            page.goto(url)
+            page.wait_for_selector("#results-table")
+            page.wait_for_selector(".comparison-chips")
+
+            def hover_and_expect(locator, label_text, snippet):
+                locator.hover()
+                page.wait_for_timeout(500)
+                popover = page.locator(".cell-preview-popover")
+                expect(popover).to_be_visible()
+                expect(popover.locator(".cell-preview-label")).to_have_text(label_text)
+                expect(popover).to_contain_text(snippet)
+
+            row = page.locator("tbody tr[data-row='main']").filter(has_text="test_func_a").first
+            hover_and_expect(row.locator("td[data-col='input']").first, "Input", "input segment")
+            hover_and_expect(row.locator("td[data-col='reference']").first, "Reference", "reference segment")
+            hover_and_expect(row.locator("td.comparison-output-cell .line-clamp-3").first, "Output", "baseline output segment")
+            hover_and_expect(row.locator("td.comparison-output-cell .text-accent-error").first, "Error", "comparison error details line 1")
+            hover_and_expect(row.locator("[data-preview-target='scores']").first, "Scores", "quality")
+            hover_and_expect(row.locator("[data-preview-target='annotation']").first, "Annotation", "annotation baseline")
+
+            browser.close()
+
+
+def test_comparison_annotation_popover_edit_and_save(tmp_path):
+    store = ResultsStore(tmp_path / "runs")
+    run1_id = store.save_run(make_run_summary("baseline"), session_name="test-session", run_name="baseline")
+    run2_id = store.save_run(make_run_summary("final"), session_name="test-session", run_name="final")
+
+    app = create_app(
+        results_dir=str(tmp_path / "runs"),
+        active_run_id=run1_id,
+        session_name="test-session",
+        run_name="baseline",
+    )
+
+    saved_runs = [
+        {"runId": run1_id, "runName": "baseline", "color": "#3b82f6"},
+        {"runId": run2_id, "runName": "final", "color": "#22c55e"},
+    ]
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.add_init_script(
+                f"sessionStorage.setItem('ezvals:comparisonRuns', JSON.stringify({json.dumps(saved_runs)}));"
+            )
+            page.goto(url)
+            page.wait_for_selector("#results-table")
+            page.wait_for_selector(".comparison-chips")
+
+            row = page.locator("tbody tr[data-row='main']").filter(has_text="test_func_a").first
+            annotation_icon = row.locator("[data-preview-target='annotation']").first
+            annotation_icon.hover()
+            page.wait_for_timeout(500)
+
+            popover = page.locator(".cell-preview-popover")
+            expect(popover).to_be_visible()
+            expect(popover).to_contain_text("annotation baseline")
+
+            annotation_icon.click()
+            editor = popover.locator("textarea[data-annotation-editor='true']")
+            expect(editor).to_be_visible()
+            editor.fill("comparison note updated")
+            popover.locator("button[data-annotation-save='true']").click()
+            expect(popover).to_contain_text("comparison note updated")
+
+            browser.close()
+
+    baseline_data = store.load_run(run1_id)
+    assert baseline_data["results"][0]["result"]["annotation"] == "comparison note updated"
+
+
 def test_comparison_table_structure(tmp_path):
     """Table should show per-run output columns in comparison mode.
 
@@ -473,6 +625,62 @@ def test_comparison_detail_shows_multiple_outputs(tmp_path):
             browser.close()
 
 
+def test_comparison_detail_shows_multiple_outputs_from_query_params(tmp_path):
+    """Comparison detail should hydrate from compare_run_id query params."""
+    store = ResultsStore(tmp_path / "runs")
+
+    run1_id = store.save_run(make_run_summary("baseline"), session_name="test-session", run_name="baseline")
+    run2_id = store.save_run(make_run_summary("final"), session_name="test-session", run_name="final")
+
+    app = create_app(
+        results_dir=str(tmp_path / "runs"),
+        active_run_id=run1_id,
+        session_name="test-session",
+        run_name="baseline",
+    )
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(f"{url}/runs/{run1_id}/results/0?compare_run_id={run1_id}&compare_run_id={run2_id}")
+            page.wait_for_selector("#main-panel")
+
+            expect(page.locator("#comparison-outputs .comparison-output-card")).to_have_count(2)
+            expect(page.locator("text=output A from baseline")).to_be_visible()
+            expect(page.locator("text=output A from final")).to_be_visible()
+
+            browser.close()
+
+
+def test_comparison_detail_shows_multiple_outputs_from_single_compare_query_param(tmp_path):
+    """Single compare_run_id param should include current detail run as base."""
+    store = ResultsStore(tmp_path / "runs")
+
+    run1_id = store.save_run(make_run_summary("baseline"), session_name="test-session", run_name="baseline")
+    run2_id = store.save_run(make_run_summary("final"), session_name="test-session", run_name="final")
+
+    app = create_app(
+        results_dir=str(tmp_path / "runs"),
+        active_run_id=run1_id,
+        session_name="test-session",
+        run_name="baseline",
+    )
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(f"{url}/runs/{run1_id}/results/0?compare_run_id={run2_id}")
+            page.wait_for_selector("#main-panel")
+
+            expect(page.locator("#comparison-outputs .comparison-output-card")).to_have_count(2)
+            expect(page.locator("text=output A from baseline")).to_be_visible()
+            expect(page.locator("text=output A from final")).to_be_visible()
+
+            browser.close()
+
+
 def _open_comparison_detail(page, url, run_id, saved_runs, index=0):
     page.add_init_script(
         f"sessionStorage.setItem('ezvals:comparisonRuns', JSON.stringify({json.dumps(saved_runs)}));"
@@ -488,7 +696,7 @@ def _make_run_summary_without_reference(run_name):
 
 
 def test_comparison_detail_layout(tmp_path):
-    """Comparison detail view should show input/reference and run outputs, no sidebar."""
+    """Comparison detail should prioritize run tiles and hide single-run controls."""
     store = ResultsStore(tmp_path / "runs")
 
     run1_id = store.save_run(make_run_summary("baseline"), session_name="test-session", run_name="baseline")
@@ -512,11 +720,15 @@ def test_comparison_detail_layout(tmp_path):
             page = browser.new_page()
             _open_comparison_detail(page, url, run1_id, saved_runs)
 
-            # Main panel should be visible with comparison layout
             expect(page.locator("#main-panel")).to_be_visible()
-            # Should show outputs from multiple runs
+            expect(page.locator("#comparison-outputs .comparison-output-card")).to_have_count(2)
+            expect(page.locator("#comparison-context")).to_be_visible()
             expect(page.locator("text=output A from baseline")).to_be_visible()
             expect(page.locator("text=output A from final")).to_be_visible()
+            expect(page.locator("#sidebar-panel")).to_have_count(0)
+            expect(page.locator("#rerun-btn")).to_have_count(0)
+            expect(page.locator("header").locator("text=test_func_a")).to_have_count(1)
+            expect(page.locator("#main-panel").locator("text=test_func_a")).to_have_count(0)
 
             browser.close()
 
@@ -546,9 +758,9 @@ def test_comparison_detail_input_full_width_no_reference(tmp_path):
             page = browser.new_page()
             _open_comparison_detail(page, url, run1_id, saved_runs)
 
-            # Main panel should be visible
             expect(page.locator("#main-panel")).to_be_visible()
-            # Outputs from runs should be visible
+            expect(page.locator("#comparison-input-panel")).to_be_visible()
+            expect(page.locator("#comparison-reference-panel")).to_have_count(0)
             expect(page.locator("text=output A from baseline")).to_be_visible()
             expect(page.locator("text=output A from final")).to_be_visible()
 
@@ -580,19 +792,17 @@ def test_comparison_detail_open_detail_link(tmp_path):
             page = browser.new_page()
             _open_comparison_detail(page, url, run1_id, saved_runs)
 
-            # Find and click the "Open detail" link for one of the runs
-            detail_link = page.locator("a[title='Open detail']").first
-            if detail_link.count() > 0:
-                detail_link.click()
-                page.wait_for_selector("#sidebar-panel")
-                # Should show sidebar panel in non-comparison view
-                expect(page.locator("#sidebar-panel")).to_be_visible()
+            detail_link = page.locator("a[title='Open detail']").nth(1)
+            expect(detail_link).to_be_visible()
+            detail_link.click()
+            page.wait_for_selector("#sidebar-panel")
+            expect(page.locator("#sidebar-panel")).to_be_visible()
 
             browser.close()
 
 
-def test_comparison_detail_scores_and_latency_badges(tmp_path):
-    """Scores and latency should show under outputs in comparison view."""
+def test_comparison_detail_scores_annotations_and_latency(tmp_path):
+    """Scores, annotation, and latency should be visible per run tile."""
     store = ResultsStore(tmp_path / "runs")
 
     run1_id = store.save_run(make_run_summary("baseline"), session_name="test-session", run_name="baseline")
@@ -616,15 +826,16 @@ def test_comparison_detail_scores_and_latency_badges(tmp_path):
             page = browser.new_page()
             _open_comparison_detail(page, url, run1_id, saved_runs)
 
-            # Scores and latency should be visible in the comparison view
-            expect(page.locator("#main-panel", has_text="pass")).to_be_visible()
-            expect(page.locator("#main-panel", has_text="1.00s")).to_be_visible()
+            first_tile = page.locator("#comparison-outputs .comparison-output-card").first
+            expect(first_tile.locator("span[title*='pass: true | notes: note from baseline']")).to_be_visible()
+            expect(first_tile.locator("span[title='annotation baseline']")).to_be_visible()
+            expect(first_tile.locator("text=1.00s")).to_be_visible()
 
             browser.close()
 
 
-def test_comparison_detail_no_metadata_or_trace(tmp_path):
-    """Comparison view shows run outputs instead of sidebar with metadata/trace."""
+def test_comparison_detail_resize_handles(tmp_path):
+    """Comparison detail split handles should resize context height and input width."""
     store = ResultsStore(tmp_path / "runs")
 
     run1_id = store.save_run(make_run_summary("baseline"), session_name="test-session", run_name="baseline")
@@ -648,9 +859,49 @@ def test_comparison_detail_no_metadata_or_trace(tmp_path):
             page = browser.new_page()
             _open_comparison_detail(page, url, run1_id, saved_runs)
 
-            # Comparison view should show multiple run outputs
-            expect(page.locator("text=output A from baseline")).to_be_visible()
-            expect(page.locator("text=output A from final")).to_be_visible()
+            context = page.locator("#comparison-context")
+            context_box_before = context.bounding_box()
+            assert context_box_before is not None
+
+            context_resize = page.locator("#main-panel .resize-handle-h").first
+            context_resize_box = context_resize.bounding_box()
+            assert context_resize_box is not None
+            page.mouse.move(
+                context_resize_box["x"] + (context_resize_box["width"] / 2),
+                context_resize_box["y"] + (context_resize_box["height"] / 2),
+            )
+            page.mouse.down()
+            page.mouse.move(
+                context_resize_box["x"] + (context_resize_box["width"] / 2),
+                context_resize_box["y"] - 60,
+            )
+            page.mouse.up()
+
+            context_box_after = context.bounding_box()
+            assert context_box_after is not None
+            assert context_box_after["height"] > context_box_before["height"] + 20
+
+            input_panel = page.locator("#comparison-input-panel")
+            input_box_before = input_panel.bounding_box()
+            assert input_box_before is not None
+
+            input_resize = page.locator("#comparison-context .resize-handle-v").first
+            input_resize_box = input_resize.bounding_box()
+            assert input_resize_box is not None
+            page.mouse.move(
+                input_resize_box["x"] + (input_resize_box["width"] / 2),
+                input_resize_box["y"] + (input_resize_box["height"] / 2),
+            )
+            page.mouse.down()
+            page.mouse.move(
+                input_resize_box["x"] + 80,
+                input_resize_box["y"] + (input_resize_box["height"] / 2),
+            )
+            page.mouse.up()
+
+            input_box_after = input_panel.bounding_box()
+            assert input_box_after is not None
+            assert input_box_after["width"] > input_box_before["width"] + 20
 
             browser.close()
 

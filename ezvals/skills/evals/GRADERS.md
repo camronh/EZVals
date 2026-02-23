@@ -6,11 +6,20 @@ The grader is the logic that determines whether an agent's output is correct. Ch
 
 | Type | Speed | Cost | Best For |
 |------|-------|------|----------|
-| **Code-based** | Fast | Free | Exact values, patterns, structure, verifiable outcomes |
-| **Model-based** | Slow | $$$ | Subjective quality, semantic pass, open-ended tasks |
+| **Code-based** | Fast | Free | Structural checks: JSON shape, tool names, state changes |
+| **Model-based** | Slow | $$$ | Evaluating agent responses: accuracy, tone, groundedness, refusal |
 | **Human** | Slowest | $$$$ | Gold standard labels, calibrating LLM judges, ambiguous cases |
 
-**Start with code-based graders whenever possible.** They're fast, cheap, and deterministic. Only escalate to model-based when code can't capture what you need to check.
+**Use code-based graders for structural/mechanical checks** — JSON structure, tool names, state changes, file existence. They're fast, cheap, and deterministic. But don't use them for evaluating natural language responses, even when the expected answer is a known value.
+
+**Use LLM judges when evaluating agent responses.** Any time you're checking whether an agent's natural language output is correct, faithful, or appropriate, use an LLM judge. This includes:
+
+- **Refusal/guardrail checking** — refusal language varies widely ("I can't help with that", "That's outside my scope", redirecting to what the agent *can* do). Keyword matching is brittle and misses nuanced refusals. **Important**: guardrail evals need both should-refuse AND should-answer cases. Include in-scope queries (e.g., "What is your return policy?") marked as "should answer" alongside out-of-scope queries marked as "should refuse" — the judge must fail both: answering out-of-scope AND refusing in-scope.
+- **Factual accuracy** — even when expected answers are known (prices, dates, policies), an LLM judge is more robust than substring matching. Substring checks miss wrong-context hits (agent mentions "$999.99" but for the wrong product), can't detect confident-but-wrong paraphrasing, and won't catch when the agent declines to answer an answerable question. Use an LLM judge for accuracy evals; supplement with code checks for exact values when needed.
+- **Tone and style** — professionalism, empathy, and clarity are inherently subjective. Code-based checks (e.g., looking for "sorry") produce false positives and miss the point.
+- **Groundedness / hallucination** — verifying that claims are supported by source documents requires semantic understanding, not keyword matching. Even when your knowledge base has exact values, the core hallucination grader should be an LLM judge that compares the response against retrieved sources — it catches wrong-context citations, subtle fabrications, and confident answers on topics the agent doesn't actually know enough about.
+
+**Use a single holistic pass/fail for subjective evals.** When grading tone, style, or overall quality, use one LLM judge call that evaluates all criteria together and returns a single pass/fail. Don't split subjective dimensions (e.g., "professional" and "empathetic") into separate scores — the individual scores aren't actionable and they fragment what should be a unified judgment.
 
 ## Code-Based Graders
 
@@ -92,6 +101,7 @@ Use when pass is subjective or requires semantic understanding.
 ### Binary Pass/Fail Judge
 
 ```python
+import json
 from anthropic import Anthropic
 
 client = Anthropic()
@@ -109,16 +119,21 @@ Question: {question}
 Response: {output}
 Criteria: {criteria}
 
-Does the response meet the criteria? Answer with:
-PASS: [brief reason]
+Return ONLY a JSON object:
+{{"passed": true, "reasoning": "brief explanation"}}
 or
-FAIL: [brief reason]"""
+{{"passed": false, "reasoning": "brief explanation"}}"""
         }]
     )
 
     text = response.content[0].text.strip()
-    passed = text.upper().startswith("PASS")
-    return passed, text
+    # Strip markdown code fences if present
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    verdict = json.loads(text.strip())
+    return verdict["passed"], verdict.get("reasoning", "")
 
 @eval(input="What is our refund policy?", dataset="qa")
 def test_answer_quality(ctx: EvalContext):
@@ -132,44 +147,26 @@ def test_answer_quality(ctx: EvalContext):
     assert passed, reasoning
 ```
 
-### Natural Language Assertions
+### Holistic Subjective Judgment
 
-Check multiple criteria about an output:
+For subjective qualities (tone, style, professionalism), use a single judge call that evaluates all criteria together:
 
 ```python
-def check_assertions(output: str, assertions: list[str]) -> dict[str, bool]:
-    """Check multiple assertions about an output"""
-    results = {}
-    for assertion in assertions:
-        response = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=10,
-            messages=[{
-                "role": "user",
-                "content": f"""Response to evaluate: {output}
-
-Is this true? "{assertion}"
-Answer only YES or NO."""
-            }]
-        )
-        results[assertion] = "YES" in response.content[0].text.upper()
-    return results
-
 @eval(input="Handle a frustrated customer asking for a refund")
 def test_support_quality(ctx: EvalContext):
     ctx.store(output=support_agent(ctx.input))
 
-    checks = check_assertions(ctx.output, [
-        "Shows empathy for the customer's frustration",
-        "Clearly explains the resolution or next steps",
-        "Maintains a professional and helpful tone"
-    ])
-
-    for assertion, passed in checks.items():
-        ctx.store(scores={"passed": passed, "key": assertion[:20], "notes": assertion})
-
-    assert all(checks.values()), f"Failed: {[a for a,p in checks.items() if not p]}"
+    passed, reasoning = llm_judge(
+        ctx.input,
+        ctx.output,
+        "The response is professional, shows empathy for the customer's frustration, "
+        "clearly explains the resolution or next steps, and maintains a helpful tone"
+    )
+    ctx.store(scores={"passed": passed, "key": "quality", "notes": reasoning})
+    assert passed, reasoning
 ```
+
+This is better than checking each criterion separately because subjective qualities interact — a response can be technically empathetic but miss the mark overall. One holistic judgment captures this.
 
 ### Binary vs Likert Scales
 
@@ -247,6 +244,22 @@ async def test_comprehensive(ctx: EvalContext):
 ```
 
 Every score must have at least one of `value` or `passed`.
+
+### Numeric Performance Scores
+
+For latency, cost, and other performance metrics, store them as **numeric scores with `value`**, not just pass/fail assertions. The main value of performance evals is tracking numbers over time across runs — a hard threshold tells you "too slow" but doesn't show improvement trends.
+
+```python
+ctx.store(scores=[
+    {"value": ctx.latency, "key": "latency_s",
+     "passed": ctx.latency < 2.0,  # optional threshold
+     "notes": f"{ctx.latency:.2f}s"},
+    {"value": cost_usd, "key": "cost_usd",
+     "notes": f"${cost_usd:.4f}"},
+])
+```
+
+Store latency in `trace_data` or use the built-in `ctx.store(latency=...)` field. Store token counts and cost in `trace_data`. Then use `ezvals serve` with run comparison to see how metrics change across optimization attempts.
 
 ## Combining Graders
 

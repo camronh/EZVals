@@ -3,7 +3,7 @@ name: evals
 description: Write and analyze evaluations for AI agents and LLM applications. Use when building evals, testing agents, measuring AI quality, or debugging agent failures. Use this skill when you need to test the performance of an LLM or Agent, or if the user mentions EZVals.
 ---
 
-<!-- Version: 0.1.8 | Requires: ezvals >=0.1.0 -->
+<!-- Version: 0.1.9 | Requires: ezvals >=0.1.0 -->
 
 # AI Agent Evaluation Skill
 
@@ -124,21 +124,57 @@ When helping a user write new evals, you're designing an experiment. In the expe
 
 ### 1. Consider the Question Being Asked
 
-The user's problem statement may not always be a clear question that they want answered by the eval. Its your job to parse out the question they want answered. 
+The user's problem statement may not always be a clear question that they want answered by the eval. Its your job to parse out the question they want answered.
 
 One example, if the user says they want "Evals for their customer service agent", what are the actual questions they want answered? Likely they are interested in how often their agent is able to handle user queries successfully. And maybe they're interested in cost and latency analysis. So the underlying question could be "How helpful is my customer service agent for users most common queries?"
 
 Another example could be something more complex like "I want evals comparing these 3 LLMs for powering my coding agent". The underlying question could be "How is code quality and latency effected by switching between model X,Y, and Z?"
 
-Formulate a practical question(s) and high level problem statement for the eval. Use this as the north star for formulating the experiment. If you're not confident, feel free to clarify things with the user to get a solid understanding of intent. 
+Formulate a practical question(s) and high level problem statement for the eval. Use this as the north star for formulating the experiment. If you're not confident, feel free to clarify things with the user to get a solid understanding of intent.
+
+**Determine if this is a permanent eval or a one-off debugging exercise.** Some problems ("my agent uses too many emojis", "responses are too verbose") are quick debugging tasks — not permanent regression suites. For these, don't create permanent eval files in the codebase. Instead, write a temp script (e.g., `/tmp/debug_eval.py`) and run it programmatically. Don't build an automated scorer for subjective "vibes" issues — no assertions, no code-based checks. The value is in capturing outputs, eyeballing them, tweaking the prompt, and comparing before/after side by side.
+
+```python
+# /tmp/debug_eval.py — throwaway, not added to the project
+from ezvals import eval, EvalContext, run
+
+@eval(cases=[
+    {"input": "What is the return policy?"},
+    {"input": "Tell me about your products"},
+])
+def test_vibes(ctx: EvalContext):
+    ctx.store(output=my_agent(ctx.input))
+    # No assertions, no scores — just capture outputs to eyeball
+
+if __name__ == "__main__":
+    run(path=__file__, session="debug-vibes", run_name="before", verbose=True)
+```
+
+The workflow: run it, eyeball outputs in `ezvals serve`, tweak the agent's prompt, rerun with `run_name="after"`, then serve and compare before/after side by side:
+
+```bash
+python /tmp/debug_eval.py  # captures "before" outputs
+# ... tweak the agent's prompt ...
+# change run_name to "after" and rerun
+python /tmp/debug_eval.py
+# compare visually
+ezvals serve /tmp/debug_eval.py --session debug-vibes
+```
 
 ### 2. High-Level Planning
 
 Next, you want to plan out at a high level how you can answer the north star questions. You should assume you have access to dataset, or can generate them synthetically. You should assume you have targets available or can build them. And you should assume you have graders available if you need them or you can build them too.
 
-Read through the other documentation available in this skill to make sure you're following best practices, but they are just guides and can/should be deviated from to fit the user's needs and current setup. 
+Read through the other documentation available in this skill to make sure you're following best practices, but they are just guides and can/should be deviated from to fit the user's needs and current setup.
 
 Plan an experiment at a high level that, if ran, would answer the north star questions. Read up on best practices and narrow down your experiment to the most robust methodology you can. Include in the plan a high level description of the target, how/where you will get the dataset, and the evaluation logic if you plan on using an automated grader.
+
+**Common planning pitfalls to avoid:**
+- **Dataset too narrow** — Always cover the full range of a dimension: if the user says "angry customers", also include neutral/confused/polite. If testing guardrails with refuse cases, also include in-scope "should answer" cases to catch over-refusal. See [datasets.md](datasets.md).
+- **Wrong grader type** — Hallucination, accuracy, tone, and refusal checks need LLM judges, not code-based string matching. For hallucination specifically, the grader must be an LLM judge that compares the response against retrieved source documents — see [use-cases/rag-agents.md](use-cases/rag-agents.md).
+- **Permanent files for throwaway work** — One-off debugging tasks (emoji, verbosity, style) should use temp scripts, not permanent eval files. No assertions or automated scoring — just capture outputs, eyeball, tweak prompt, rerun, and compare before/after in `ezvals serve`. See the guidance above.
+
+**If the user is testing prompt/config changes** (CLAUDE.md, system prompts, agent instructions), read [use-cases/testing-agent-skills.md](use-cases/testing-agent-skills.md) — it covers headless CLI agents as targets, plan-only mode, and before/after comparison with session/run naming. This applies to any scenario where the user is iterating on the configuration that drives their agent.
 
 
 ### 3. Take Inventory
@@ -208,9 +244,9 @@ You should have everything you need to plan a good eval from here.
 ## Use Cases
 
 ### [use-cases/rag-agents.md](use-cases/rag-agents.md)
-**When to read:** Evaluating RAG systems, checking groundedness and retrieval quality
+**When to read:** Evaluating RAG systems, checking groundedness and retrieval quality. **Also read this for any hallucination or groundedness eval**, even if the agent isn't a traditional RAG system — the grading principles (LLM judge comparing response against sources) apply to any agent with a knowledge base.
 
-- Hallucination detection
+- Hallucination detection (LLM judge, not code checks)
 - Pass and coverage verification
 - Source quality checks
 - Full RAG eval example

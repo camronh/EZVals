@@ -5,10 +5,13 @@ How to run evaluations, manage sessions, and serve results for review.
 ## Quick Start
 
 ```bash
-# Run evals and save results
+# Run evals headlessly (for CI/agents)
 ezvals run evals/ --session my-experiment --run-name baseline
 
-# Serve results for the user to review in the browser
+# Run evals AND open the UI in one command
+ezvals serve evals/ --session my-experiment --run
+
+# Or just open the UI to browse/run evals interactively
 ezvals serve evals/ --session my-experiment
 ```
 
@@ -17,7 +20,9 @@ ezvals serve evals/ --session my-experiment
 | Command | Purpose | Output |
 |---------|---------|--------|
 | `ezvals run` | Headless execution for CI/agents | Minimal stdout, JSON file |
-| `ezvals serve` | Interactive browser UI | Web interface at localhost:8000 |
+| `ezvals serve` | Interactive browser UI — can **both run AND view** evals | Web interface at localhost:8000 |
+
+> **Both commands can run evals.** `serve` is NOT view-only — users can click **Run** in the UI to execute evals, or pass `--run` to auto-run on startup. The only difference between `run` and `serve` is that `run` is headless while `serve` provides an interactive web UI.
 
 ### When to Use Each
 
@@ -27,7 +32,7 @@ ezvals serve evals/ --session my-experiment
 - Batch execution without human review
 
 **Use `serve` when:**
-- User wants to review results visually
+- User wants to run evals and review results visually
 - Debugging failures interactively
 - Comparing runs side-by-side
 
@@ -79,7 +84,7 @@ If you don't specify names, friendly adjective-noun combinations are generated:
 ```bash
 # Auto-generated session and run names
 ezvals run evals/
-# Creates: .ezvals/runs/swift-falcon_2024-01-15T10-30-00Z.json
+# Creates: .ezvals/sessions/default/swift-falcon_a1b2c3d4.json
 ```
 
 ### Rename an Existing Saved Run
@@ -97,6 +102,8 @@ ezvals run --rename run123 better-name --session model-comparison
 ## Running Evals
 
 ### Basic Run
+
+> **IMPORTANT:** EZVals does NOT use pytest's `-k` flag. Use `::` path selectors to target specific evals.
 
 ```bash
 # Run all evals in a directory
@@ -198,7 +205,7 @@ This opens `http://localhost:8000` by default (use `--no-open` to skip auto-open
 - Click into individual results for details
 - Filter by dataset, label, or status
 - Compare runs side-by-side
-- Export to JSON, CSV, or Markdown
+- Export to JSON, CSV, Markdown, or PNG
 
 ### Run on Startup
 
@@ -258,15 +265,19 @@ You can see passing pass-only results for QA labels here:
 http://127.0.0.1:8000/?run_id=1826bc4c&score_passed=pass,true&label_in=qa
 ```
 
-### Loading Previous Results
+### Viewing Previous Results
+
+Two ways to view a previous run:
 
 ```bash
-# Load a specific run file
-ezvals serve .ezvals/runs/baseline_2024-01-15T10-30-00Z.json
+# Option 1: Pass the run JSON file directly
+ezvals serve .ezvals/sessions/default/baseline_a1b2c3d4.json
 
-# Load latest results
-ezvals serve .ezvals/runs/latest.json
+# Option 2: Load a session and pick runs from the dropdown
+ezvals serve evals/ --session my-experiment
 ```
+
+If the original eval source file still exists, you can rerun evaluations. If the source was moved or deleted, it works in view-only mode.
 
 ### Custom Port
 
@@ -276,14 +287,15 @@ ezvals serve evals/ --port 3000
 
 ## Results Storage
 
-Results are saved to `.ezvals/runs/` with the pattern `{run_name}_{timestamp}.json`:
+Results are saved to `.ezvals/sessions/` organized by session, with the pattern `{run_name}_{run_id}.json`:
 
 ```
-.ezvals/runs/
-├── baseline_2024-01-15T10-30-00Z.json
-├── improved_2024-01-15T11-00-00Z.json
-├── swift-falcon_2024-01-15T14-45-00Z.json
-└── latest.json  # Copy of most recent
+.ezvals/sessions/
+├── model-comparison/
+│   ├── baseline_a1b2c3d4.json
+│   └── improved_e5f6g7h8.json
+└── default/
+    └── swift-falcon_i9j0k1l2.json
 ```
 
 ### JSON Structure
@@ -351,7 +363,7 @@ At least one of `value` or `passed` is always present on each score.
 ```python
 import json
 
-with open(".ezvals/runs/latest.json") as f:
+with open(".ezvals/sessions/default/swift-falcon_a1b2c3d4.json") as f:
     run = json.load(f)
 
 results = run["results"]
@@ -479,6 +491,7 @@ Open the overflow (three-dot) menu in the header, then hover **Download** to exp
 - **JSON**: Raw results file
 - **CSV**: Flat format for spreadsheets
 - **Markdown**: ASCII charts + table (respects current filters)
+- **PNG**: Chart image with stats bars, metrics, and branding
 
 ## Configuration
 
@@ -487,7 +500,7 @@ Create `ezvals.json` in your project root for defaults:
 ```json
 {
   "concurrency": 4,
-  "results_dir": ".ezvals/runs",
+  "results_dir": ".ezvals/sessions",
   "port": 8000
 }
 ```

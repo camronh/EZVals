@@ -15,6 +15,9 @@ type SettingsModalProps = {
   setSettingsForm: Dispatch<SetStateAction<SettingsFormState>>
   onNotificationsChange: (enabled: boolean) => void
   onToggleTheme: () => void
+  configNames: string[]
+  activeConfig: string | null
+  onConfigSelect: (name: string | null) => void
 }
 
 export default function SettingsModal({
@@ -25,6 +28,9 @@ export default function SettingsModal({
   setSettingsForm,
   onNotificationsChange,
   onToggleTheme,
+  configNames,
+  activeConfig,
+  onConfigSelect,
 }: SettingsModalProps) {
   if (!open) {
     return <div id="settings-modal" className="fixed inset-0 z-50 hidden"></div>
@@ -89,6 +95,21 @@ export default function SettingsModal({
               <span className="dark:hidden">Dark</span><span className="hidden dark:inline">Light</span>
             </button>
           </div>
+          {configNames.length > 0 && (
+            <div className="flex items-center justify-between">
+              <label className="text-theme-text-muted">Run Config</label>
+              <select
+                className="w-32 rounded border border-theme-border bg-theme-bg-secondary px-2 py-1 text-theme-text focus:border-blue-500 focus:outline-none"
+                value={activeConfig || ''}
+                onChange={(e) => onConfigSelect(e.target.value || null)}
+              >
+                <option value="">None</option>
+                {configNames.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <label className="flex cursor-pointer items-center justify-between gap-3">
             <span className="text-theme-text-muted">Notifications</span>
             <input

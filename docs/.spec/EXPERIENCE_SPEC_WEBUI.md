@@ -35,6 +35,14 @@ Scenario: Sort by scores column
   When the user clicks the Scores column header
   Then rows sort by aggregate score (pass ratio or average value)
   And clicking again reverses the sort order
+
+Scenario: Annotation indicator in results table
+  Given results are displayed in the table
+  When a row has a non-empty annotation
+  Then a subtle annotation indicator icon appears in the Output cell
+  And hovering the icon changes it to an edit affordance
+  And hovering that indicator shows the full annotation in the hover preview popover
+  And the popover has an edit action that switches to textarea mode with Save/Cancel
 ```
 
 ### Run Button (Single Action)
@@ -727,6 +735,40 @@ Scenario: Result alignment across runs
   Then results are matched across runs by (function, dataset) tuple
   And rows with matching results show data from all runs
   And missing results show "—" in the respective run column
+
+Scenario: Hover preview popover in comparison table
+  Given comparison mode is active
+  When the user hovers truncated cell content in the comparison table
+  Then a preview popover appears after the same delay as single-run mode
+  And this applies to Input and Reference cells
+  And this applies to Output, Error, and Scores content within each run column
+  And this applies to annotation indicators within run columns when annotations are present
+  And annotation popovers can switch to edit mode and save updates inline
+```
+
+### Comparison Detail View
+
+```gherkin
+Scenario: Comparison detail layout
+  Given comparison mode is active
+  And the user opens a result detail page
+  Then the page uses a dedicated comparison layout
+  And the eval function name appears once in the top header
+  And the rerun button is hidden
+  And the single-run right sidebar is hidden
+  And run output cards are the primary top region
+  And input/reference are shown in a supporting bottom region
+  And the top/bottom and input/reference boundaries are draggable
+
+Scenario: Per-run information in comparison detail
+  Given comparison mode is active in detail view
+  Then each run output card shows:
+    - run name and status
+    - output content
+    - score chips with hoverable full score details (key, value/passed, notes)
+    - annotation (inline or hoverable when present)
+    - latency (when present)
+  And each run output card includes an "Open detail" link to that run's single-run detail page
 ```
 
 ### Comparison Limits

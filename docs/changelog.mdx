@@ -3,6 +3,29 @@ title: "Changelog"
 description: "All notable changes to EZVals"
 ---
 
+## 0.1.9 - 2026-02-23
+
+- Added: Skill sandbox Q&A eval suite — 25 cases testing whether the EZVals skill correctly teaches agents CLI usage, session management, export, and configuration.
+- Added: Shared eval infrastructure (`_common.py`) with robust JSON extraction and retry logic for LLM judge calls via Claude Code headless mode.
+- Fixed: Skill docs had incorrect results storage paths (`.ezvals/runs/` → `.ezvals/sessions/`), missing PNG export format, unimplemented keyboard shortcuts (r, e, f), and wrong jq field name in CLI docs.
+- Changed: Skill docs now emphasize that `ezvals serve` can run evals (not view-only), with prominent callouts in Quick Start and Two Modes sections.
+- Changed: Skill grader docs now recommend LLM judges over code-based checks for evaluating natural language responses, with guidance on holistic pass/fail for subjective evals.
+- Added: Detail view now supports URL-driven comparison mode via repeated `compare_run_id` query params, enabling direct shareable links like `/runs/{run_id}/results/{index}?compare_run_id=...&compare_run_id=...`.
+- Changed: Comparison-table row links now preserve `compare_run_id` params when opening detail pages, so compare context survives new tabs, refresh, and browser navigation.
+- Fixed: Detail compare URLs with a single `compare_run_id` now auto-include the current detail run as base context.
+- Tests: Added E2E coverage for comparison row deep-link query params and detail compare hydration from both repeated and single `compare_run_id` query forms.
+- Changed: Comparison-mode detail view now uses a dedicated layout that prioritizes run output cards on top, with input/reference context moved to a supporting lower pane.
+- Fixed: Comparison detail no longer reuses single-run controls; duplicate eval title rows, rerun action, and the single-run sidebar are now hidden in comparison mode.
+- Added: Comparison detail run cards now include per-run score/latency/annotation context and an `Open detail` action that jumps directly to that run's single-result view.
+- Tests: Expanded comparison-detail E2E coverage for layout behavior, hidden controls, per-run badges/annotations, deep-link navigation, and draggable split handles.
+- Added: Comparison-mode table cells now support the same hover preview popover behavior as single-run mode for input, reference, output, error, and scores content.
+- Tests: Added E2E coverage for comparison-table hover previews across input, reference, output, error, and scores.
+- Fixed: Detail view now keeps the `Trace Data` section collapsed by default, so verbose trace payloads do not push higher-signal sidebar content out of view.
+- Tests: Updated full-scenario E2E coverage to assert `Trace Data` starts collapsed and expands only when toggled open.
+- Added: Run configs — named configuration profiles in `ezvals.json` (`configs` key) selectable via `--config` flag on both `run` and `serve`, with the config dict available as `ctx.config` in eval code. Auto-defaults `run_name` to the config name for easy side-by-side comparison.
+- Added: Settings modal now includes a Run Config dropdown when configs are defined in `ezvals.json`.
+- Tests: Added unit and integration tests for `resolve_run_config()`, `ctx.config`, `--config` CLI flag, and config auto-naming.
+
 ## 0.1.8 - 2026-02-20
 
 - Changed: Removed `--visual` from `ezvals run`; headless runs now use the minimal output flow plus JSON results output (`--output` or `--no-save`).

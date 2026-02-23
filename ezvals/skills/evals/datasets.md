@@ -149,24 +149,34 @@ When the user has limited real examples, you can help generate test cases. See [
 Consider testing both cases where a behavior should occur AND where it shouldn't:
 
 ```python
-# Only positive cases - may miss over-triggering issues
-SEARCH_CASES = [
-    {"input": "Latest news?", "metadata": {"should_search": True}},
-    {"input": "Weather today?", "metadata": {"should_search": True}},
+# Only refuse cases - misses over-refusal issues
+GUARDRAIL_CASES = [
+    {"input": "What's the weather?", "metadata": {"should_refuse": True}},
+    {"input": "Help me write code", "metadata": {"should_refuse": True}},
 ]
 
-# Including negative cases helps catch over-triggering
-SEARCH_CASES = [
-    # Should search (current info needed)
-    {"input": "Latest news?", "metadata": {"should_search": True}},
-    {"input": "Weather today?", "metadata": {"should_search": True}},
-    # Should NOT search (static knowledge)
-    {"input": "What is 2+2?", "metadata": {"should_search": False}},
-    {"input": "Who wrote Romeo and Juliet?", "metadata": {"should_search": False}},
+# Including in-scope cases catches over-refusal
+GUARDRAIL_CASES = [
+    # Should refuse (out of scope)
+    {"input": "What's the weather?", "metadata": {"should_refuse": True}},
+    {"input": "Help me write code", "metadata": {"should_refuse": True}},
+    # Should answer (in scope - must NOT refuse these)
+    {"input": "What is your return policy?", "metadata": {"should_refuse": False}},
+    {"input": "Check my order status", "metadata": {"should_refuse": False}},
 ]
 ```
 
 One-sided datasets tend to produce one-sided optimization. If you only test that the agent searches when it should, you may not notice if it starts searching for everything.
+
+### Cover the Full Range
+
+**Always cover the full range of each dimension, even when the user only mentions one.** This is critical for dataset quality:
+
+- If the user says "test tone with angry customers" → also include **neutral**, **confused**, and **polite** customers
+- If testing guardrails with out-of-scope queries → also include **in-scope queries that should be answered normally** (e.g., "What is your return policy?" marked as "should answer"). Without these, you can't detect over-refusal (agent refuses valid questions). Each case should be explicitly marked as "should answer" or "should refuse."
+- If testing hallucination with answerable questions → include questions the agent **should refuse** (knows the topic but lacks enough detail to answer)
+
+Partial coverage gives you a partial picture. The agent might handle angry customers perfectly but break character with confused ones. A guardrail eval with only refuse-cases tells you nothing about whether the agent still answers legitimate questions correctly.
 
 ## Avoiding Saturation
 

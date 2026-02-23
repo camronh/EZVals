@@ -2,11 +2,19 @@
 
 RAG (Retrieval-Augmented Generation) agents retrieve documents and generate answers grounded in those sources. The primary failure mode is hallucination—stating things that aren't supported by the retrieved documents.
 
+## Key Principle: Single Groundedness Metric with LLM Judge
+
+For hallucination/faithfulness evals, use **one LLM judge** that checks whether the response is grounded in the retrieved sources. Don't fragment into separate evals for "factual accuracy", "no fabrication", and "groundedness" — these are all facets of the same question: *"Is everything the agent said supported by its sources?"* One holistic groundedness check covers all of them and is easier to act on.
+
+**The core grader for any hallucination eval must be an LLM judge that compares the response against retrieved source documents** — even when your knowledge base has exact, verifiable values like prices and dates. Code-based keyword checks (e.g., `assert "999.99" in output`) miss critical failure modes: wrong-context citations (right price, wrong product), subtle fabrications, and confident answers drawn from the model's own training data rather than the retrieved sources. The target must capture retrieved sources in `trace_data`, and the LLM judge must read those sources when evaluating faithfulness. Use code checks as fast supplementary sanity checks if you want, but never as the primary hallucination grader.
+
+**This applies to any agent with a knowledge base**, not just traditional RAG systems. If your agent retrieves from a KB, database, or document store, the groundedness grading pattern is the same: capture the sources in `trace_data`, then have an LLM judge verify the response is faithful to those sources.
+
 ## Key Metrics
 
 | Metric | What It Measures |
 |--------|------------------|
-| **Groundedness** | Are claims supported by retrieved sources? |
+| **Groundedness** | Are claims supported by retrieved sources? (primary metric) |
 | **Pass** | Does the answer match the expected reference? |
 | **Coverage** | Are key facts/topics included? |
 | **Source Quality** | Are sources authoritative and relevant? |
@@ -47,6 +55,7 @@ async def test_rag_accuracy(ctx: EvalContext):
 The most critical check for RAG systems. Verify all claims are supported by sources:
 
 ```python
+import json
 from anthropic import Anthropic
 
 client = Anthropic()
@@ -55,23 +64,30 @@ def check_groundedness(answer: str, sources: list[str]) -> tuple[bool, str]:
     """Verify all claims are supported by cited sources."""
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
-        max_tokens=500,
+        max_tokens=300,
         messages=[{
             "role": "user",
-            "content": f"""Sources the agent cited:
+            "content": f"""Sources the agent retrieved:
 {chr(10).join(sources)}
 
 Agent's answer:
 {answer}
 
-List any factual claims in the answer that are NOT directly supported by the sources.
-If every factual claim is supported, respond with only: ALL_SUPPORTED"""
+Is every factual claim in the answer supported by the sources?
+If the sources don't contain enough info and the agent says "I don't know" or declines, that's CORRECT (not a hallucination).
+If the agent answers confidently using info NOT in the sources, that's a hallucination.
+
+Return ONLY JSON: {{"passed": true/false, "reasoning": "brief explanation"}}"""
         }]
     )
 
-    text = response.content[0].text
-    is_grounded = "ALL_SUPPORTED" in text
-    return is_grounded, text
+    text = response.content[0].text.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    verdict = json.loads(text.strip())
+    return verdict["passed"], verdict.get("reasoning", "")
 
 @eval(target=run_rag_agent, dataset="rag_qa", input="Summarize our shipping options")
 async def test_groundedness(ctx: EvalContext):

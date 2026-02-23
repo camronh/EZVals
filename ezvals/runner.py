@@ -8,7 +8,7 @@ from pathlib import Path
 from threading import Thread
 from typing import Any, Dict, List, Optional, Union, Callable, TypedDict
 
-from ezvals.config import load_config, DEFAULT_CONFIG
+from ezvals.config import load_config, DEFAULT_CONFIG, resolve_run_config
 from ezvals.decorators import EvalFunction, run_metadata_var
 from ezvals.discovery import EvalDiscovery
 from ezvals.schemas import EvalResult
@@ -527,6 +527,7 @@ def run(
     results_dir: Optional[str] = None,
     overwrite: Optional[bool] = None,
     use_config: bool = False,
+    config_name: Optional[str] = None,
     on_start: Optional[Callable[[EvalFunction], None]] = None,
     on_complete: Optional[Callable[[EvalFunction, Dict], None]] = None,
 ) -> RunResult:
@@ -559,12 +560,15 @@ def run(
     run_id = store.generate_run_id()
     session_name = session if session else "default"
 
+    run_config = resolve_run_config(config_name)
+
     token = run_metadata_var.set(
         {
             "run_id": run_id,
             "session_name": session_name,
             "run_name": run_name,
             "eval_path": resolved_path,
+            "config": run_config,
         }
     )
     try:
@@ -578,6 +582,8 @@ def run(
             limit=limit,
         )
         summary["path"] = resolved_path
+        if config_name:
+            summary["config_name"] = config_name
     finally:
         run_metadata_var.reset(token)
 

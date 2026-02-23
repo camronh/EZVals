@@ -55,7 +55,9 @@ Use `ctx.store()` to set context fields. It accepts these parameters:
 
 **Use first-class parameters when they exist.** Don't put your agent's response in `metadata["response"]`—use the `output` parameter.
 
-**Use `trace_data` for debug info you want to inspect.** Tool call sequences, retrieval scores, confidence values—anything you'd look at when debugging a failure.
+**Use `trace_data` for debug info you want to inspect.** Tool call sequences, retrieval scores, confidence values—anything you'd look at when debugging a failure. For performance evals, store token counts and cost here too.
+
+**For latency/cost tracking**, capture timing in the target and store it as a numeric score in the grader using `ctx.store(scores=[{"value": latency, "key": "latency_s"}])`. Don't just assert under a threshold — the numeric `value` is what lets you track trends across runs in `ezvals serve`. See the Numeric Performance Scores section in [GRADERS.md](GRADERS.md).
 
 **Use `metadata` for organizational data.** Test categorization, user personas, experiment tags.
 
