@@ -245,6 +245,38 @@ The judge itself needs calibration. On your first run, review every result:
 
 This is normal. Judge alignment is iterative, just like prompt engineering.
 
+## Regression Testing Agent Config Changes
+
+When a user is about to change their CLAUDE.md, system prompt, or agent instructions, this is a testing-agent-skills scenario. The key elements: (1) check if existing evals are already in place and reuse them, (2) headless CLI agent (`claude -p`) as target with plan-only contract, (3) run against the current project directory (no separate sandbox), (4) `--session`/`--run-name` to name baseline vs. post-change runs, (5) add new behavior checks to existing datasets, (6) compare side-by-side in `ezvals serve`.
+
+### Concrete Steps
+
+**1. Target: headless CLI agent with plan-only contract.** Use `claude -p` (or `codex exec`) as the target. Prepend the plan-only contract from section 2 above — `"You are analyzing a codebase and producing a PLAN only. Do NOT write any files."` — so the agent plans but doesn't execute or mutate files. Run against the current project directory, no separate sandbox needed.
+
+**2. Dataset: regression cases.** If the user already has evals, reuse them. If not, write cases covering the agent's important behaviors — the things that must NOT break. Test across representative task types (e.g., bug fixes, new features, refactoring). Use programmatic evaluators where possible, LLM judge with "should" statements where code checks don't suffice.
+
+**3. Run baseline with `--run-name baseline`.** All cases should pass before changing anything.
+
+**4. Make the config change** (e.g., add type checking to CLAUDE.md).
+
+**5. Update the dataset for the new behavior.** If the change adds type checking, add type-checking "should" statements to cases that would be affected (e.g., `"should include type annotations on function parameters"`). The eval should verify both that the new behavior appears AND that existing behavior doesn't regress.
+
+**6. Re-run with `--run-name new-prompt`.** Compare against the baseline using `ezvals serve`:
+
+```bash
+# 1. Baseline before the change
+ezvals run evals/ --session config-change --run-name baseline
+
+# 2. Make the CLAUDE.md / prompt change
+# 3. Update dataset with new-behavior checks
+
+# 4. Re-run after the change
+ezvals run evals/ --session config-change --run-name new-prompt
+
+# 5. Compare side by side in the UI
+ezvals serve evals/ --session config-change
+```
+
 ## What You Need
 
 1. **A project for the agent to inspect** — the agent needs a codebase to read when planning. This can be your actual project or a sandbox with a toy agent.

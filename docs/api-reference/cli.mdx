@@ -234,7 +234,7 @@ ezvals run evals/ -v
 ```
 
 <ParamField path="-o, --output" type="string">
-  Override the default results path. When specified, results are saved only to this path (not to `.ezvals/runs/`).
+  Override the default results path. When specified, results are saved only to this path (not to `.ezvals/sessions/`).
 </ParamField>
 
 ```bash
@@ -248,7 +248,7 @@ ezvals run evals/ -o results.json
 
 ```bash
 # Get results as JSON without writing to disk
-ezvals run evals/ --no-save | jq '.passed'
+ezvals run evals/ --no-save | jq '.total_passed'
 ```
 
 ### Session Options
@@ -382,7 +382,7 @@ ezvals run evals/ -c 8 --timeout 60.0
 ### Export Results
 
 ```bash
-# Results auto-save to .ezvals/runs/ by default
+# Results auto-save to .ezvals/sessions/ by default
 ezvals run evals/
 
 # Override output path
@@ -422,7 +422,7 @@ EZVals supports a `ezvals.json` config file for persisting default CLI options. 
 ```json
 {
   "concurrency": 1,
-  "results_dir": ".ezvals/runs"
+  "results_dir": ".ezvals/sessions"
 }
 ```
 
@@ -476,12 +476,12 @@ By default, `ezvals run` outputs minimal text optimized for LLM agents and CI pi
 
 ```
 Running evals/...
-Results saved to .ezvals/runs/swift-falcon_2024-01-15T10-30-00Z.json
+Results saved to .ezvals/sessions/default/swift-falcon_a1b2c3d4.json
 ```
 
 ### JSON File Output
 
-Results are always saved as JSON to `.ezvals/runs/` (or custom path via `-o`):
+Results are always saved as JSON to `.ezvals/sessions/` (or custom path via `-o`):
 
 ```json
 {

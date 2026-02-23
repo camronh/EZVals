@@ -5,53 +5,21 @@ and scores it against criteria using an LLM judge (also headless Claude).
 """
 
 import json
-import os
-import subprocess
 from pathlib import Path
 
 from ezvals import eval, EvalContext
 
-ROOT = Path(__file__).parent.parent
+from _common import ROOT, claude_code_target, judge_with_prompt
+
 EVALS_DIR = Path(__file__).parent
-SANDBOX_DIR = str(ROOT / "sandbox")
 PLAN_CONTRACT = (ROOT / "prompts" / "plan_contract.md").read_text()
 JUDGE_PROMPT_TEMPLATE = (ROOT / "prompts" / "judge_prompt.md").read_text()
 CASES = json.loads((EVALS_DIR / "dataset.json").read_text())
 
-# Clean env for subprocess calls - unset CLAUDECODE to allow nested invocations
-_CLEAN_ENV = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
 
-
-def _run_claude(prompt, cwd=None, timeout=180):
-    """Run claude -p and return the parsed JSON payload."""
-    result = subprocess.run(
-        ["claude", "-p", prompt, "--output-format", "json"],
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        env=_CLEAN_ENV,
-    )
-
-    if result.returncode != 0:
-        raise RuntimeError(f"claude exited {result.returncode}: {result.stderr[:500]}")
-
-    return json.loads(result.stdout)
-
-
-def claude_code_target(ctx: EvalContext):
-    """Run Claude Code headless and capture its eval plan."""
-    full_prompt = f"{PLAN_CONTRACT}\n\nTASK:\n{ctx.input}"
-    payload = _run_claude(full_prompt, cwd=SANDBOX_DIR, timeout=180)
-    plan_text = payload.get("result", "")
-
-    ctx.store(
-        output=plan_text,
-        trace_data={
-            "cost_usd": payload.get("total_cost_usd"),
-            "duration_ms": payload.get("duration_ms"),
-        },
-    )
+def plan_target(ctx: EvalContext):
+    """Run Claude Code headless with plan-only contract."""
+    claude_code_target(ctx, prompt_prefix=f"{PLAN_CONTRACT}\n\nTASK:\n")
 
 
 def judge_plan(plan, should_statements):
@@ -60,23 +28,11 @@ def judge_plan(plan, should_statements):
     prompt = JUDGE_PROMPT_TEMPLATE.replace("{{PLAN}}", plan).replace(
         "{{CRITERIA}}", criteria_text
     )
-
-    payload = _run_claude(prompt, timeout=60)
-    judge_text = payload.get("result", "")
-
-    # Strip markdown code fences if present
-    cleaned = judge_text.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-    if cleaned.endswith("```"):
-        cleaned = cleaned[:-3]
-
-    verdict = json.loads(cleaned.strip())
-    return {"passed": verdict["passed"], "notes": verdict.get("reasoning", "")}
+    return judge_with_prompt(prompt, timeout=60)
 
 
 @eval(
-    target=claude_code_target,
+    target=plan_target,
     dataset="skill_eval",
     timeout=300,
     cases=CASES,

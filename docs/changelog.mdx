@@ -5,6 +5,11 @@ description: "All notable changes to EZVals"
 
 ## Unreleased
 
+- Added: Skill sandbox Q&A eval suite — 25 cases testing whether the EZVals skill correctly teaches agents CLI usage, session management, export, and configuration.
+- Added: Shared eval infrastructure (`_common.py`) with robust JSON extraction and retry logic for LLM judge calls via Claude Code headless mode.
+- Fixed: Skill docs had incorrect results storage paths (`.ezvals/runs/` → `.ezvals/sessions/`), missing PNG export format, unimplemented keyboard shortcuts (r, e, f), and wrong jq field name in CLI docs.
+- Changed: Skill docs now emphasize that `ezvals serve` can run evals (not view-only), with prominent callouts in Quick Start and Two Modes sections.
+- Changed: Skill grader docs now recommend LLM judges over code-based checks for evaluating natural language responses, with guidance on holistic pass/fail for subjective evals.
 - Added: Detail view now supports URL-driven comparison mode via repeated `compare_run_id` query params, enabling direct shareable links like `/runs/{run_id}/results/{index}?compare_run_id=...&compare_run_id=...`.
 - Changed: Comparison-table row links now preserve `compare_run_id` params when opening detail pages, so compare context survives new tabs, refresh, and browser navigation.
 - Fixed: Detail compare URLs with a single `compare_run_id` now auto-include the current detail run as base context.

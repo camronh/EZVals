@@ -1,0 +1,127 @@
+[
+  {
+    "id": "run_specific_eval",
+    "input": "How can I run a specific eval only?",
+    "reference": "Use the :: selector syntax: `ezvals run evals.py::test_function_name`. For a specific parametrized variant, use brackets: `ezvals run evals.py::test_math[low]`. You can also run multiple specific evals with commas: `ezvals run evals.py::test_a,test_b`. For specific case IDs, use @: `ezvals run evals.py::test_a@case_id`."
+  },
+  {
+    "id": "install_ezvals",
+    "input": "How do I install EZVals?",
+    "reference": "Install with your preferred package manager: `uv add ezvals --dev`, `pip install ezvals`, or `poetry add ezvals --group dev`."
+  },
+  {
+    "id": "install_skill",
+    "input": "How do I install the EZVals skill for my coding agent?",
+    "reference": "The fastest way is `npx skills add camronh/evals-skill`. Alternatively, if you already have EZVals installed, use `ezvals skills add --claude` (or other target flags like --codex, --cursor). For global install across all projects, add the --global flag."
+  },
+  {
+    "id": "compare_runs",
+    "input": "How do I compare one run to another?",
+    "reference": "Use sessions and run naming. Run evals with `--session name --run-name baseline`, then again with `--run-name improved`. Then use `ezvals serve` to open the web UI, click '+ Compare' in the stats bar, and select runs to compare side by side. You can also use `--compare-runs baseline,improved` to pre-load comparison mode."
+  },
+  {
+    "id": "leave_annotations",
+    "input": "How can I leave annotations on my eval results?",
+    "reference": "In the web UI, click on a result to open the detail page. There's an annotations field where you can add notes. Changes are saved to the results JSON file."
+  },
+  {
+    "id": "run_parallel",
+    "input": "How do I run evals in parallel?",
+    "reference": "Use the -c or --concurrency flag: `ezvals run evals/ -c 4` to run 4 evaluations concurrently. The default is 1 (sequential). You can also set a default in ezvals.json with the concurrency key."
+  },
+  {
+    "id": "filter_by_dataset",
+    "input": "How do I filter evals by dataset?",
+    "reference": "Use the -d or --dataset flag: `ezvals run evals/ -d customer_service`. For multiple datasets, use comma-separated values: `ezvals run evals/ -d customer_service,technical_support`. Works with both `run` and `serve` commands."
+  },
+  {
+    "id": "filter_by_label",
+    "input": "How do I filter evals by label?",
+    "reference": "Use the -l or --label flag: `ezvals run evals/ -l production`. You can specify multiple labels: `ezvals run evals/ -l production -l critical`. Works with both `run` and `serve` commands."
+  },
+  {
+    "id": "export_results",
+    "input": "How do I export my eval results?",
+    "reference": "Use the `ezvals export` command: `ezvals export run.json -f md` for Markdown, `-f csv` for CSV, or `-f json` for JSON. You can also export from the web UI via the overflow (three-dot) menu > Download, which supports JSON, CSV, Markdown, and PNG formats. PNG export creates a chart image with stats and branding — useful for sharing visual reports."
+  },
+  {
+    "id": "results_location",
+    "input": "Where are my eval results stored?",
+    "reference": "Results are saved as JSON files in `.ezvals/sessions/`, organized by session subdirectories. Each run creates a new JSON file named `{run_name}_{run_id}.json` within its session folder (e.g., `.ezvals/sessions/my-session/baseline_1705312200.json`)."
+  },
+  {
+    "id": "set_timeout",
+    "input": "How do I set a timeout for my evals?",
+    "reference": "You can set a timeout per-eval in the decorator: `@eval(timeout=10.0)` for 10 seconds. Or globally via CLI: `ezvals run evals/ --timeout 30.0`. The decorator timeout applies per-eval, while the CLI timeout is global."
+  },
+  {
+    "id": "no_save",
+    "input": "How do I run evals without saving results to disk?",
+    "reference": "Use the --no-save flag: `ezvals run evals/ --no-save`. This prints the run summary as JSON to stdout instead of writing to the .ezvals directory. The summary object includes keys like `total_passed`, `total_evaluations`, `total_errors`, etc."
+  },
+  {
+    "id": "file_defaults",
+    "input": "How do I share configuration across all evals in a file?",
+    "reference": "Define an `ezvals_defaults` dictionary at the module level in your eval file. It can set dataset, labels, default_score_key, metadata, timeout, and evaluators. Individual @eval decorators can override any default. Example: `ezvals_defaults = {\"labels\": [\"production\"], \"default_score_key\": \"quality\"}`."
+  },
+  {
+    "id": "multiple_inputs",
+    "input": "How do I test multiple inputs with one eval function?",
+    "reference": "Use `cases=` in the @eval decorator with a list of dicts. Each dict can have id, input, reference, metadata, etc. Example: `@eval(cases=[{\"input\": \"q1\", \"reference\": \"a1\"}, {\"input\": \"q2\", \"reference\": \"a2\"}])`. Each case generates a separate eval variant."
+  },
+  {
+    "id": "multiple_scores",
+    "input": "How do I add multiple scores to one eval?",
+    "reference": "Use `ctx.store(scores=[...])` with a list of score dicts. Each score needs at least a `key` and one of `value` or `passed`. Example: `ctx.store(scores=[{\"passed\": True, \"key\": \"format\"}, {\"value\": 0.9, \"key\": \"relevance\"}])`."
+  },
+  {
+    "id": "serve_vs_run",
+    "input": "Can ezvals serve also run evals, or is it just for viewing?",
+    "reference": "`ezvals serve` is NOT view-only — it starts a web UI where users can click the Run button to execute evals interactively, or pass `--run` to auto-run on startup. It also supports browsing, comparing, and annotating results. `ezvals run` runs evaluations headlessly with minimal output, optimized for CI/CD pipelines and coding agents. Both save results to the same .ezvals directory."
+  },
+  {
+    "id": "view_previous_run",
+    "input": "How do I view a previous run's results?",
+    "reference": "Use `ezvals serve` with either approach: (1) pass a run JSON file directly: `ezvals serve .ezvals/sessions/default/run_123.json`, or (2) use `--session` to load a session and pick runs from the dropdown: `ezvals serve evals/ --session my-experiment`. Either method is sufficient. If the original eval source file still exists, you can rerun evaluations. If the source was moved or deleted, it works in view-only mode."
+  },
+  {
+    "id": "default_concurrency",
+    "input": "How do I set default concurrency so I don't have to pass -c every time?",
+    "reference": "Set `\"concurrency\"` in your `ezvals.json` config file in the project root. Example: `{\"concurrency\": 4}`. CLI flags always override config values. You can also edit config from the web UI via the settings icon. Alternatively, set the `EZVALS_CONCURRENCY` environment variable."
+  },
+  {
+    "id": "target_hook",
+    "input": "How can I reuse my agent across different evals?",
+    "reference": "Define a target function that runs your agent and populates `ctx.output` (and optionally trace_data, metadata, etc.), then pass it to multiple evals via `target=my_target` in the `@eval` decorator. Each eval function then only contains grading/assertion logic. This keeps agent invocation DRY and target latency is tracked separately from grading."
+  },
+  {
+    "id": "input_loader",
+    "input": "How do I load test cases from a database or external source?",
+    "reference": "Use `input_loader=` in @eval with an async or sync function that returns a list of dicts with `input`, `reference`, and/or `metadata` keys. The loader is called lazily at eval time (not at import). Example: `@eval(dataset=\"dynamic\", input_loader=fetch_from_db)`. Note: input_loader cannot be combined with input=, reference=, or cases=."
+  },
+  {
+    "id": "programmatic_run",
+    "input": "How do I run evals programmatically from Python code?",
+    "reference": "Use the `run` function from ezvals: `from ezvals import run; result = run(path=\"evals/\", concurrency=4, session=\"adhoc\")`. The result dict includes the saved_path and run statistics."
+  },
+  {
+    "id": "keyboard_shortcuts",
+    "input": "What keyboard shortcuts does the web UI support?",
+    "reference": "In the detail page, the web UI supports: up/down arrow keys to navigate between results, and Escape to go back to the table view."
+  },
+  {
+    "id": "limit_evals",
+    "input": "How do I limit the number of evals that run?",
+    "reference": "Use the --limit flag: `ezvals run evals/ --limit 10` to only run the first 10 evaluations. Useful for quick smoke tests or debugging."
+  },
+  {
+    "id": "evaluators",
+    "input": "How do I use evaluators for reusable post-processing checks?",
+    "reference": "Define a function that takes an EvalResult and returns a score dict (with key, passed/value, and optional notes). Then pass it via `evaluators=[fn]` in @eval. Evaluators run after the eval function completes and add additional scores. They're useful for reusable checks like format validation, length checks, or LLM-as-judge patterns across many evals."
+  },
+  {
+    "id": "verbose_output",
+    "input": "How do I see more detail when running evals from the CLI?",
+    "reference": "Use the -v or --verbose flag: `ezvals run evals/ -v`. This shows stdout from eval functions (print statements, logs) while running. You can also set verbose: true in ezvals.json for a persistent default."
+  }
+]

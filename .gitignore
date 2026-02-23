@@ -75,7 +75,6 @@ ezvals/skills/evals/ezvals-docs/
 skills-sandbox/sandbox/.claude/
 skills-sandbox/.ezvals/
 skills-sandbox/.venv/
-skills-sandbox/uv.lock
 
 # Generated frontend build artifacts (packaged at release time, not tracked in commits)
 ezvals/static/index.html
