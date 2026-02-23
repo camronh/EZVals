@@ -963,6 +963,60 @@ def test_case():
     assert "loaded_ds" in r.text
 
 
+def test_rerun_with_invalid_config_name_returns_400(tmp_path: Path, monkeypatch):
+    """Invalid config_name should return 400 with a user-correctable error."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "ezvals.json").write_text(json.dumps({"configs": {"good": {"model": "x"}}}))
+
+    eval_dir = tmp_path / "evals"
+    eval_dir.mkdir()
+    eval_file = eval_dir / "test_config_rerun.py"
+    eval_file.write_text("""
+from ezvals import eval, EvalResult
+
+@eval()
+def case():
+    return EvalResult(input="i", output="o")
+""")
+
+    store = ResultsStore(tmp_path / "runs")
+    run_id = store.save_run(make_summary(), run_id="config-rerun")
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id, path=str(eval_file))
+    client = TestClient(app)
+
+    response = client.post("/api/runs/rerun", json={"config_name": "missing"})
+    assert response.status_code == 400
+    assert "Config 'missing' not found" in response.json()["detail"]
+
+
+def test_rerun_with_stale_active_config_returns_400_without_stuck_thread(tmp_path: Path, monkeypatch):
+    """Stale app.state.config_name should fail before thread startup and not leave run_thread set."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "ezvals.json").write_text(json.dumps({"configs": {"good": {"model": "x"}}}))
+
+    eval_dir = tmp_path / "evals"
+    eval_dir.mkdir()
+    eval_file = eval_dir / "test_stale_config.py"
+    eval_file.write_text("""
+from ezvals import eval, EvalResult
+
+@eval()
+def case():
+    return EvalResult(input="i", output="o")
+""")
+
+    store = ResultsStore(tmp_path / "runs")
+    run_id = store.save_run(make_summary(), run_id="stale-config")
+    app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id, path=str(eval_file))
+    app.state.config_name = "missing"
+    client = TestClient(app)
+
+    response = client.post("/api/runs/rerun")
+    assert response.status_code == 400
+    assert "Config 'missing' not found" in response.json()["detail"]
+    assert app.state.run_thread is None
+
+
 def test_rerun_with_input_loader(tmp_path: Path, monkeypatch):
     """Test that input_loader functions work correctly with server rerun."""
     monkeypatch.chdir(tmp_path)

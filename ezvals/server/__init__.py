@@ -155,6 +155,10 @@ def create_app(
         config = load_config()
         # Use CLI-resolved results_dir (CLI override → config → default, resolved at startup)
         run_store = ResultsStore(results_dir)
+        try:
+            run_config = resolve_run_config(app.state.config_name)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
 
         if not functions:
             if existing_results is not None:
@@ -260,7 +264,6 @@ def create_app(
                     _persist()
 
         def _run_evals():
-            run_config = resolve_run_config(app.state.config_name)
             # Set run metadata context var for this run
             token = run_metadata_var.set({
                 'run_id': run_id,
@@ -524,7 +527,10 @@ def create_app(
 
         # Apply config from request body (atomic with this run)
         if request.config_name is not None:
-            resolve_run_config(request.config_name)  # validate it exists
+            try:
+                resolve_run_config(request.config_name)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc))
             app.state.config_name = request.config_name
             app.state.run_name = request.config_name
 
