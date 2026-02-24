@@ -300,12 +300,13 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             assert error_rows.count() >= 1, "expected at least one error row for coverage"
             expect(error_rows.first.locator(".status-pill")).to_have_text("err")
 
-            # Stats bar shows latency and score breakdown after run.
+            # Time header tooltip shows average latency; chart still shows score breakdown only.
             page.wait_for_selector("#stats-expanded .stats-metric-sm", timeout=UI_TIMEOUT_MS)
-            latency_text = page.locator("#stats-expanded .stats-latency .stats-metric-value").text_content() or ""
-            latency_match = re.search(r"\d+(?:\.\d+)?", latency_text)
-            assert latency_match, "expected avg latency number"
-            assert float(latency_match.group(0)) > 0, "avg latency should be positive"
+            expect(page.locator("#stats-expanded .stats-chart-label", has_text="Latency")).to_have_count(0)
+            latency_title = page.locator("thead th[data-col='latency']").get_attribute("title") or ""
+            latency_match = re.search(r"\(Avg:\s*(\d+(?:\.\d+)?)s\)", latency_title)
+            assert latency_match, "expected avg latency in time header tooltip"
+            assert float(latency_match.group(1)) > 0, "avg latency should be positive"
 
             values = page.locator("#stats-expanded .stats-chart-values .stats-chart-value")
             assert values.count() > 0, "score chart should render values"

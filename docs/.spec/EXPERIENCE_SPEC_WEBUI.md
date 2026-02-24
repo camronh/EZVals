@@ -428,7 +428,8 @@ Shows a bar chart with score breakdown:
 - Each score key has a colored bar (green ≥80%, amber ≥50%, red <50%)
 - Below each bar: percentage prominent on top, ratio smaller below
   - Example: "87%" on first line, "54/62" smaller below
-- Left side shows: session name, run name (dropdown if multiple runs), test count, avg latency
+- Left side shows: session name, run name (dropdown if multiple runs), test count, error count
+- Time column header tooltip shows average latency as `(Avg: 0.50s)`
 
 Compact mode is not available. The stats bar always uses expanded view.
 
@@ -439,7 +440,7 @@ Scenario: Stats update with filters
   Given filters or search are active
   When rows are filtered
   Then stats bar shows "filtered/total" format (e.g., "TESTS 5/20")
-  And latency and score chips calculate from visible rows only
+  And time header average latency and score chips calculate from visible rows only
   And chips show actual filtered counts, not original totals
 ```
 

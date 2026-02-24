@@ -8,7 +8,6 @@ type StatsExpandedProps = {
   hasFilters: boolean
   displayFilteredCount: number | null
   displayChips: ScoreChip[]
-  displayLatency: number
   isComparisonMode: boolean
   normalizedComparisonRuns: NormalizedComparisonRun[]
   comparisonData: Record<string, RunSummary>
@@ -37,7 +36,6 @@ export default function StatsExpanded({
   hasFilters,
   displayFilteredCount,
   displayChips,
-  displayLatency,
   isComparisonMode,
   normalizedComparisonRuns,
   comparisonData,
@@ -264,12 +262,6 @@ export default function StatsExpanded({
           <span className="stats-metric-value text-accent-error">{stats.totalErrors}</span>
           <span className="stats-metric-label">errors</span>
         </div>
-        {displayLatency > 0 ? (
-          <div className="stats-metric stats-metric-sm stats-latency">
-            <span className="stats-metric-value">{displayLatency.toFixed(2)}<span className="stats-metric-unit">s</span></span>
-            <span className="stats-metric-label">avg latency</span>
-          </div>
-        ) : null}
       </div>
     </>
   ) : null

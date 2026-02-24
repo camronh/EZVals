@@ -13,6 +13,8 @@ description: "All notable changes to EZVals"
 - Changed: Detail view now restores pane layout from session state so resized horizontal and vertical splits carry across result-to-result navigation.
 - Fixed: Reference pane height no longer snaps back during detail navigation after a user resize.
 - Tests: Added E2E regression coverage for detail pane persistence across eval navigation, including a high reference-pane resize case.
+- Changed: Single-run average latency is now shown in the `Time` table header tooltip as `(Avg: <value>s)` instead of occupying space in the stats panel/chart.
+- Tests: Updated E2E coverage to assert average latency appears in the `Time` header tooltip and remains positive after a run completes.
 
 ## 0.1.9 - 2026-02-23
 

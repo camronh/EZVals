@@ -158,6 +158,18 @@ export default function ResultsTable({
     })
   }, [cancelDismiss, data?.run_id])
 
+  let avgVisibleLatency: number | null = null
+  let latencyTotal = 0
+  let latencyCount = 0
+  rows.forEach((row) => {
+    const lat = row.result.latency
+    if (typeof lat === 'number' && !Number.isNaN(lat)) {
+      latencyTotal += lat
+      latencyCount += 1
+    }
+  })
+  if (latencyCount > 0) avgVisibleLatency = latencyTotal / latencyCount
+
   return (
     <>
       <table id="results-table" data-run-id={data?.run_id} className="w-full table-fixed border-collapse text-sm text-theme-text">
@@ -178,6 +190,7 @@ export default function ResultsTable({
               key={col.key}
               data-col={col.key}
               data-type={col.type}
+              title={col.key === 'latency' && avgVisibleLatency != null ? `(Avg: ${avgVisibleLatency.toFixed(2)}s)` : undefined}
               ref={(el) => { if (headerRefs?.current) headerRefs.current[col.key] = el }}
               style={{ width: colWidths[col.key] ? `${colWidths[col.key]}px` : col.width, textAlign: col.align }}
               className={`relative bg-theme-bg px-3 py-2 text-[10px] font-medium uppercase tracking-wider text-theme-text-muted ${hiddenSet.has(col.key) ? 'hidden' : ''}`}

@@ -1490,7 +1490,6 @@ export default function DashboardPage() {
           hasFilters={hasFilters}
           displayFilteredCount={displayFilteredCount}
           displayChips={displayChips}
-          displayLatency={displayLatency}
           isComparisonMode={isComparisonMode}
           normalizedComparisonRuns={normalizedComparisonRuns}
           comparisonData={comparisonData}
