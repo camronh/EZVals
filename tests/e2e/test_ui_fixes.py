@@ -109,6 +109,49 @@ def make_summary_with_messages():
     }
 
 
+def make_summary_with_two_detail_rows():
+    return {
+        "total_evaluations": 2,
+        "total_functions": 2,
+        "total_errors": 0,
+        "total_passed": 2,
+        "total_with_scores": 2,
+        "average_latency": 0.4,
+        "results": [
+            {
+                "function": "first_case",
+                "dataset": "ds",
+                "labels": [],
+                "result": {
+                    "input": "input 1",
+                    "output": "output 1",
+                    "reference": "ref 1",
+                    "scores": [{"key": "correct", "passed": True}],
+                    "error": None,
+                    "latency": 0.3,
+                    "metadata": None,
+                    "status": "completed",
+                },
+            },
+            {
+                "function": "second_case",
+                "dataset": "ds",
+                "labels": [],
+                "result": {
+                    "input": "input 2",
+                    "output": "output 2",
+                    "reference": "ref 2",
+                    "scores": [{"key": "correct", "passed": True}],
+                    "error": None,
+                    "latency": 0.5,
+                    "metadata": None,
+                    "status": "completed",
+                },
+            },
+        ],
+    }
+
+
 def make_summary_with_long_chip_text():
     long_dataset = "dataset_with_an_extremely_long_name_that_should_be_truncated_in_chip_ui_components"
     long_label = "label_with_an_extremely_long_name_that_should_be_truncated_in_chip_ui_components"
@@ -747,6 +790,78 @@ class TestDetailLayoutDefaults:
                 assert dims["refY"] > dims["inputY"]
                 assert dims["refWidth"] < dims["mainWidth"] * 0.8
                 assert dims["refX"] + dims["refWidth"] <= dims["outputX"] + 2
+
+                browser.close()
+
+    def test_detail_split_persists_across_eval_navigation(self, tmp_path):
+        store = ResultsStore(tmp_path / "runs")
+        run_id = store.save_run(make_summary_with_two_detail_rows(), "2024-01-01T00-00-00Z")
+        app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
+
+        with run_server(app) as url:
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page(viewport={"width": 1200, "height": 900})
+                page.goto(f"{url}/runs/{run_id}/results/0")
+                page.wait_for_selector("#main-panel")
+                page.wait_for_selector("#sidebar-panel")
+
+                sidebar_box = page.locator("#sidebar-panel").bounding_box()
+                assert sidebar_box is not None
+                resize_x = sidebar_box["x"] - 1
+                resize_y = sidebar_box["y"] + (sidebar_box["height"] / 2)
+                page.mouse.move(resize_x, resize_y)
+                page.mouse.down()
+                page.mouse.move(resize_x - 70, resize_y)
+                page.mouse.up()
+
+                ref_panel_box = page.locator("#ref-panel").bounding_box()
+                assert ref_panel_box is not None
+                ref_resize_x = ref_panel_box["x"] + (ref_panel_box["width"] / 2)
+                ref_resize_y = ref_panel_box["y"] - 1
+                page.mouse.move(ref_resize_x, ref_resize_y)
+                page.mouse.down()
+                page.mouse.move(ref_resize_x, ref_resize_y - 220)
+                page.mouse.up()
+
+                resized = page.evaluate(
+                    """
+                    () => ({
+                      sidebar: document.querySelector('#sidebar-panel')?.getBoundingClientRect().width || 0,
+                      ref: document.querySelector('#ref-panel')?.getBoundingClientRect().height || 0,
+                    })
+                    """
+                )
+                assert resized["ref"] > 300
+                page.wait_for_function(
+                    """
+                    ([sidebarWidth, refHeight]) => {
+                      const raw = sessionStorage.getItem('ezvals:detailLayout');
+                      if (!raw) return false;
+                      const parsed = JSON.parse(raw);
+                      return Math.abs((parsed.sidebarWidth || 0) - sidebarWidth) < 3
+                        && Math.abs((parsed.refHeight || 0) - refHeight) < 3;
+                    }
+                    """,
+                    arg=[resized["sidebar"], resized["ref"]],
+                )
+
+                page.keyboard.press("ArrowDown")
+                page.wait_for_url(re.compile(r"/results/1$"))
+                page.wait_for_selector("#sidebar-panel")
+                page.wait_for_selector("#ref-panel")
+
+                next_dims = page.evaluate(
+                    """
+                    () => ({
+                      sidebar: document.querySelector('#sidebar-panel')?.getBoundingClientRect().width || 0,
+                      ref: document.querySelector('#ref-panel')?.getBoundingClientRect().height || 0,
+                    })
+                    """
+                )
+
+                assert abs(next_dims["sidebar"] - resized["sidebar"]) < 3
+                assert abs(next_dims["ref"] - resized["ref"]) < 3
 
                 browser.close()
 

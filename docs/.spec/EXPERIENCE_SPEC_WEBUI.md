@@ -177,6 +177,12 @@ Scenario: Navigate between results
 
   When the user presses Escape
   Then the user returns to the main table
+
+Scenario: Detail pane sizes persist in-session
+  Given the user is on a detail page
+  And the user resizes one or more detail panes
+  When the user navigates to another detail result in the same browser session
+  Then the resized pane sizes remain applied
 ```
 
 ---

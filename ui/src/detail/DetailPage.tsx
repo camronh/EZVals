@@ -1,11 +1,12 @@
 import type { MouseEvent as ReactMouseEvent } from 'react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ComparisonRun, NormalizedComparisonRun, RunResultRow, Score, TraceData } from '../types'
 import { getResultKey, normalizeComparisonRuns } from '../dashboard/utils'
 import { DataViewer, extractToolNamesFromMessages, getRawText } from '../components/DataViewer'
 
 const DETAIL_BODY_CLASS = 'min-h-screen bg-blue-50/40 font-sans text-zinc-800 dark:bg-neutral-950 dark:text-zinc-100'
 const COMPARISON_STORAGE_KEY = 'ezvals:comparisonRuns'
+const DETAIL_LAYOUT_STORAGE_KEY = 'ezvals:detailLayout'
 const DETAIL_HEADER_HEIGHT = 120
 
 type ResultDetailPayload = {
@@ -235,6 +236,21 @@ export default function DetailPage() {
   const buildDetailHref = useCallback((targetRunId: string, targetIndex: number) => {
     return `/runs/${targetRunId}/results/${targetIndex}${detailSearchSuffix}`
   }, [detailSearchSuffix])
+  const savedLayout = useMemo(() => {
+    try {
+      const raw = sessionStorage.getItem(DETAIL_LAYOUT_STORAGE_KEY)
+      if (!raw) return null
+      return JSON.parse(raw) as {
+        inputWidth?: number
+        comparisonInputWidth?: number
+        refHeight?: number
+        comparisonContextHeight?: number
+        sidebarWidth?: number
+      }
+    } catch {
+      return null
+    }
+  }, [])
 
   const [data, setData] = useState<ResultDetailPayload | null>(null)
   const [loading, setLoading] = useState(true)
@@ -255,17 +271,20 @@ export default function DetailPage() {
   const [scoreDraftNotes, setScoreDraftNotes] = useState('')
   const [scoreSaving, setScoreSaving] = useState(false)
   const [scoreError, setScoreError] = useState<string | null>(null)
-  const [inputWidth, setInputWidth] = useState(() => (window.innerWidth < 1100 ? 55 : 50))
-  const [comparisonInputWidth, setComparisonInputWidth] = useState(() => (window.innerWidth < 1100 ? 55 : 50))
+  const [inputWidth, setInputWidth] = useState(() => savedLayout?.inputWidth ?? (window.innerWidth < 1100 ? 55 : 50))
+  const [comparisonInputWidth, setComparisonInputWidth] = useState(() => savedLayout?.comparisonInputWidth ?? (window.innerWidth < 1100 ? 55 : 50))
   const [refHeight, setRefHeight] = useState(() => {
+    if (savedLayout?.refHeight != null) return savedLayout.refHeight
     const availableHeight = Math.max(200, window.innerHeight - DETAIL_HEADER_HEIGHT)
     return Math.max(100, Math.min(150, Math.floor(availableHeight * 0.3)))
   })
   const [comparisonContextHeight, setComparisonContextHeight] = useState(() => {
+    if (savedLayout?.comparisonContextHeight != null) return savedLayout.comparisonContextHeight
     const availableHeight = Math.max(240, window.innerHeight - DETAIL_HEADER_HEIGHT)
     return Math.max(160, Math.min(360, Math.floor(availableHeight * 0.35)))
   })
   const [sidebarWidth, setSidebarWidth] = useState(() => {
+    if (savedLayout?.sidebarWidth != null) return savedLayout.sidebarWidth
     return Math.max(220, Math.min(320, Math.floor(window.innerWidth * 0.28)))
   })
   const resizingRef = useRef<ResizeState | null>(null)
@@ -319,7 +338,6 @@ export default function DetailPage() {
       setRefHeight((prev) => Math.min(prev, maxRefHeight))
       setComparisonContextHeight((prev) => Math.min(prev, maxComparisonContextHeight))
     }
-    handleViewportResize()
     window.addEventListener('resize', handleViewportResize)
     return () => window.removeEventListener('resize', handleViewportResize)
   }, [])
@@ -386,6 +404,13 @@ export default function DetailPage() {
     loadComparison()
     return () => { active = false }
   }, [comparisonRuns, data, isComparisonMode])
+
+  useLayoutEffect(() => {
+    sessionStorage.setItem(
+      DETAIL_LAYOUT_STORAGE_KEY,
+      JSON.stringify({ inputWidth, comparisonInputWidth, refHeight, comparisonContextHeight, sidebarWidth }),
+    )
+  }, [comparisonContextHeight, comparisonInputWidth, inputWidth, refHeight, sidebarWidth])
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {

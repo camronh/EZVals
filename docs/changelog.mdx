@@ -10,6 +10,9 @@ description: "All notable changes to EZVals"
 - Changed: `results_dir` in `ezvals.json` is now treated as a base directory, with runs always stored under `{results_dir}/.ezvals/sessions`.
 - Changed: Default config now sets `"results_dir": "."`, preserving default storage at `./.ezvals/sessions` while removing full sessions-path config complexity.
 - Tests: Added CLI unit coverage to verify run/save and rename behavior when `results_dir` is configured as a base directory.
+- Changed: Detail view now restores pane layout from session state so resized horizontal and vertical splits carry across result-to-result navigation.
+- Fixed: Reference pane height no longer snaps back during detail navigation after a user resize.
+- Tests: Added E2E regression coverage for detail pane persistence across eval navigation, including a high reference-pane resize case.
 
 ## 0.1.9 - 2026-02-23
 
