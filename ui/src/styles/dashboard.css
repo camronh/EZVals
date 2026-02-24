@@ -779,6 +779,160 @@ tr[data-row="main"] {
   color: var(--accent-link);
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   RUN PICKER DROPDOWN
+   ═══════════════════════════════════════════════════════════════ */
+.run-picker {
+  position: fixed;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  max-height: 280px;
+  overflow-y: auto;
+  min-width: 240px;
+  outline: none;
+  padding: 4px;
+}
+.run-picker:focus { outline: none; }
+
+.run-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.1s;
+  position: relative;
+}
+.run-picker-row:hover,
+.run-picker-row.focused {
+  background: var(--bg-elevated);
+}
+.run-picker-row.selected {
+  background: rgba(59, 130, 246, 0.08);
+  border-left: 2px solid var(--accent-link);
+  padding-left: 6px;
+}
+
+/* Selection dot */
+.run-picker-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1.5px solid var(--border-subtle);
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+.run-picker-dot.active {
+  background: var(--accent-link);
+  border-color: var(--accent-link);
+}
+
+/* Name area */
+.run-picker-name-area {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.run-picker-run-name {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.run-picker-row.selected .run-picker-run-name {
+  font-weight: 600;
+  color: var(--accent-link);
+}
+.run-picker-timestamp {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Action buttons - opacity toggle for spatial stability */
+.run-picker-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.run-picker-row:hover .run-picker-actions,
+.run-picker-row.focused .run-picker-actions,
+.run-picker-row.selected .run-picker-actions {
+  opacity: 1;
+}
+.run-picker-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.1s, background 0.1s;
+}
+.run-picker-action-btn:hover {
+  color: var(--text);
+  background: var(--bg-secondary);
+}
+.run-picker-action-btn.copied {
+  color: #34d399;
+}
+
+/* Inline edit */
+.run-picker-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.run-picker-edit-input {
+  flex: 1;
+  min-width: 0;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  background: var(--bg);
+  border: 1px solid var(--accent-link);
+  border-radius: 4px;
+  padding: 2px 6px;
+  color: var(--text);
+  outline: none;
+}
+.run-picker-edit-input:focus {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+.run-picker-key-hints {
+  display: flex;
+  gap: 3px;
+  flex-shrink: 0;
+}
+.run-picker-key-hints kbd {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
 /* Adjust stats-right width in comparison mode for more horizontal space */
 .stats-expanded.comparison-mode .stats-right {
   flex: 1 1 auto;

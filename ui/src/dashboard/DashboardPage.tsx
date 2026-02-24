@@ -40,6 +40,7 @@ import SettingsModal from './components/SettingsModal'
 import ComparisonTable from './components/ComparisonTable'
 import ResultsTable from './components/ResultsTable'
 import FloatingMenu from './components/FloatingMenu'
+import RunPickerDropdown from './components/RunPickerDropdown'
 import PngExportModal from './components/PngExportModal'
 
 const DASHBOARD_BODY_CLASS = 'h-screen flex flex-col bg-theme-bg font-sans text-theme-text'
@@ -1408,6 +1409,19 @@ export default function DashboardPage() {
     }
   }, [data, hasRunBefore, loadResults, runNameDraft])
 
+  const handleRenameRunById = useCallback(async (runId: string, newName: string) => {
+    try {
+      await fetch(`/api/runs/${runId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ run_name: newName }),
+      })
+      loadResults(true)
+    } catch (err) {
+      console.error('Rename failed:', err)
+    }
+  }, [loadResults])
+
   const activeFilterCount = useMemo(() => {
     let count = 0
     filters.valueRules.forEach(() => { count += 1 })
@@ -1586,31 +1600,24 @@ export default function DashboardPage() {
         sessionName={data?.session_name || ''}
       />
 
-      <FloatingMenu anchorRef={runDropdownExpandedRef} open={runDropdownOpen} onClose={() => setRunDropdownOpen(false)}>
-        {sessionRuns.map((run) => {
-          const isCurrent = run.run_id === data?.run_id
-          return (
-            <button
-              key={run.run_id}
-              data-run-id={run.run_id}
-              className={`compare-option${isCurrent ? ' current-run' : ''}`}
-              onClick={async () => {
-                if (run.run_id !== data?.run_id) {
-                  try {
-                    await fetch(`/api/runs/${encodeURIComponent(run.run_id)}/activate`, { method: 'POST' })
-                  } catch {
-                    // ignore
-                  }
-                  loadResults(true)
-                }
-                setRunDropdownOpen(false)
-              }}
-            >
-              {run.run_name || run.run_id} <span className="text-zinc-500">({formatRunTimestamp(run.timestamp)})</span>
-            </button>
-          )
-        })}
-      </FloatingMenu>
+      <RunPickerDropdown
+        anchorRef={runDropdownExpandedRef}
+        open={runDropdownOpen}
+        onClose={() => setRunDropdownOpen(false)}
+        sessionRuns={sessionRuns}
+        activeRunId={data?.run_id}
+        onSelectRun={async (runId) => {
+          if (runId !== data?.run_id) {
+            try {
+              await fetch(`/api/runs/${encodeURIComponent(runId)}/activate`, { method: 'POST' })
+            } catch {
+              // ignore
+            }
+            loadResults(true)
+          }
+        }}
+        onRenameRun={handleRenameRunById}
+      />
 
       <FloatingMenu anchorRef={compareDropdownAnchorRef} open={compareDropdownOpen} onClose={() => setCompareDropdownOpen(false)}>
         {sessionRuns.filter((r) => !normalizedComparisonRuns.find((run) => run.runId === r.run_id) && r.run_id !== data?.run_id).length === 0 ? (

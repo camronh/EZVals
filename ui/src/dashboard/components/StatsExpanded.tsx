@@ -155,16 +155,7 @@ export default function StatsExpanded({
             <div className="stats-info-row group">
               <span className="stats-info-label">run</span>
               <div className="stats-run-row-main">
-                {editingRunName ? (
-                  <input
-                    className="font-mono text-sm bg-zinc-800 border border-zinc-600 rounded px-1 w-28 text-white outline-none focus:border-zinc-500"
-                    value={runNameDraft}
-                    onChange={(e) => setRunNameDraft(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') onRunNameSave(); if (e.key === 'Escape') setEditingRunName(false) }}
-                    onBlur={() => setEditingRunName(false)}
-                    autoFocus
-                  />
-                ) : canSwitchRuns ? (
+                {canSwitchRuns ? (
                   <button
                     ref={runDropdownExpandedRef}
                     id="run-dropdown-expanded"
@@ -174,27 +165,30 @@ export default function StatsExpanded({
                   >
                     {currentRunLabel} <span className="dropdown-arrow">v</span>
                   </button>
+                ) : editingRunName ? (
+                  <input
+                    className="font-mono text-sm bg-zinc-800 border border-zinc-600 rounded px-1 w-28 text-white outline-none focus:border-zinc-500"
+                    value={runNameDraft}
+                    onChange={(e) => setRunNameDraft(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') onRunNameSave(); if (e.key === 'Escape') setEditingRunName(false) }}
+                    onBlur={() => setEditingRunName(false)}
+                    autoFocus
+                  />
                 ) : (
-                  <CopyableText text={stats.runName ?? ''} className="stats-run copyable cursor-pointer hover:text-zinc-300" />
+                  <>
+                    <CopyableText text={stats.runName ?? ''} className="stats-run copyable cursor-pointer hover:text-zinc-300" />
+                    <button
+                      className="edit-run-btn-expanded ml-1 text-zinc-600 transition hover:text-zinc-400"
+                      title="Rename run"
+                      onClick={() => {
+                        setEditingRunName(true)
+                        setRunNameDraft(stats.runName || '')
+                      }}
+                    >
+                      <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><use href="#icon-pencil"></use></svg>
+                    </button>
+                  </>
                 )}
-                <button
-                  className="edit-run-btn-expanded ml-1 text-zinc-600 transition hover:text-zinc-400"
-                  title={editingRunName ? 'Save' : 'Rename run'}
-                  onClick={() => {
-                    if (editingRunName) {
-                      onRunNameSave()
-                    } else {
-                      setEditingRunName(true)
-                      setRunNameDraft(stats.runName || '')
-                    }
-                  }}
-                >
-                  {editingRunName ? (
-                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5" /></svg>
-                  ) : (
-                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><use href="#icon-pencil"></use></svg>
-                  )}
-                </button>
               </div>
             </div>
           ) : null}
