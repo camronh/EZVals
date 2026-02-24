@@ -430,7 +430,15 @@ export default function DashboardPage() {
   const debouncedSearch = useDebouncedValue(search, 120)
   const normalizedComparisonRuns = useMemo(() => normalizeComparisonRuns(comparisonRuns), [comparisonRuns])
   const isComparisonMode = normalizedComparisonRuns.length > 1
-  const comparisonMatrix = useMemo<Record<string, ComparisonMatrixEntry>>(() => buildComparisonMatrix(comparisonData), [comparisonData])
+  const comparisonDataForMode = useMemo<Record<string, RunSummary>>(() => {
+    if (!isComparisonMode) return comparisonData
+    const selectedRunIds = new Set(normalizedComparisonRuns.map((run) => run.runId))
+    return Object.fromEntries(Object.entries(comparisonData).filter(([runId]) => selectedRunIds.has(runId)))
+  }, [comparisonData, isComparisonMode, normalizedComparisonRuns])
+  const comparisonMatrix = useMemo<Record<string, ComparisonMatrixEntry>>(
+    () => buildComparisonMatrix(comparisonDataForMode),
+    [comparisonDataForMode],
+  )
   const comparisonDataCount = useMemo(() => Object.keys(comparisonData).length, [comparisonData])
   const searchColumnsSet = useMemo(() => new Set(searchColumns.filter((key) => DEFAULT_SEARCH_COLS.includes(key))), [searchColumns])
   const hasFilters = isFilterActive(filters, debouncedSearch)
@@ -744,10 +752,10 @@ export default function DashboardPage() {
 
   const allResultsForFilters = useMemo(() => {
     if (isComparisonMode) {
-      return Object.values(comparisonData).flatMap((run) => run?.results || [])
+      return Object.values(comparisonDataForMode).flatMap((run) => run?.results || [])
     }
     return data?.results || []
-  }, [comparisonData, data, isComparisonMode])
+  }, [comparisonDataForMode, data, isComparisonMode])
 
   const scoreKeysMeta = useMemo(() => computeScoreKeyMeta(allResultsForFilters), [allResultsForFilters])
   const datasetLabels = useMemo(() => computeDatasetLabels(allResultsForFilters), [allResultsForFilters])
