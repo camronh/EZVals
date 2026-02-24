@@ -157,6 +157,7 @@ export default function RunPickerDropdown({
             className={`run-picker-row${isSelected ? ' selected' : ''}${isFocused ? ' focused' : ''}`}
             role="option"
             aria-selected={isSelected}
+            data-run-id={run.run_id}
             onClick={() => {
               if (!isEditing) {
                 onSelectRun(run.run_id)
