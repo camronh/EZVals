@@ -75,7 +75,7 @@ export default function StatsExpanded({
           {stats.sessionName ? (
             <div className="stats-info-row">
               <span className="stats-info-label">session</span>
-              <CopyableText text={stats.sessionName ?? ''} className="stats-session copyable cursor-pointer hover:text-zinc-300" />
+              <CopyableText text={stats.sessionName ?? ''} className="stats-session copyable cursor-pointer hover:text-theme-text-secondary" />
             </div>
           ) : null}
           <div className="stats-info-row"><span className="stats-info-label">comparing</span></div>
@@ -91,7 +91,7 @@ export default function StatsExpanded({
                 >
                   <span className="w-2 h-2 rounded-full" style={{ background: run.color }}></span>
                   <span className="comparison-chip-name truncate max-w-[120px]">{run.runName}</span>
-                  <span className="text-zinc-500">({testCount})</span>
+                  <span className="text-theme-text-muted">({testCount})</span>
                   {idx > 0 ? (
                     <button
                       className="move-comparison ml-1 hover:text-white text-[12px] leading-none"
@@ -130,7 +130,7 @@ export default function StatsExpanded({
               <button
                 ref={addCompareAnchorRef}
                 id="add-more-compare"
-                className="rounded-full px-2 py-1 text-[10px] bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300"
+                className="rounded-full px-2 py-1 text-[10px] bg-theme-bg-elevated text-theme-text-muted hover:bg-theme-btn-bg-hover hover:text-theme-text-secondary"
                 title="Add another run to compare"
                 onClick={onAddMoreCompareToggle}
               >
@@ -148,7 +148,7 @@ export default function StatsExpanded({
           {stats.sessionName ? (
             <div className="stats-info-row">
               <span className="stats-info-label">session</span>
-              <CopyableText text={stats.sessionName ?? ''} className="stats-session copyable cursor-pointer hover:text-zinc-300" />
+              <CopyableText text={stats.sessionName ?? ''} className="stats-session copyable cursor-pointer hover:text-theme-text-secondary" />
             </div>
           ) : null}
           {stats.runName ? (
@@ -167,7 +167,7 @@ export default function StatsExpanded({
                   </button>
                 ) : editingRunName ? (
                   <input
-                    className="font-mono text-sm bg-zinc-800 border border-zinc-600 rounded px-1 w-28 text-white outline-none focus:border-zinc-500"
+                    className="font-mono text-sm bg-theme-bg-elevated border border-theme-border rounded px-1 w-28 text-theme-text outline-none focus:border-blue-500"
                     value={runNameDraft}
                     onChange={(e) => setRunNameDraft(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') onRunNameSave(); if (e.key === 'Escape') setEditingRunName(false) }}
@@ -176,9 +176,9 @@ export default function StatsExpanded({
                   />
                 ) : (
                   <>
-                    <CopyableText text={stats.runName ?? ''} className="stats-run copyable cursor-pointer hover:text-zinc-300" />
+                    <CopyableText text={stats.runName ?? ''} className="stats-run copyable cursor-pointer hover:text-theme-text-secondary" />
                     <button
-                      className="edit-run-btn-expanded ml-1 text-zinc-600 transition hover:text-zinc-400"
+                      className="edit-run-btn-expanded ml-1 text-theme-text-muted transition hover:text-theme-text-secondary"
                       title="Rename run"
                       onClick={() => {
                         setEditingRunName(true)
@@ -205,6 +205,7 @@ export default function StatsExpanded({
                   <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <use href="#icon-plus"></use>
                   </svg>
+                  <span>New run</span>
                 </button>
                 <button
                   ref={compareDropdownAnchorRef}
@@ -218,6 +219,7 @@ export default function StatsExpanded({
                   <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <use href="#icon-compare"></use>
                   </svg>
+                  <span>Compare</span>
                 </button>
               </div>
             </div>

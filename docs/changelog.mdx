@@ -6,6 +6,18 @@ description: "All notable changes to EZVals"
 ## Unreleased
 
 - Changed: Run picker dropdown now uses a listbox-style UI with inline rename, copy-to-clipboard feedback, keyboard navigation, and selection indicators replacing the old FloatingMenu.
+- Changed: Replaced all `alert()` calls with inline toast notifications that auto-dismiss after 4 seconds.
+- Fixed: Hardcoded dark-mode zinc colors in filter panel, more menu, columns menu, and comparison chips now use theme-aware CSS variables, fixing broken light-mode rendering.
+- Changed: Table rows are now clickable to open the detail view (excluding checkboxes and annotation indicators).
+- Changed: Column resize handles now show a blue highlight on hover for discoverability.
+- Changed: "New run" and "Compare" action buttons in the stats panel now have visible text labels.
+- Changed: Columns and Export controls promoted from the overflow menu to the main header toolbar; overflow menu now only contains "Reload Server".
+- Added: Filter panel three-state toggle legend (Include/Exclude/Any) with color indicators and title attributes.
+- Changed: Detail page header height reduced from 120px to 80px to maximize content area.
+- Changed: Footer removed to reclaim vertical space.
+- Added: Empty state message ("No results yet") when the results table has no rows.
+- Added: Dropdown menus now auto-flip above the anchor when they would overflow the viewport bottom.
+- Tests: Updated E2E tests for toast notifications, header toolbar layout, and clickable row blur behavior.
 
 - Fixed: Comparison-mode output columns now render per-run output content correctly for URL-driven compare sessions, even when the active run is not one of the selected compared runs.
 - Tests: Added E2E regression coverage for URL-only `compare_run_id` startup to verify compared-run output text appears and unrelated active-run rows are excluded.

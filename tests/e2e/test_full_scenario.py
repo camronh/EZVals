@@ -449,7 +449,7 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             input_field = page.locator(".stats-info-row input")
             expect(input_field).to_be_visible()
             input_field.fill("AAAA")
-            page.locator("body").click()
+            page.locator(".stats-info-label").first.click()
             expect(run_name_el).to_have_text(run_name)
 
             run_row.hover()
@@ -896,8 +896,7 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             page.wait_for_selector("#results-table")
 
             # Export JSON/CSV and validate schema columns.
-            # Export is now in its own dropdown (not settings modal)
-            page.locator("#more-menu-toggle").click()
+            # Export is now a direct header button (moved out of overflow menu)
             page.locator("#export-toggle").click()
             page.wait_for_selector("#export-menu:not(.hidden)")
             with page.expect_download() as download_info:
@@ -910,9 +909,8 @@ def test_full_serve_flow_end_to_end(tmp_path, monkeypatch):
             assert len(exported.get("results", [])) == expected_count, "JSON export should include all results"
             # Wait for menu to close after export (may be auto-closed or need to close manually)
             page.wait_for_timeout(300)
-            page.click("body")  # Close if still open
+            page.keyboard.press("Escape")  # Close if still open
             page.wait_for_timeout(100)
-            page.locator("#more-menu-toggle").click()
             page.locator("#export-toggle").click()
             page.wait_for_selector("#export-menu:not(.hidden)")
             with page.expect_download() as download_info:

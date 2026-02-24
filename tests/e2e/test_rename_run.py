@@ -184,7 +184,7 @@ def test_rename_run_blur_cancels(tmp_path):
             # Type new name then click elsewhere to blur
             input_field = page.locator(".stats-info-row input")
             input_field.fill("should-not-save-blur")
-            page.locator("body").click()  # Click elsewhere to trigger blur
+            page.locator(".stats-info-label").first.click()  # Click elsewhere to trigger blur
 
             # Wait for UI to refresh and verify original name remains
             page.wait_for_timeout(500)

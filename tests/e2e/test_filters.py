@@ -215,7 +215,6 @@ def test_search_column_scope_is_independent_from_visible_columns(tmp_path):
             expect(rows).to_have_count(1)
             expect(rows.first).to_contain_text("f2")
 
-            page.click("#more-menu-toggle")
             page.click("#columns-toggle")
             page.wait_for_selector("#columns-menu.active")
             output_search_cb = page.locator("#columns-menu input[data-search-col='output']")

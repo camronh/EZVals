@@ -7,7 +7,7 @@ import { DataViewer, extractToolNamesFromMessages, getRawText } from '../compone
 const DETAIL_BODY_CLASS = 'min-h-screen bg-blue-50/40 font-sans text-zinc-800 dark:bg-neutral-950 dark:text-zinc-100'
 const COMPARISON_STORAGE_KEY = 'ezvals:comparisonRuns'
 const DETAIL_LAYOUT_STORAGE_KEY = 'ezvals:detailLayout'
-const DETAIL_HEADER_HEIGHT = 120
+const DETAIL_HEADER_HEIGHT = 80
 
 type ResultDetailPayload = {
   result: RunResultRow

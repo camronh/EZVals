@@ -208,6 +208,13 @@ export default function ResultsTable({
         </tr>
       </thead>
       <tbody className="divide-y divide-theme-border-subtle">
+        {rows.length === 0 && (
+          <tr>
+            <td colSpan={columnDefs.length + 1} className="px-4 py-12 text-center text-sm text-theme-text-muted">
+              No results yet
+            </td>
+          </tr>
+        )}
         {rows.map((row) => {
           const result = row.result
           const annotationText = result.annotation?.trim()
@@ -293,7 +300,13 @@ export default function ResultsTable({
                 data-has-url={row.hasUrl}
                 data-has-messages={row.hasMessages}
                 data-has-error={row.hasError}
-                className={`group hover:bg-theme-bg-elevated/50 transition-colors ${isNotStarted ? 'opacity-60' : ''}`}
+                className={`group hover:bg-theme-bg-elevated/50 transition-colors cursor-pointer ${isNotStarted ? 'opacity-60' : ''}`}
+                onClick={(e) => {
+                  const target = e.target as HTMLElement
+                  if (target.closest('input[type=checkbox]') || target.closest('[data-annotation-indicator]') || target.closest('a')) return
+                  sessionStorage.setItem('ezvals:scrollY', window.scrollY.toString())
+                  window.location.href = `/runs/${data?.run_id}/results/${row.index}`
+                }}
               >
                 <td className="px-2 py-3 text-center align-middle">
                   <input
