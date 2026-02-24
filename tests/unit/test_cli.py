@@ -425,6 +425,42 @@ def test_nosave():
             # No file should be saved
             assert not Path('.ezvals/sessions').exists() or len(list(Path('.ezvals/sessions').rglob('*.json'))) == 0
 
+    def test_run_uses_config_results_dir_as_base_dir(self):
+        with self.runner.isolated_filesystem():
+            Path('ezvals.json').write_text(json.dumps({
+                "results_dir": "workspace-a",
+            }))
+            with open('test_base_dir.py', 'w') as f:
+                f.write("""
+from ezvals import eval, EvalResult
+
+@eval()
+def test_base_dir():
+    return EvalResult(input="x", output="y")
+""")
+
+            result = self.runner.invoke(cli, ['run', 'test_base_dir.py'])
+            assert result.exit_code == 0
+
+            session_dir = Path('workspace-a/.ezvals/sessions/default')
+            run_files = list(session_dir.glob('*.json'))
+            assert len(run_files) == 1
+
+    def test_rename_uses_config_results_dir_as_base_dir(self):
+        with self.runner.isolated_filesystem():
+            Path('ezvals.json').write_text(json.dumps({
+                "results_dir": "workspace-b",
+            }))
+            store = ResultsStore("workspace-b/.ezvals/sessions")
+            summary = {"results": [], "total_evaluations": 0}
+            run_id = store.save_run(summary, run_id="run001", session_name="s1", run_name="old-name")
+
+            result = self.runner.invoke(cli, ['run', '--rename', run_id, 'new-name', '--session', 's1'])
+            assert result.exit_code == 0
+
+            renamed_files = list(Path('workspace-b/.ezvals/sessions/s1').glob('new-name_*.json'))
+            assert len(renamed_files) == 1
+
     def test_session_flag(self):
         """--session sets session_name in stored JSON"""
         with self.runner.isolated_filesystem():

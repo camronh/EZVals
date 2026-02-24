@@ -422,7 +422,7 @@ EZVals supports a `ezvals.json` config file for persisting default CLI options. 
 ```json
 {
   "concurrency": 1,
-  "results_dir": ".ezvals/sessions"
+  "results_dir": "."
 }
 ```
 
@@ -433,7 +433,7 @@ EZVals supports a `ezvals.json` config file for persisting default CLI options. 
 | `concurrency` | integer | Number of concurrent evaluations | `run` |
 | `timeout` | float | Global timeout in seconds | `run` |
 | `verbose` | boolean | Show stdout from eval functions | `run` |
-| `results_dir` | string | Directory for results storage | `serve` |
+| `results_dir` | string | Base directory; runs are stored in `{results_dir}/.ezvals/sessions` | `run`, `serve` |
 | `port` | integer | Web UI server port | `serve` |
 | `configs` | object | Named config profiles selectable via `--config` | `run`, `serve` |
 

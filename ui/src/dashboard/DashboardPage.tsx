@@ -40,7 +40,10 @@ import SettingsModal from './components/SettingsModal'
 import ComparisonTable from './components/ComparisonTable'
 import ResultsTable from './components/ResultsTable'
 import FloatingMenu from './components/FloatingMenu'
+import RunPickerDropdown from './components/RunPickerDropdown'
 import PngExportModal from './components/PngExportModal'
+
+type Toast = { id: number; message: string; type: 'error' | 'success' }
 
 const DASHBOARD_BODY_CLASS = 'h-screen flex flex-col bg-theme-bg font-sans text-theme-text'
 
@@ -408,6 +411,14 @@ export default function DashboardPage() {
   const [queryActiveRunId, setQueryActiveRunId] = useState<string | null>(null)
   const [configNames, setConfigNames] = useState<string[]>([])
   const [activeConfig, setActiveConfig] = useState<string | null>(null)
+  const [toasts, setToasts] = useState<Toast[]>([])
+  const toastIdRef = useRef(0)
+
+  const addToast = useCallback((message: string, type: 'error' | 'success' = 'error') => {
+    const id = ++toastIdRef.current
+    setToasts((prev) => [...prev, { id, message, type }])
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000)
+  }, [])
 
   const filtersToggleRef = useRef<HTMLButtonElement | null>(null)
   const filtersMenuRef = useRef<HTMLDivElement | null>(null)
@@ -430,7 +441,15 @@ export default function DashboardPage() {
   const debouncedSearch = useDebouncedValue(search, 120)
   const normalizedComparisonRuns = useMemo(() => normalizeComparisonRuns(comparisonRuns), [comparisonRuns])
   const isComparisonMode = normalizedComparisonRuns.length > 1
-  const comparisonMatrix = useMemo<Record<string, ComparisonMatrixEntry>>(() => buildComparisonMatrix(comparisonData), [comparisonData])
+  const comparisonDataForMode = useMemo<Record<string, RunSummary>>(() => {
+    if (!isComparisonMode) return comparisonData
+    const selectedRunIds = new Set(normalizedComparisonRuns.map((run) => run.runId))
+    return Object.fromEntries(Object.entries(comparisonData).filter(([runId]) => selectedRunIds.has(runId)))
+  }, [comparisonData, isComparisonMode, normalizedComparisonRuns])
+  const comparisonMatrix = useMemo<Record<string, ComparisonMatrixEntry>>(
+    () => buildComparisonMatrix(comparisonDataForMode),
+    [comparisonDataForMode],
+  )
   const comparisonDataCount = useMemo(() => Object.keys(comparisonData).length, [comparisonData])
   const searchColumnsSet = useMemo(() => new Set(searchColumns.filter((key) => DEFAULT_SEARCH_COLS.includes(key))), [searchColumns])
   const hasFilters = isFilterActive(filters, debouncedSearch)
@@ -744,10 +763,10 @@ export default function DashboardPage() {
 
   const allResultsForFilters = useMemo(() => {
     if (isComparisonMode) {
-      return Object.values(comparisonData).flatMap((run) => run?.results || [])
+      return Object.values(comparisonDataForMode).flatMap((run) => run?.results || [])
     }
     return data?.results || []
-  }, [comparisonData, data, isComparisonMode])
+  }, [comparisonDataForMode, data, isComparisonMode])
 
   const scoreKeysMeta = useMemo(() => computeScoreKeyMeta(allResultsForFilters), [allResultsForFilters])
   const datasetLabels = useMemo(() => computeDatasetLabels(allResultsForFilters), [allResultsForFilters])
@@ -1135,7 +1154,7 @@ export default function DashboardPage() {
       loadResults(true)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      alert(`Run failed: ${message}`)
+      addToast(`Run failed: ${message}`, 'error')
     }
   }, [activeConfig, data, isRunningOverride, loadResults, selectedIndices])
 
@@ -1161,7 +1180,7 @@ export default function DashboardPage() {
       await loadResults(true)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      alert(`New run failed: ${message}`)
+      addToast(`New run failed: ${message}`, 'error')
     }
   }, [loadResults])
 
@@ -1178,7 +1197,7 @@ export default function DashboardPage() {
       await loadResults(true)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      alert(`Run control failed: ${message}`)
+      addToast(`Run control failed: ${message}`, 'error')
     }
   }, [data, loadResults])
 
@@ -1195,7 +1214,7 @@ export default function DashboardPage() {
     } catch (err) {
       setIsRestartingServer(false)
       const message = err instanceof Error ? err.message : String(err)
-      alert(`Restart failed: ${message}`)
+      addToast(`Restart failed: ${message}`, 'error')
     }
   }, [isRestartingServer])
 
@@ -1245,7 +1264,7 @@ export default function DashboardPage() {
       setSettingsOpen(false)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      alert(`Failed to save settings: ${message}`)
+      addToast(`Failed to save settings: ${message}`, 'error')
     }
   }, [settingsForm])
 
@@ -1354,7 +1373,7 @@ export default function DashboardPage() {
       })
       if (!resp.ok) {
         const errText = await resp.text()
-        alert(`Export failed: ${errText}`)
+        addToast(`Export failed: ${errText}`)
         return
       }
       const blob = await resp.blob()
@@ -1367,7 +1386,7 @@ export default function DashboardPage() {
       URL.revokeObjectURL(url)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      alert(`Export failed: ${message}`)
+      addToast(`Export failed: ${message}`)
     }
   }, [comparisonData, data, displayChips, displayFilteredCount, displayLatency, hasFilters, hiddenSet, isComparisonMode, normalizedComparisonRuns, sortedComparisonRows, sortedRows, stats])
 
@@ -1399,6 +1418,19 @@ export default function DashboardPage() {
       setEditingRunName(false)
     }
   }, [data, hasRunBefore, loadResults, runNameDraft])
+
+  const handleRenameRunById = useCallback(async (runId: string, newName: string) => {
+    try {
+      await fetch(`/api/runs/${runId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ run_name: newName }),
+      })
+      loadResults(true)
+    } catch (err) {
+      console.error('Rename failed:', err)
+    }
+  }, [loadResults])
 
   const activeFilterCount = useMemo(() => {
     let count = 0
@@ -1482,7 +1514,6 @@ export default function DashboardPage() {
           hasFilters={hasFilters}
           displayFilteredCount={displayFilteredCount}
           displayChips={displayChips}
-          displayLatency={displayLatency}
           isComparisonMode={isComparisonMode}
           normalizedComparisonRuns={normalizedComparisonRuns}
           comparisonData={comparisonData}
@@ -1536,23 +1567,6 @@ export default function DashboardPage() {
 
       </main>
 
-      <footer className="shrink-0 border-t border-theme-border bg-theme-bg py-3">
-        <div className="flex items-center justify-center gap-6 text-xs text-theme-text-muted">
-          <a href="https://github.com/camronh/EZVals" target="_blank" rel="noreferrer" className="flex items-center gap-1.5 hover:text-theme-text-secondary">
-            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
-              <use href="#icon-github"></use>
-            </svg>
-            GitHub
-          </a>
-          <a href="https://ezvals.com" target="_blank" rel="noreferrer" className="flex items-center gap-1.5 hover:text-theme-text-secondary">
-            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <use href="#icon-doc"></use>
-            </svg>
-            Docs
-          </a>
-        </div>
-      </footer>
-
       <SettingsModal
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
@@ -1579,39 +1593,32 @@ export default function DashboardPage() {
         sessionName={data?.session_name || ''}
       />
 
-      <FloatingMenu anchorRef={runDropdownExpandedRef} open={runDropdownOpen} onClose={() => setRunDropdownOpen(false)}>
-        {sessionRuns.map((run) => {
-          const isCurrent = run.run_id === data?.run_id
-          return (
-            <button
-              key={run.run_id}
-              data-run-id={run.run_id}
-              className={`compare-option${isCurrent ? ' current-run' : ''}`}
-              onClick={async () => {
-                if (run.run_id !== data?.run_id) {
-                  try {
-                    await fetch(`/api/runs/${encodeURIComponent(run.run_id)}/activate`, { method: 'POST' })
-                  } catch {
-                    // ignore
-                  }
-                  loadResults(true)
-                }
-                setRunDropdownOpen(false)
-              }}
-            >
-              {run.run_name || run.run_id} <span className="text-zinc-500">({formatRunTimestamp(run.timestamp)})</span>
-            </button>
-          )
-        })}
-      </FloatingMenu>
+      <RunPickerDropdown
+        anchorRef={runDropdownExpandedRef}
+        open={runDropdownOpen}
+        onClose={() => setRunDropdownOpen(false)}
+        sessionRuns={sessionRuns}
+        activeRunId={data?.run_id}
+        onSelectRun={async (runId) => {
+          if (runId !== data?.run_id) {
+            try {
+              await fetch(`/api/runs/${encodeURIComponent(runId)}/activate`, { method: 'POST' })
+            } catch {
+              // ignore
+            }
+            loadResults(true)
+          }
+        }}
+        onRenameRun={handleRenameRunById}
+      />
 
       <FloatingMenu anchorRef={compareDropdownAnchorRef} open={compareDropdownOpen} onClose={() => setCompareDropdownOpen(false)}>
         {sessionRuns.filter((r) => !normalizedComparisonRuns.find((run) => run.runId === r.run_id) && r.run_id !== data?.run_id).length === 0 ? (
-          <div className="text-zinc-500 text-[10px] p-2">No other runs available</div>
+          <div className="text-theme-text-muted text-[10px] p-2">No other runs available</div>
         ) : sessionRuns.filter((r) => !normalizedComparisonRuns.find((run) => run.runId === r.run_id) && r.run_id !== data?.run_id).map((run) => (
           <button
             key={run.run_id}
-            className="compare-option w-full text-left px-3 py-2 hover:bg-zinc-700 text-xs text-zinc-300"
+            className="compare-option w-full text-left px-3 py-2 text-xs text-theme-text-secondary"
             onClick={() => {
               const current = data?.run_id
               if (current && !normalizedComparisonRuns.find((r) => r.runId === current)) {
@@ -1621,27 +1628,41 @@ export default function DashboardPage() {
               setCompareDropdownOpen(false)
             }}
           >
-            {run.run_name || run.run_id} <span className="text-zinc-500">({formatRunTimestamp(run.timestamp)})</span>
+            {run.run_name || run.run_id} <span className="text-theme-text-muted">({formatRunTimestamp(run.timestamp)})</span>
           </button>
         ))}
       </FloatingMenu>
 
       <FloatingMenu anchorRef={addCompareAnchorRef} open={addCompareOpen} onClose={() => setAddCompareOpen(false)}>
         {sessionRuns.filter((r) => !normalizedComparisonRuns.find((run) => run.runId === r.run_id)).length === 0 ? (
-          <div className="text-zinc-500 text-[10px] p-2">No other runs available</div>
+          <div className="text-theme-text-muted text-[10px] p-2">No other runs available</div>
         ) : sessionRuns.filter((r) => !normalizedComparisonRuns.find((run) => run.runId === r.run_id)).map((run) => (
           <button
             key={run.run_id}
-            className="compare-option w-full text-left px-3 py-2 hover:bg-zinc-700 text-xs text-zinc-300"
+            className="compare-option w-full text-left px-3 py-2 text-xs text-theme-text-secondary"
             onClick={() => {
               handleAddComparison(run.run_id, run.run_name || run.run_id)
               setAddCompareOpen(false)
             }}
           >
-            {run.run_name || run.run_id} <span className="text-zinc-500">({formatRunTimestamp(run.timestamp)})</span>
+            {run.run_name || run.run_id} <span className="text-theme-text-muted">({formatRunTimestamp(run.timestamp)})</span>
           </button>
         ))}
       </FloatingMenu>
+
+      {toasts.length > 0 && (
+        <div id="toast-container" className="fixed bottom-4 right-4 z-[200] flex flex-col gap-2">
+          {toasts.map((toast) => (
+            <div
+              key={toast.id}
+              className={`rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-lg ${toast.type === 'error' ? 'bg-red-600/90' : 'bg-emerald-600/90'}`}
+              style={{ animation: 'toast-in 0.2s ease-out' }}
+            >
+              {toast.message}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

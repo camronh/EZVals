@@ -111,7 +111,7 @@ export default function DashboardHeader({
         </a>
         <div className="flex items-center gap-2">
           <div className="relative">
-            <svg className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-theme-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <use href="#icon-search"></use>
             </svg>
             <input
@@ -140,10 +140,10 @@ export default function DashboardHeader({
             <div
               ref={filtersMenuRef}
               id="filters-menu"
-              className={`filters-panel absolute right-0 z-50 mt-1 w-80 rounded border border-zinc-700 bg-zinc-900 p-3 text-xs shadow-xl ${filtersOpen ? 'active' : ''}`}
+              className={`filters-panel absolute right-0 z-50 mt-1 w-80 rounded border border-theme-border bg-theme-bg-secondary p-3 text-xs shadow-xl ${filtersOpen ? 'active' : ''}`}
             >
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">Filters</span>
+                <span className="text-[10px] font-medium uppercase tracking-wider text-theme-text-muted">Filters</span>
                 <button
                   id="clear-filters"
                   className="text-[10px] text-blue-400 hover:text-blue-300"
@@ -152,12 +152,12 @@ export default function DashboardHeader({
                   Clear
                 </button>
               </div>
-              <div className="mb-2 rounded bg-zinc-800/50 p-2">
+              <div className="mb-2 rounded bg-theme-bg-elevated/50 p-2">
                 <div className="mb-1.5 flex min-w-0 items-center gap-1.5">
-                  <span className="shrink-0 text-[9px] font-medium uppercase tracking-wider text-zinc-500">Score</span>
+                  <span className="shrink-0 text-[9px] font-medium uppercase tracking-wider text-theme-text-muted">Score</span>
                   <select
                     id="key-select"
-                    className="w-0 min-w-0 max-w-full flex-1 rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-[11px] text-zinc-200 focus:border-blue-500 focus:outline-none"
+                    className="w-0 min-w-0 max-w-full flex-1 rounded border border-theme-border bg-theme-bg-elevated px-1.5 py-0.5 text-[11px] text-theme-text focus:border-blue-500 focus:outline-none"
                     value={selectedScoreKey}
                     onChange={(e) => setSelectedScoreKey(e.target.value)}
                   >
@@ -167,7 +167,7 @@ export default function DashboardHeader({
                   </select>
                 </div>
                 <div className={`flex gap-1 ${scoreKeysMeta.meta?.[selectedScoreKey]?.hasNumeric ? '' : 'hidden'}`} id="value-section">
-                  <select id="fv-op" className="w-12 rounded border border-zinc-700 bg-zinc-800 px-1 py-0.5 text-[11px] text-zinc-200 focus:outline-none">
+                  <select id="fv-op" className="w-12 rounded border border-theme-border bg-theme-bg-elevated px-1 py-0.5 text-[11px] text-theme-text focus:outline-none">
                     <option value=">">&gt;</option>
                     <option value=">=">&gt;=</option>
                     <option value="<">&lt;</option>
@@ -180,7 +180,7 @@ export default function DashboardHeader({
                     type="number"
                     step="any"
                     placeholder="val"
-                    className="w-14 rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-[11px] text-zinc-200 focus:outline-none"
+                    className="w-14 rounded border border-theme-border bg-theme-bg-elevated px-1.5 py-0.5 text-[11px] text-theme-text focus:outline-none"
                     onKeyDown={(e) => {
                       if (e.key !== 'Enter') return
                       const op = (document.getElementById('fv-op') as HTMLSelectElement | null)?.value || '>'
@@ -206,7 +206,7 @@ export default function DashboardHeader({
                   </button>
                 </div>
                 <div className={`flex gap-1 mt-1 ${scoreKeysMeta.meta?.[selectedScoreKey]?.hasPassed ? '' : 'hidden'}`} id="passed-section">
-                  <select id="fp-val" className="flex-1 rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-[11px] text-zinc-200 focus:outline-none">
+                  <select id="fp-val" className="flex-1 rounded border border-theme-border bg-theme-bg-elevated px-1.5 py-0.5 text-[11px] text-theme-text focus:outline-none">
                     <option value="true">Passed</option>
                     <option value="false">Failed</option>
                   </select>
@@ -223,43 +223,52 @@ export default function DashboardHeader({
                   </button>
                 </div>
               </div>
+              <div className="mb-1.5 flex items-center gap-3 text-[9px] text-theme-text-muted">
+                <span className="flex items-center gap-1"><span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-600"></span> Include</span>
+                <span className="flex items-center gap-1"><span className="inline-block h-1.5 w-1.5 rounded-full bg-rose-500/60"></span> Exclude</span>
+                <span className="flex items-center gap-1"><span className="inline-block h-1.5 w-1.5 rounded-full border border-theme-text-muted"></span> Any</span>
+              </div>
               <div className="mb-2 flex flex-wrap gap-1">
                 <button
                   id="filter-has-annotation"
-                  className={`rounded px-2 py-0.5 text-[10px] font-medium ${filters.annotation === 'yes' ? 'bg-blue-600 text-white' : filters.annotation === 'no' ? 'bg-rose-500/30 text-rose-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300'}`}
+                  className={`rounded px-2 py-0.5 text-[10px] font-medium ${filters.annotation === 'yes' ? 'bg-blue-600 text-white' : filters.annotation === 'no' ? 'bg-rose-500/30 text-rose-300' : 'bg-theme-bg-elevated text-theme-text-muted hover:bg-theme-btn-bg-hover hover:text-theme-text-secondary'}`}
+                  title="Click to cycle: include → exclude → any"
                   onClick={() => {
                     setFilters((prev) => ({ ...prev, annotation: prev.annotation === 'any' ? 'yes' : prev.annotation === 'yes' ? 'no' : 'any' }))
                   }}
                 >
-                  {filters.annotation === 'no' ? 'No Note' : 'Has Note'}
+                  {filters.annotation === 'no' ? <><span className="mr-0.5">✕</span>Note</> : 'Has Note'}
                 </button>
                 <button
                   id="filter-has-error"
-                  className={`rounded px-2 py-0.5 text-[10px] font-medium ${filters.hasError === true ? 'bg-blue-600 text-white' : filters.hasError === false ? 'bg-rose-500/30 text-rose-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300'}`}
+                  className={`rounded px-2 py-0.5 text-[10px] font-medium ${filters.hasError === true ? 'bg-blue-600 text-white' : filters.hasError === false ? 'bg-rose-500/30 text-rose-300' : 'bg-theme-bg-elevated text-theme-text-muted hover:bg-theme-btn-bg-hover hover:text-theme-text-secondary'}`}
+                  title="Click to cycle: include → exclude → any"
                   onClick={() => setFilters((prev) => ({ ...prev, hasError: prev.hasError === null ? true : prev.hasError === true ? false : null }))}
                 >
-                  Has Error
+                  {filters.hasError === false ? <><span className="mr-0.5">✕</span>Error</> : 'Has Error'}
                 </button>
                 <button
                   id="filter-has-url"
-                  className={`rounded px-2 py-0.5 text-[10px] font-medium ${filters.hasUrl === true ? 'bg-blue-600 text-white' : filters.hasUrl === false ? 'bg-rose-500/30 text-rose-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300'}`}
+                  className={`rounded px-2 py-0.5 text-[10px] font-medium ${filters.hasUrl === true ? 'bg-blue-600 text-white' : filters.hasUrl === false ? 'bg-rose-500/30 text-rose-300' : 'bg-theme-bg-elevated text-theme-text-muted hover:bg-theme-btn-bg-hover hover:text-theme-text-secondary'}`}
+                  title="Click to cycle: include → exclude → any"
                   onClick={() => setFilters((prev) => ({ ...prev, hasUrl: prev.hasUrl === null ? true : prev.hasUrl === true ? false : null }))}
                 >
-                  Has URL
+                  {filters.hasUrl === false ? <><span className="mr-0.5">✕</span>URL</> : 'Has URL'}
                 </button>
                 <button
                   id="filter-has-messages"
-                  className={`rounded px-2 py-0.5 text-[10px] font-medium ${filters.hasMessages === true ? 'bg-blue-600 text-white' : filters.hasMessages === false ? 'bg-rose-500/30 text-rose-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300'}`}
+                  className={`rounded px-2 py-0.5 text-[10px] font-medium ${filters.hasMessages === true ? 'bg-blue-600 text-white' : filters.hasMessages === false ? 'bg-rose-500/30 text-rose-300' : 'bg-theme-bg-elevated text-theme-text-muted hover:bg-theme-btn-bg-hover hover:text-theme-text-secondary'}`}
+                  title="Click to cycle: include → exclude → any"
                   onClick={() => setFilters((prev) => ({ ...prev, hasMessages: prev.hasMessages === null ? true : prev.hasMessages === true ? false : null }))}
                 >
-                  Has Messages
+                  {filters.hasMessages === false ? <><span className="mr-0.5">✕</span>Messages</> : 'Has Messages'}
                 </button>
               </div>
               <div className="mb-2">
-                <div className="text-[9px] font-medium uppercase tracking-wider text-zinc-500 mb-1">Dataset</div>
+                <div className="text-[9px] font-medium uppercase tracking-wider text-theme-text-muted mb-1">Dataset</div>
                 <div id="dataset-pills" className="flex flex-wrap gap-1">
                   {datasetLabels.datasets.length === 0 ? (
-                    <span className="text-[10px] text-zinc-600 italic">None</span>
+                    <span className="text-[10px] text-theme-text-muted italic">None</span>
                   ) : datasetLabels.datasets.map((ds) => {
                     const isInc = filters.selectedDatasets?.include?.includes(ds)
                     const isExc = filters.selectedDatasets?.exclude?.includes(ds)
@@ -294,10 +303,10 @@ export default function DashboardHeader({
                 </div>
               </div>
               <div className="mb-2">
-                <div className="text-[9px] font-medium uppercase tracking-wider text-zinc-500 mb-1">Labels</div>
+                <div className="text-[9px] font-medium uppercase tracking-wider text-theme-text-muted mb-1">Labels</div>
                 <div id="label-pills" className="flex flex-wrap gap-1">
                   {datasetLabels.labels.length === 0 ? (
-                    <span className="text-[10px] text-zinc-600 italic">None</span>
+                    <span className="text-[10px] text-theme-text-muted italic">None</span>
                   ) : datasetLabels.labels.map((la) => {
                     const isInc = filters.selectedLabels?.include?.includes(la)
                     const isExc = filters.selectedLabels?.exclude?.includes(la)
@@ -331,7 +340,7 @@ export default function DashboardHeader({
                   })}
                 </div>
               </div>
-              <div id="active-filters" className="flex flex-wrap gap-1 border-t border-zinc-800 pt-2">
+              <div id="active-filters" className="flex flex-wrap gap-1 border-t border-theme-border pt-2">
                 {filters.valueRules.map((rule, idx) => (
                   <span key={`value-${idx}`} className="inline-flex items-center gap-1 rounded bg-blue-500/20 px-2 py-0.5 text-[10px] text-blue-300">
                     {rule.key} {rule.op} {rule.value}
@@ -409,6 +418,108 @@ export default function DashboardHeader({
               </div>
             </div>
           </div>
+          <div className="dropdown relative">
+            <button
+              ref={columnsToggleRef}
+              id="columns-toggle"
+              className="flex h-7 w-7 items-center justify-center rounded border border-theme-btn-border bg-theme-btn-bg text-theme-text-secondary hover:bg-theme-btn-bg-hover hover:text-theme-text"
+              onClick={() => { setColumnsOpen((prev) => !prev); setExportOpen(false) }}
+              title="Columns"
+            >
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <use href="#icon-grid"></use>
+              </svg>
+            </button>
+            <div
+              ref={columnsMenuRef}
+              id="columns-menu"
+              className={`columns-panel absolute right-0 z-[60] mt-1 w-64 rounded border border-theme-border bg-theme-bg-secondary p-2 text-xs shadow-xl ${columnsOpen ? 'active' : ''}`}
+            >
+              <div className="mb-2 grid grid-cols-[1fr_44px_52px] items-center text-[9px] font-medium uppercase tracking-wider text-theme-text-muted">
+                <span>Columns</span>
+                <span className="text-center">Show</span>
+                <span className="text-center">Search</span>
+              </div>
+              {columnDefs.map((col) => (
+                <div key={col.key} className="grid grid-cols-[1fr_44px_52px] items-center py-0.5 text-theme-text-secondary hover:text-theme-text">
+                  <span>{col.label}</span>
+                  <label className="mx-auto">
+                    <input
+                      type="checkbox"
+                      data-col={col.key}
+                      checked={!hiddenSet.has(col.key)}
+                      className="accent-blue-500"
+                      onChange={(e) => {
+                        const next = new Set(hiddenSet)
+                        if (e.target.checked) next.delete(col.key)
+                        else next.add(col.key)
+                        setHiddenColumns(Array.from(next))
+                      }}
+                    />
+                  </label>
+                  <label className="mx-auto">
+                    <input
+                      type="checkbox"
+                      data-search-col={col.key}
+                      checked={searchColumns.has(col.key)}
+                      className="accent-emerald-500"
+                      onChange={(e) => {
+                        const next = new Set(searchColumns)
+                        if (e.target.checked) next.add(col.key)
+                        else next.delete(col.key)
+                        setSearchColumns(Array.from(next))
+                      }}
+                    />
+                  </label>
+                </div>
+              ))}
+              <div className="mt-2 flex gap-1 border-t border-theme-border pt-2">
+                <button id="reset-columns" className="flex-1 rounded bg-theme-bg-elevated px-2 py-1 text-[10px] text-theme-text-muted hover:bg-theme-btn-bg-hover hover:text-theme-text-secondary" onClick={() => setHiddenColumns(Array.from(DEFAULT_HIDDEN_COLS))}>Reset</button>
+                <button id="reset-search-columns" className="flex-1 rounded bg-theme-bg-elevated px-2 py-1 text-[10px] text-theme-text-muted hover:bg-theme-btn-bg-hover hover:text-theme-text-secondary" onClick={() => setSearchColumns(columnDefs.map((col) => col.key))}>Search</button>
+                <button id="reset-sorting" className="flex-1 rounded bg-theme-bg-elevated px-2 py-1 text-[10px] text-theme-text-muted hover:bg-theme-btn-bg-hover hover:text-theme-text-secondary" onClick={() => setSortState([])}>Sort</button>
+                <button id="reset-widths" className="flex-1 rounded bg-theme-bg-elevated px-2 py-1 text-[10px] text-theme-text-muted hover:bg-theme-btn-bg-hover hover:text-theme-text-secondary" onClick={() => setColWidths({})}>Width</button>
+              </div>
+            </div>
+          </div>
+          <div className="dropdown relative">
+            <button
+              ref={exportToggleRef}
+              id="export-toggle"
+              className="flex h-7 w-7 items-center justify-center rounded border border-theme-btn-border bg-theme-btn-bg text-theme-text-secondary hover:bg-theme-btn-bg-hover hover:text-theme-text"
+              onClick={() => { setExportOpen((prev) => !prev); setColumnsOpen(false) }}
+              title="Export"
+            >
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <use href="#icon-download"></use>
+              </svg>
+            </button>
+            <div
+              ref={exportMenuRef}
+              id="export-menu"
+              className={`absolute right-0 z-[60] mt-1 w-44 rounded border border-theme-border bg-theme-bg-secondary p-2 text-xs shadow-xl ${exportOpen ? '' : 'hidden'}`}
+            >
+              <button id="export-json-btn" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-theme-text-secondary hover:bg-theme-bg-elevated" onClick={() => handleExport('json')}>
+                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><use href="#icon-download"></use></svg>
+                JSON
+                <span className="ml-auto text-[9px] text-theme-text-muted">raw</span>
+              </button>
+              <button id="export-csv-btn" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-theme-text-secondary hover:bg-theme-bg-elevated" onClick={() => handleExport('csv')}>
+                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><use href="#icon-download"></use></svg>
+                CSV
+                <span className="ml-auto text-[9px] text-theme-text-muted">raw</span>
+              </button>
+              <div className="my-1.5 border-t border-theme-border"></div>
+              <div className="mb-1 px-2 text-[9px] text-theme-text-muted">Filtered view</div>
+              <button id="export-md-btn" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-theme-text-secondary hover:bg-theme-bg-elevated" onClick={() => handleExport('markdown')}>
+                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><use href="#icon-download"></use></svg>
+                Markdown
+              </button>
+              <button id="export-png-btn" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-theme-text-secondary hover:bg-theme-bg-elevated" onClick={() => handleExport('png')}>
+                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><use href="#icon-download"></use></svg>
+                PNG
+              </button>
+            </div>
+          </div>
           <button id="settings-toggle" className="flex h-7 w-7 items-center justify-center rounded border border-theme-btn-border bg-theme-btn-bg text-theme-text-secondary hover:bg-theme-btn-bg-hover hover:text-theme-text" onClick={handleSettingsOpen}>
             <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <use href="#icon-gear"></use>
@@ -431,151 +542,13 @@ export default function DashboardHeader({
             <div
               ref={moreMenuRef}
               id="more-menu"
-              className={`absolute right-0 z-50 mt-1 w-44 rounded border border-zinc-700 bg-zinc-900 p-1.5 text-xs shadow-xl ${moreMenuOpen ? '' : 'hidden'}`}
+              className={`absolute right-0 z-50 mt-1 w-44 rounded border border-theme-border bg-theme-bg-secondary p-1.5 text-xs shadow-xl ${moreMenuOpen ? '' : 'hidden'}`}
             >
-              <div className="relative">
-                <button
-                  ref={columnsToggleRef}
-                  id="columns-toggle"
-                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-zinc-300 hover:bg-zinc-800"
-                  onMouseEnter={() => {
-                    setColumnsOpen(true)
-                    setExportOpen(false)
-                  }}
-                  onFocus={() => {
-                    setColumnsOpen(true)
-                    setExportOpen(false)
-                  }}
-                  onClick={() => {
-                    setColumnsOpen(true)
-                    setExportOpen(false)
-                  }}
-                >
-                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <use href="#icon-grid"></use>
-                  </svg>
-                  <span>Columns</span>
-                  <svg className="ml-auto h-3 w-3 text-zinc-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M15 6l-6 6 6 6"></path>
-                  </svg>
-                </button>
-                <div
-                  ref={columnsMenuRef}
-                  id="columns-menu"
-                  className={`columns-panel absolute right-[calc(100%+0.75rem)] top-0 z-[60] w-64 rounded border border-zinc-700 bg-zinc-900 p-2 text-xs shadow-xl ${columnsOpen ? 'active' : ''}`}
-                >
-                  <div className="mb-2 grid grid-cols-[1fr_44px_52px] items-center text-[9px] font-medium uppercase tracking-wider text-zinc-500">
-                    <span>Columns</span>
-                    <span className="text-center">Show</span>
-                    <span className="text-center">Search</span>
-                  </div>
-                  {columnDefs.map((col) => (
-                    <div key={col.key} className="grid grid-cols-[1fr_44px_52px] items-center py-0.5 text-zinc-300 hover:text-zinc-100">
-                      <span>{col.label}</span>
-                      <label className="mx-auto">
-                        <input
-                          type="checkbox"
-                          data-col={col.key}
-                          checked={!hiddenSet.has(col.key)}
-                          className="accent-blue-500"
-                          onChange={(e) => {
-                            const next = new Set(hiddenSet)
-                            if (e.target.checked) next.delete(col.key)
-                            else next.add(col.key)
-                            setHiddenColumns(Array.from(next))
-                          }}
-                        />
-                      </label>
-                      <label className="mx-auto">
-                        <input
-                          type="checkbox"
-                          data-search-col={col.key}
-                          checked={searchColumns.has(col.key)}
-                          className="accent-emerald-500"
-                          onChange={(e) => {
-                            const next = new Set(searchColumns)
-                            if (e.target.checked) next.add(col.key)
-                            else next.delete(col.key)
-                            setSearchColumns(Array.from(next))
-                          }}
-                        />
-                      </label>
-                    </div>
-                  ))}
-                  <div className="mt-2 flex gap-1 border-t border-zinc-800 pt-2">
-                    <button id="reset-columns" className="flex-1 rounded bg-zinc-800 px-2 py-1 text-[10px] text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300" onClick={() => setHiddenColumns(Array.from(DEFAULT_HIDDEN_COLS))}>Reset</button>
-                    <button id="reset-search-columns" className="flex-1 rounded bg-zinc-800 px-2 py-1 text-[10px] text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300" onClick={() => setSearchColumns(columnDefs.map((col) => col.key))}>Search</button>
-                    <button id="reset-sorting" className="flex-1 rounded bg-zinc-800 px-2 py-1 text-[10px] text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300" onClick={() => setSortState([])}>Sort</button>
-                    <button id="reset-widths" className="flex-1 rounded bg-zinc-800 px-2 py-1 text-[10px] text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300" onClick={() => setColWidths({})}>Width</button>
-                  </div>
-                </div>
-              </div>
-              <div className="relative">
-                <button
-                  ref={exportToggleRef}
-                  id="export-toggle"
-                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-zinc-300 hover:bg-zinc-800"
-                  onMouseEnter={() => {
-                    setExportOpen(true)
-                    setColumnsOpen(false)
-                  }}
-                  onFocus={() => {
-                    setExportOpen(true)
-                    setColumnsOpen(false)
-                  }}
-                  onClick={() => {
-                    setExportOpen(true)
-                    setColumnsOpen(false)
-                  }}
-                >
-                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <use href="#icon-download"></use>
-                  </svg>
-                  <span>Download</span>
-                  <svg className="ml-auto h-3 w-3 text-zinc-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M15 6l-6 6 6 6"></path>
-                  </svg>
-                </button>
-                <div
-                  ref={exportMenuRef}
-                  id="export-menu"
-                  className={`absolute right-[calc(100%+0.75rem)] top-0 z-[60] w-44 rounded border border-zinc-700 bg-zinc-900 p-2 text-xs shadow-xl ${exportOpen ? '' : 'hidden'}`}
-                >
-                  <div className="mb-2 text-[9px] font-medium uppercase tracking-wider text-zinc-500">Export</div>
-                  <button id="export-json-btn" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-zinc-300 hover:bg-zinc-800" onClick={() => handleExport('json')}>
-                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><use href="#icon-download"></use></svg>
-                    JSON
-                    <span className="ml-auto text-[9px] text-zinc-500">raw</span>
-                  </button>
-                  <button id="export-csv-btn" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-zinc-300 hover:bg-zinc-800" onClick={() => handleExport('csv')}>
-                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><use href="#icon-download"></use></svg>
-                    CSV
-                    <span className="ml-auto text-[9px] text-zinc-500">raw</span>
-                  </button>
-                  <div className="my-1.5 border-t border-zinc-800"></div>
-                  <div className="mb-1 px-2 text-[9px] text-zinc-500">Filtered view</div>
-                  <button id="export-md-btn" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-zinc-300 hover:bg-zinc-800" onClick={() => handleExport('markdown')}>
-                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><use href="#icon-download"></use></svg>
-                    Markdown
-                  </button>
-                  <button id="export-png-btn" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-zinc-300 hover:bg-zinc-800" onClick={() => handleExport('png')}>
-                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><use href="#icon-download"></use></svg>
-                    PNG
-                  </button>
-                </div>
-              </div>
-              <div className="my-1 border-t border-zinc-800"></div>
               <button
                 id="restart-server-btn"
-                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-amber-300 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
-                onMouseEnter={() => {
-                  setColumnsOpen(false)
-                  setExportOpen(false)
-                }}
+                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-amber-300 hover:bg-theme-bg-elevated disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={() => {
                   setMoreMenuOpen(false)
-                  setColumnsOpen(false)
-                  setExportOpen(false)
                   onRestartServer()
                 }}
                 disabled={isRestartingServer}

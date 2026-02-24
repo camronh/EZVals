@@ -68,3 +68,6 @@ Report:
 - What documentation was updated
 - What was skipped and why
 - The final merge skill command: `/merge <branch>`
+
+## 7. Update Project Board
+If working on a GitHub issue, move the issue to **Ready 2 Merge** on the project board. See the "GitHub Projects Workflow" section in CLAUDE.local.md for the `gh` commands and option IDs.

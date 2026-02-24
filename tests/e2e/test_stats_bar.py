@@ -130,7 +130,7 @@ def test_stats_bar_tests_count(tmp_path):
 
 
 def test_stats_bar_avg_latency(tmp_path):
-    """Stats bar shows AVG LATENCY"""
+    """Time header tooltip shows average latency."""
     store = ResultsStore(tmp_path / "runs")
     run_id = store.save_run(make_summary_with_scores(), "2024-01-01T00-00-00Z")
     app = create_app(results_dir=str(tmp_path / "runs"), active_run_id=run_id)
@@ -142,10 +142,9 @@ def test_stats_bar_avg_latency(tmp_path):
             page.goto(url)
             page.wait_for_selector("#results-table")
 
-            # Latency should be visible (formatted with 2 decimal places)
-            page_content = page.content()
-            assert "Latency" in page_content or "latency" in page_content
-            assert "0.50s" in page_content or "0.50" in page_content
+            expect(page.locator("#stats-expanded .stats-chart-label", has_text="Latency")).to_have_count(0)
+            time_header = page.locator("thead th[data-col='latency']")
+            expect(time_header).to_have_attribute("title", "(Avg: 0.50s)")
 
             browser.close()
 

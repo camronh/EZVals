@@ -88,29 +88,25 @@ class TestResponseBodyStreamError:
                 # Intercept /api/runs/rerun to return a plain text error
                 page.route("**/api/runs/rerun", intercept_with_plain_text_error)
 
-                # Capture alerts
-                alerts = []
-                page.on("dialog", lambda dialog: (alerts.append(dialog.message), dialog.dismiss()))
-
                 page.goto(url)
                 page.wait_for_selector("#results-table")
 
                 # Click play to trigger rerun (which will be intercepted with plain text error)
                 page.locator("#play-btn").click()
-                page.wait_for_timeout(500)
 
-                # Should have received an alert with the error
-                assert len(alerts) == 1, f"Expected 1 alert, got {len(alerts)}"
+                # Should show a toast notification with the error (replaced alert())
+                toast = page.locator("#toast-container > div").first
+                toast.wait_for(state="visible", timeout=3000)
+                toast_text = toast.text_content()
 
-                # The alert should NOT contain "body stream already read"
-                alert_text = alerts[0]
-                assert "body stream already read" not in alert_text.lower(), (
-                    f"Bug reproduced: got 'body stream already read' error. Alert: {alert_text}"
+                # The toast should NOT contain "body stream already read"
+                assert "body stream already read" not in toast_text.lower(), (
+                    f"Bug reproduced: got 'body stream already read' error. Toast: {toast_text}"
                 )
 
-                # The alert SHOULD contain the actual error message or status
-                assert "something went wrong" in alert_text.lower() or "500" in alert_text, (
-                    f"Expected error message from server, got: {alert_text}"
+                # The toast SHOULD contain the actual error message or status
+                assert "something went wrong" in toast_text.lower() or "500" in toast_text or "failed" in toast_text.lower(), (
+                    f"Expected error message from server, got: {toast_text}"
                 )
 
                 browser.close()

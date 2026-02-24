@@ -158,6 +158,18 @@ export default function ResultsTable({
     })
   }, [cancelDismiss, data?.run_id])
 
+  let avgVisibleLatency: number | null = null
+  let latencyTotal = 0
+  let latencyCount = 0
+  rows.forEach((row) => {
+    const lat = row.result.latency
+    if (typeof lat === 'number' && !Number.isNaN(lat)) {
+      latencyTotal += lat
+      latencyCount += 1
+    }
+  })
+  if (latencyCount > 0) avgVisibleLatency = latencyTotal / latencyCount
+
   return (
     <>
       <table id="results-table" data-run-id={data?.run_id} className="w-full table-fixed border-collapse text-sm text-theme-text">
@@ -178,6 +190,7 @@ export default function ResultsTable({
               key={col.key}
               data-col={col.key}
               data-type={col.type}
+              title={col.key === 'latency' && avgVisibleLatency != null ? `(Avg: ${avgVisibleLatency.toFixed(2)}s)` : undefined}
               ref={(el) => { if (headerRefs?.current) headerRefs.current[col.key] = el }}
               style={{ width: colWidths[col.key] ? `${colWidths[col.key]}px` : col.width, textAlign: col.align }}
               className={`relative bg-theme-bg px-3 py-2 text-[10px] font-medium uppercase tracking-wider text-theme-text-muted ${hiddenSet.has(col.key) ? 'hidden' : ''}`}
@@ -195,6 +208,13 @@ export default function ResultsTable({
         </tr>
       </thead>
       <tbody className="divide-y divide-theme-border-subtle">
+        {rows.length === 0 && (
+          <tr>
+            <td colSpan={columnDefs.length + 1} className="px-4 py-12 text-center text-sm text-theme-text-muted">
+              No results yet
+            </td>
+          </tr>
+        )}
         {rows.map((row) => {
           const result = row.result
           const annotationText = result.annotation?.trim()
@@ -280,7 +300,13 @@ export default function ResultsTable({
                 data-has-url={row.hasUrl}
                 data-has-messages={row.hasMessages}
                 data-has-error={row.hasError}
-                className={`group hover:bg-theme-bg-elevated/50 transition-colors ${isNotStarted ? 'opacity-60' : ''}`}
+                className={`group hover:bg-theme-bg-elevated/50 transition-colors cursor-pointer ${isNotStarted ? 'opacity-60' : ''}`}
+                onClick={(e) => {
+                  const target = e.target as HTMLElement
+                  if (target.closest('input[type=checkbox]') || target.closest('[data-annotation-indicator]') || target.closest('a')) return
+                  sessionStorage.setItem('ezvals:scrollY', window.scrollY.toString())
+                  window.location.href = `/runs/${data?.run_id}/results/${row.index}`
+                }}
               >
                 <td className="px-2 py-3 text-center align-middle">
                   <input

@@ -500,7 +500,7 @@ Create `ezvals.json` in your project root for defaults:
 ```json
 {
   "concurrency": 4,
-  "results_dir": ".ezvals/sessions",
+  "results_dir": ".",
   "port": 8000
 }
 ```

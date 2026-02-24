@@ -90,6 +90,8 @@ Then delete the merged branch:
 git branch -d <branch>
 ```
 
+If the merged branch was associated with a GitHub issue, move the issue to **Done** on the project board. See the "GitHub Projects Workflow" section in CLAUDE.local.md for the `gh` commands and option IDs.
+
 ## Error Handling
 
 - If UAT fails or something looks wrong: STOP, report findings, `git checkout dev`, do NOT merge

@@ -47,6 +47,12 @@
 /* Utility class for theme-aware progress bar background */
 .bg-theme-progress-bar { background: var(--progress-bar-bg); }
 
+/* Toast notifications */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* Panels */
 .filters-panel, .columns-panel { display: none; }
 .filters-panel.active, .columns-panel.active { display: block; }
@@ -65,8 +71,9 @@
 #results-table thead th[aria-sort="descending"]::after { content: " ▼"; font-size: 8px; color: #3b82f6; }
 
 /* Column resizer */
-.col-resizer { position: absolute; right: 0; top: 0; width: 4px; height: 100%; cursor: col-resize; }
-.col-resizer:hover, .col-resizer:active { background: rgba(59, 130, 246, 0.4); }
+.col-resizer { position: absolute; right: 0; top: 0; width: 4px; height: 100%; cursor: col-resize; opacity: 0; transition: opacity 0.15s; }
+th:hover .col-resizer { opacity: 1; background: rgba(59, 130, 246, 0.4); }
+.col-resizer:active { opacity: 1; background: rgba(59, 130, 246, 0.6); }
 body.ezvals-col-resize { cursor: col-resize !important; user-select: none; }
 
 /* Checkbox styling */
@@ -233,13 +240,13 @@ tr[data-row="main"] {
 }
 .stats-metric-value {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 56px;
+  font-size: 32px;
   font-weight: 600;
   color: var(--text);
   line-height: 1;
 }
 .stats-metric-sm .stats-metric-value {
-  font-size: 32px;
+  font-size: 20px;
 }
 .stats-metric-unit {
   font-size: 20px;
@@ -517,7 +524,7 @@ tr[data-row="main"] {
   opacity: 0.3;
 }
 .stats-metric-divisor {
-  font-size: 24px;
+  font-size: 16px;
   font-weight: 400;
   color: var(--text-muted);
   margin-left: 2px;
@@ -684,11 +691,13 @@ tr[data-row="main"] {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 4px;
   color: #71717a;
   background: transparent;
   border: 1px solid var(--border);
   border-radius: 4px;
   cursor: pointer;
+  font-size: 11px;
   transition: color 0.15s, border-color 0.15s, background-color 0.15s;
 }
 
@@ -777,6 +786,160 @@ tr[data-row="main"] {
 .compare-option.current-run::before {
   content: '✓ ';
   color: var(--accent-link);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RUN PICKER DROPDOWN
+   ═══════════════════════════════════════════════════════════════ */
+.run-picker {
+  position: fixed;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  max-height: 280px;
+  overflow-y: auto;
+  min-width: 240px;
+  outline: none;
+  padding: 4px;
+}
+.run-picker:focus { outline: none; }
+
+.run-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.1s;
+  position: relative;
+}
+.run-picker-row:hover,
+.run-picker-row.focused {
+  background: var(--bg-elevated);
+}
+.run-picker-row.selected {
+  background: rgba(59, 130, 246, 0.08);
+  border-left: 2px solid var(--accent-link);
+  padding-left: 6px;
+}
+
+/* Selection dot */
+.run-picker-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1.5px solid var(--border-subtle);
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+.run-picker-dot.active {
+  background: var(--accent-link);
+  border-color: var(--accent-link);
+}
+
+/* Name area */
+.run-picker-name-area {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.run-picker-run-name {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.run-picker-row.selected .run-picker-run-name {
+  font-weight: 600;
+  color: var(--accent-link);
+}
+.run-picker-timestamp {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Action buttons - opacity toggle for spatial stability */
+.run-picker-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.run-picker-row:hover .run-picker-actions,
+.run-picker-row.focused .run-picker-actions,
+.run-picker-row.selected .run-picker-actions {
+  opacity: 1;
+}
+.run-picker-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.1s, background 0.1s;
+}
+.run-picker-action-btn:hover {
+  color: var(--text);
+  background: var(--bg-secondary);
+}
+.run-picker-action-btn.copied {
+  color: #34d399;
+}
+
+/* Inline edit */
+.run-picker-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.run-picker-edit-input {
+  flex: 1;
+  min-width: 0;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  background: var(--bg);
+  border: 1px solid var(--accent-link);
+  border-radius: 4px;
+  padding: 2px 6px;
+  color: var(--text);
+  outline: none;
+}
+.run-picker-edit-input:focus {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+.run-picker-key-hints {
+  display: flex;
+  gap: 3px;
+  flex-shrink: 0;
+}
+.run-picker-key-hints kbd {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  line-height: 1.4;
 }
 
 /* Adjust stats-right width in comparison mode for more horizontal space */

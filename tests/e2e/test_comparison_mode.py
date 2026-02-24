@@ -402,6 +402,42 @@ def test_comparison_mode_from_single_compare_query_param(tmp_path):
             browser.close()
 
 
+def test_comparison_mode_url_only_ignores_unselected_active_run(tmp_path):
+    """URL-only compare_run_id params should render rows from selected runs, not the unrelated active run."""
+    store = ResultsStore(tmp_path / "runs")
+
+    active_summary = make_run_summary("active")
+    for row in active_summary["results"]:
+        row["function"] = f"active_{row['function']}"
+        row["result"]["output"] = f"active output for {row['function']}"
+
+    active_run_id = store.save_run(active_summary, session_name="test-session", run_name="active")
+    run1_id = store.save_run(make_run_summary("baseline"), session_name="test-session", run_name="baseline")
+    run2_id = store.save_run(make_run_summary("final"), session_name="test-session", run_name="final")
+
+    app = create_app(
+        results_dir=str(tmp_path / "runs"),
+        active_run_id=active_run_id,
+        session_name="test-session",
+        run_name="active",
+    )
+
+    query = f"compare_run_id={run1_id}&compare_run_id={run2_id}"
+
+    with run_server(app) as url:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(f"{url}?{query}")
+            page.wait_for_selector("#results-table")
+            page.wait_for_selector(".comparison-chips")
+            expect(page.locator(".comparison-chip")).to_have_count(2)
+            expect(page.locator("text=output A from baseline")).to_be_visible()
+            expect(page.locator("text=output A from final")).to_be_visible()
+            expect(page.locator("text=active output for")).to_have_count(0)
+            browser.close()
+
+
 def test_launch_query_active_run_activation(tmp_path):
     """run_id query param should switch the UI to that run on startup."""
     store = ResultsStore(tmp_path / "runs")

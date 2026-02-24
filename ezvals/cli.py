@@ -16,7 +16,7 @@ from rich.console import Console
 
 from ezvals.discovery import EvalDiscovery
 from ezvals.runner import run as run_sdk
-from ezvals.config import load_config
+from ezvals.config import load_config, resolve_sessions_dir
 
 
 console = Console()
@@ -229,7 +229,7 @@ def serve_cmd(
 
     # Load config and merge with CLI args
     config = load_config()
-    results_dir = results_dir if results_dir is not None else config.get("results_dir", ".ezvals/sessions")
+    results_dir = results_dir if results_dir is not None else resolve_sessions_dir(config)
     port = port if port is not None else config.get("port", 8000)
 
     # Auto-generate session name for serve command (each serve = new session)
@@ -389,7 +389,7 @@ def run_cmd(
         from ezvals.storage import ResultsStore
 
         config = load_config()
-        store = ResultsStore(config.get("results_dir", ".ezvals/sessions"))
+        store = ResultsStore(resolve_sessions_dir(config))
         run_id, new_name = rename
         try:
             renamed = store.rename_run(run_id, new_name, session_name=session)

@@ -8,7 +8,7 @@ from pathlib import Path
 from threading import Thread
 from typing import Any, Dict, List, Optional, Union, Callable, TypedDict
 
-from ezvals.config import load_config, DEFAULT_CONFIG, resolve_run_config
+from ezvals.config import load_config, DEFAULT_CONFIG, resolve_run_config, resolve_sessions_dir
 from ezvals.decorators import EvalFunction, run_metadata_var
 from ezvals.discovery import EvalDiscovery
 from ezvals.schemas import EvalResult
@@ -537,7 +537,7 @@ def run(
     config = load_config() if use_config else DEFAULT_CONFIG.copy()
     effective_concurrency = concurrency if concurrency is not None else config.get("concurrency", 1)
     effective_timeout = timeout if timeout is not None else config.get("timeout")
-    effective_results_dir = results_dir if results_dir is not None else config.get("results_dir", ".ezvals/sessions")
+    effective_results_dir = results_dir if results_dir is not None else resolve_sessions_dir(config)
     effective_overwrite = overwrite if overwrite is not None else config.get("overwrite", True)
 
     selectors: List[str] = []

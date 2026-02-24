@@ -8,7 +8,7 @@ CONFIG_FILENAME = "ezvals.json"
 
 DEFAULT_CONFIG = {
     "concurrency": 1,
-    "results_dir": ".ezvals/sessions",
+    "results_dir": ".",
     "overwrite": True,
     "completion_notifications": False,
 }
@@ -49,3 +49,8 @@ def resolve_run_config(config_name: Optional[str]) -> dict:
             f"Config '{config_name}' not found in ezvals.json. Available: {available}"
         )
     return configs[config_name]
+
+
+def resolve_sessions_dir(config: dict) -> str:
+    """Resolve the concrete sessions storage dir from config's base directory."""
+    return str(Path(config.get("results_dir", ".")) / ".ezvals" / "sessions")
