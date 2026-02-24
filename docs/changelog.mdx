@@ -7,6 +7,9 @@ description: "All notable changes to EZVals"
 
 - Fixed: Comparison-mode output columns now render per-run output content correctly for URL-driven compare sessions, even when the active run is not one of the selected compared runs.
 - Tests: Added E2E regression coverage for URL-only `compare_run_id` startup to verify compared-run output text appears and unrelated active-run rows are excluded.
+- Changed: `results_dir` in `ezvals.json` is now treated as a base directory, with runs always stored under `{results_dir}/.ezvals/sessions`.
+- Changed: Default config now sets `"results_dir": "."`, preserving default storage at `./.ezvals/sessions` while removing full sessions-path config complexity.
+- Tests: Added CLI unit coverage to verify run/save and rename behavior when `results_dir` is configured as a base directory.
 
 ## 0.1.9 - 2026-02-23
 

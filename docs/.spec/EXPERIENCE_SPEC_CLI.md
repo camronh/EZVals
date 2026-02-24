@@ -317,7 +317,7 @@ Scenario: Export to Markdown
   "concurrency": 1,
   "timeout": null,
   "verbose": false,
-  "results_dir": ".ezvals/sessions",
+  "results_dir": ".",
   "overwrite": true,
   "configs": {
     "gpt-4": {"model": "gpt-4", "temperature": 0.7},
@@ -331,7 +331,7 @@ Scenario: Export to Markdown
 | `concurrency` | int | 1 | Parallel evaluations |
 | `timeout` | float | null | Global timeout (seconds) |
 | `verbose` | bool | false | Show eval stdout |
-| `results_dir` | string | `.ezvals/sessions` | Storage directory |
+| `results_dir` | string | `.` | Base directory where runs are stored in `.ezvals/sessions` |
 | `overwrite` | bool | true | Replace runs with same session + run name |
 | `configs` | dict | `{}` | Named config profiles selectable via `--config` |
 
