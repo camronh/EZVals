@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import type { NormalizedComparisonRun, RunSummary, ScoreChip } from '../../types'
-import { useDebouncedValue } from '../hooks'
+import type { ComparisonRun, RunSummary, ScoreChip } from '../../types'
+import { useDebouncedValue } from '../../hooks/storage'
 import {
   DEFAULT_SCORE_COLORS,
   renderPngCanvas,
@@ -15,7 +15,7 @@ type PngExportModalProps = {
   displayFilteredCount: number | null
   totalTests: number
   isComparisonMode: boolean
-  normalizedComparisonRuns: NormalizedComparisonRun[]
+  normalizedComparisonRuns: ComparisonRun[]
   comparisonData: Record<string, RunSummary>
   sessionName: string
 }
@@ -27,7 +27,8 @@ function slugifyFilename(value: string) {
     .replace(/^-+|-+$/g, '')
 }
 
-export default function PngExportModal({
+/** Renders the score chart as a shareable PNG, with title, color and run options. */
+export function PngExportModal({
   open,
   onClose,
   displayChips,

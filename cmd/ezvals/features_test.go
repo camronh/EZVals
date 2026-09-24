@@ -50,6 +50,14 @@ func TestRegradeJobsNeedATarget(t *testing.T) {
 	if len(jobs) != 1 || jobs[0].ID != "with" || jobs[0].Grade.Output != "x" || noTarget != 1 {
 		t.Fatalf("jobs=%+v noTarget=%d", jobs, noTarget)
 	}
+
+	// serve passes the manifest already expanded into trials
+	trials := expandTrials([]Eval{{ID: "t", Function: "t", Target: true}}, 2)
+	run = materialize([]Event{{Type: "evals", Evals: trials}, result("t~1", "x", true), result("t~2", "y", false)})
+	jobs, _ = regradeJobs(run, trials, []int{1})
+	if len(jobs) != 1 || jobs[0].ID != "t~2" || jobs[0].Eval != "t" || !run.Results[1].Regradable {
+		t.Fatalf("trial jobs=%+v", jobs)
+	}
 }
 
 func TestCollectorGroupsSpansByEval(t *testing.T) {

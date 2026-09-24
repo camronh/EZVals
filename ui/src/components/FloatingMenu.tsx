@@ -1,15 +1,16 @@
-import type { CSSProperties, ReactNode, RefObject } from 'react'
+import type { CSSProperties, HTMLAttributes, ReactNode, RefObject } from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
-type FloatingMenuProps = {
-  anchorRef: RefObject<HTMLElement>
+type FloatingMenuProps = HTMLAttributes<HTMLDivElement> & {
+  anchorRef: RefObject<HTMLElement | null>
   open: boolean
   onClose?: () => void
   children: ReactNode
 }
 
-export default function FloatingMenu({ anchorRef, open, onClose, children }: FloatingMenuProps) {
+/** A menu portaled to <body>, positioned under its anchor and kept on screen. */
+export function FloatingMenu({ anchorRef, open, onClose, children, className = 'compare-dropdown', ...props }: FloatingMenuProps) {
   const menuRef = useRef<HTMLDivElement | null>(null)
   const [style, setStyle] = useState<CSSProperties | null>(null)
 
@@ -22,16 +23,13 @@ export default function FloatingMenu({ anchorRef, open, onClose, children }: Flo
       left: rect.left,
       zIndex: 100,
     }
-    // Defer overflow check to after the menu renders
     requestAnimationFrame(() => {
       const menu = menuRef.current
       if (!menu) return
       const menuRect = menu.getBoundingClientRect()
-      // Flip above anchor if overflowing bottom
       if (menuRect.bottom > window.innerHeight - 8) {
         setStyle((prev) => prev ? { ...prev, top: rect.top - menuRect.height - 4 } : prev)
       }
-      // Shift left if overflowing right
       if (menuRect.right > window.innerWidth - 8) {
         setStyle((prev) => prev ? { ...prev, left: Math.max(8, window.innerWidth - menuRect.width - 8) } : prev)
       }
@@ -54,7 +52,7 @@ export default function FloatingMenu({ anchorRef, open, onClose, children }: Flo
   if (!open) return null
 
   return createPortal(
-    <div ref={menuRef} className="compare-dropdown" style={style}>
+    <div ref={menuRef} className={className} style={style ?? undefined} {...props}>
       {children}
     </div>,
     document.body,

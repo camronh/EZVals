@@ -56,8 +56,8 @@ type Eval struct {
 	Input     any      `json:"input"`
 	Reference any      `json:"reference"`
 	Metadata  any      `json:"metadata"`
-	Trials    int      `json:"trials,omitempty"` // requested by the eval; the host expands them
-	Target    bool     `json:"target,omitempty"` // the eval has a target, so its results can be regraded
+	Trials    int      `json:"trials,omitempty"`   // requested by the eval; the host expands them
+	Target    bool     `json:"target,omitempty"`   // the eval has a target, so its results can be regraded
 	Trial     int      `json:"trial,omitempty"`    // this eval is trial N of TrialOf
 	TrialOf   string   `json:"trial_of,omitempty"` // the SDK's id for the eval
 }
@@ -112,15 +112,16 @@ type Correction struct {
 }
 
 type Row struct {
-	ID        string   `json:"id"`
-	Function  string   `json:"function"`
-	Dataset   *string  `json:"dataset"`
-	Labels    []string `json:"labels"`
-	Trial     int      `json:"trial,omitempty"`
-	TrialOf   string   `json:"trial_of,omitempty"`
-	SpanCount int      `json:"span_count,omitempty"`
-	Spans     []Span   `json:"spans,omitempty"` // only in single-result responses
-	Result    Result   `json:"result"`
+	ID         string   `json:"id"`
+	Function   string   `json:"function"`
+	Dataset    *string  `json:"dataset"`
+	Labels     []string `json:"labels"`
+	Trial      int      `json:"trial,omitempty"`
+	TrialOf    string   `json:"trial_of,omitempty"`
+	SpanCount  int      `json:"span_count,omitempty"`
+	Regradable bool     `json:"regradable,omitempty"` // the eval has a target, so a finished result can be regraded
+	Spans      []Span   `json:"spans,omitempty"`      // only in single-result responses
+	Result     Result   `json:"result"`
 }
 
 // Run is the materialized view of a run's events.
@@ -194,7 +195,8 @@ func materialize(events []Event) *Run {
 	firstRow := map[string]int{}
 	for _, ev := range manifest {
 		firstRow[ev.ID] = len(run.Results)
-		row := Row{ID: ev.ID, Function: ev.Function, Dataset: ev.Dataset, Labels: ev.Labels, Trial: ev.Trial, TrialOf: ev.TrialOf, SpanCount: len(run.spans[ev.ID])}
+		row := Row{ID: ev.ID, Function: ev.Function, Dataset: ev.Dataset, Labels: ev.Labels, Trial: ev.Trial, TrialOf: ev.TrialOf,
+			SpanCount: len(run.spans[ev.ID]), Regradable: ev.Target}
 		if s, ok := status[ev.ID]; ok || len(results[ev.ID]) == 0 {
 			if !ok {
 				s = "not_started"

@@ -5,7 +5,8 @@ type CopyableTextProps = {
   className?: string
 }
 
-export default function CopyableText({ text, className = '' }: CopyableTextProps) {
+/** Text that copies itself on click and briefly shows "Copied!". */
+export function CopyableText({ text, className = '' }: CopyableTextProps) {
   const [copied, setCopied] = useState(false)
 
   const handleCopy = useCallback(async () => {

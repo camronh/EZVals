@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import DOMPurify from 'dompurify'
+import hljs from 'highlight.js/lib/core'
+import json from 'highlight.js/lib/languages/json'
+import 'highlight.js/styles/github-dark-dimmed.css'
+import { marked } from 'marked'
+import { useMemo, useState } from 'react'
+import { getRawText } from '../lib/format'
+
+hljs.registerLanguage('json', json)
 
 type MessageItem = {
   key: string
@@ -34,10 +42,6 @@ type ToolCallInfo = {
 
 type MessageViewMode = 'pretty' | 'raw'
 
-type MarkedLike = { parse: (input: string) => string }
-type DomPurifyLike = { sanitize: (input: string) => string }
-type HljsLike = { highlight: (input: string, opts: { language: string }) => { value: string } }
-
 function escapeHtml(str: unknown) {
   if (str == null) return ''
   return String(str)
@@ -50,17 +54,6 @@ function looksLikeMarkdown(text: string) {
   if (!text) return false
   return [/^#{1,6}\s+\S/m, /^\s*[-*+]\s+\S/m, /^\s*\d+\.\s+\S/m, /^>+\s+\S/m, /`{3,}[\s\S]*?`{3,}/m, /\[.+?\]\(.+?\)/m]
     .some((re) => re.test(text))
-}
-
-export function getRawText(content: unknown) {
-  if (content == null) return ''
-  if (typeof content === 'string') return content
-  if (typeof content === 'number' || typeof content === 'boolean') return String(content)
-  try {
-    return JSON.stringify(content, null, 2)
-  } catch {
-    return String(content)
-  }
 }
 
 function buildViewer(content: unknown, placeholder = '—') {
@@ -86,23 +79,12 @@ function buildViewer(content: unknown, placeholder = '—') {
   }
 
   if (mode === 'markdown') {
-    const marked = typeof window !== 'undefined' ? (window as unknown as { marked?: MarkedLike }).marked : undefined
-    const purifier = typeof window !== 'undefined' ? (window as unknown as { DOMPurify?: DomPurifyLike }).DOMPurify : undefined
-    let html = marked ? marked.parse(rawText) : `<pre class="data-pre">${escapeHtml(rawText)}</pre>`
-    if (purifier) html = purifier.sanitize(html)
+    const html = DOMPurify.sanitize(marked.parse(rawText, { async: false }))
     return { raw: rawText, html: `<div class="data-surface markdown-body">${html}</div>` }
   }
 
   if (mode === 'json') {
-    const hljs = typeof window !== 'undefined' ? (window as unknown as { hljs?: HljsLike }).hljs : undefined
-    let highlighted = escapeHtml(rawText)
-    if (hljs) {
-      try {
-        highlighted = hljs.highlight(rawText, { language: 'json' }).value
-      } catch {
-        highlighted = escapeHtml(rawText)
-      }
-    }
+    const highlighted = hljs.highlight(rawText, { language: 'json' }).value
     return {
       raw: rawText,
       html: `<div class="data-surface"><pre class="data-pre"><code class="hljs language-json">${highlighted}</code></pre></div>`,
@@ -300,11 +282,9 @@ type DataViewerProps = {
 export function DataViewer({ content, placeholder, className = '' }: DataViewerProps) {
   const { html, raw } = useMemo(() => buildViewer(content, placeholder), [content, placeholder])
   const messageItems = useMemo(() => buildMessageItems(content), [content])
-  const [mode, setMode] = useState<MessageViewMode>('pretty')
-
-  useEffect(() => {
-    setMode('pretty')
-  }, [content])
+  const [chosen, setChosen] = useState<{ content: unknown; mode: MessageViewMode }>({ content, mode: 'pretty' })
+  const mode = chosen.content === content ? chosen.mode : 'pretty'
+  const setMode = (next: MessageViewMode) => setChosen({ content, mode: next })
 
   if (messageItems && messageItems.length > 0) {
     const rawText = getRawText(content)

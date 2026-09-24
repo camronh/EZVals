@@ -211,9 +211,9 @@ func expandTrials(evals []Eval, override int) []Eval {
 // regradeJobs re-scores stored results (rows nil = every row). Only finished results of evals with a target
 // qualify: the target produced the output, so the eval body and evaluators can score it again without it.
 func regradeJobs(run *Run, manifest []Eval, rows []int) (jobs []Job, noTarget int) {
-	current := map[string]Eval{}
+	current := map[string]Eval{} // by SDK id; the manifest may already be expanded into trials
 	for _, e := range manifest {
-		current[e.ID] = e
+		current[e.sdkID()] = e
 	}
 	resultsPerEval := map[string]int{}
 	for _, row := range run.Results {
@@ -235,7 +235,7 @@ func regradeJobs(run *Run, manifest []Eval, rows []int) (jobs []Job, noTarget in
 			continue
 		}
 		stored := row.Result
-		jobs = append(jobs, Job{ID: row.ID, Eval: eval.ID, Grade: &stored})
+		jobs = append(jobs, Job{ID: row.ID, Eval: eval.sdkID(), Grade: &stored})
 	}
 	return jobs, noTarget
 }

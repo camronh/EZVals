@@ -1,5 +1,5 @@
-import type { NormalizedComparisonRun, RunSummary, ScoreChip } from '../types'
-import { chipStats, COMPARISON_COLORS } from './utils'
+import type { ComparisonRun, RunSummary, ScoreChip } from '../types'
+import { chipStats, COMPARISON_COLORS } from '../lib/stats'
 
 export type PngExportData = {
   displayChips: ScoreChip[]
@@ -7,7 +7,7 @@ export type PngExportData = {
   displayFilteredCount: number | null
   totalTests: number
   isComparisonMode: boolean
-  normalizedComparisonRuns: NormalizedComparisonRun[]
+  normalizedComparisonRuns: ComparisonRun[]
   comparisonData: Record<string, RunSummary>
 }
 
@@ -253,7 +253,7 @@ async function drawNormalMode(
   const startX = PAD + (barAreaW - totalBarsW) / 2
 
   chips.forEach((chip, i) => {
-    const { pct, value } = chipStats(chip, 2)
+    const { pct, value } = chipStats(chip)
     const x = startX + i * (barW + barGap)
     const h = (pct / 100) * BAR_MAX_H
     const y = BAR_AREA_BOTTOM - h
@@ -354,7 +354,7 @@ async function drawComparisonMode(
         pct = maxLatency > 0 ? (lat / maxLatency) * 100 : 0
       } else {
         const chip = (runData?.score_chips || []).find((c) => c.key === key)
-        if (chip) pct = chipStats(chip, 2).pct
+        if (chip) pct = chipStats(chip).pct
       }
 
       const x = groupX + runIdx * (singleBarW + barGapInGroup)

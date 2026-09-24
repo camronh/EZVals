@@ -54,8 +54,6 @@
 }
 
 /* Panels */
-.filters-panel, .columns-panel { display: none; }
-.filters-panel.active, .columns-panel.active { display: block; }
 .filter-badge { display: none; }
 .filter-badge.active { display: flex; }
 
@@ -1146,3 +1144,9 @@ body.resizing * { cursor: inherit !important; user-select: none !important; }
 .dark .msg-tool .msg-box-content, .dark .msg-tool_calls .msg-box-content { background: rgb(168 85 247 / 0.08); }
 .dark .msg-tool_result .msg-box-header { background: rgb(236 72 153 / 0.25); color: rgb(249 168 212); }
 .dark .msg-tool_result .msg-box-content { background: rgb(236 72 153 / 0.08); }
+
+/* Chart entrance, replayed whenever the chart is re-keyed for a new run or comparison. */
+.stats-chart-bars > * { animation: stats-rise 0.4s ease-out; }
+.stats-chart-fill, .comparison-bar { animation: stats-grow 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); transform-origin: bottom; }
+@keyframes stats-rise { from { opacity: 0; transform: translateY(20px); } }
+@keyframes stats-grow { from { transform: scaleY(0); } }
