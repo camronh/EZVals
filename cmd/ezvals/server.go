@@ -293,10 +293,13 @@ func (s *Server) run(rows []int, configName *string) error {
 	if err == nil && configName != nil && *configName != "" && *configName != existing.ConfigName {
 		s.activeID, s.runName, existing = newRunID(), *configName, nil
 	}
-	current, _ := s.activeRun()
+	current, err := s.activeRun()
+	if err != nil && len(rows) > 0 {
+		return fail(400, "No results available to run. Check that your eval files import correctly.")
+	}
 	var ids []string
 	for _, i := range rows {
-		if current == nil || i < 0 || i >= len(current.Results) {
+		if i < 0 || i >= len(current.Results) {
 			return fail(400, "Invalid index %d: only %d results exist", i, len(current.Results))
 		}
 		if id := current.Results[i].ID; !slices.Contains(ids, id) {

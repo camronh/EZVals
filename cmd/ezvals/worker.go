@@ -187,14 +187,15 @@ type Execution struct {
 	resume    *sync.Cond
 	paused    bool
 	stopped   bool
-	remaining map[string]bool
+	remaining map[string]bool // queued ids (true) and dispatched ids awaiting results (false)
+	exited    map[*Worker]bool
 	workers   []*Worker
 	emit      func(...Event)
 	Done      chan struct{}
 }
 
 func execute(workers []*Worker, ids []string, concurrency int, emit func(...Event)) *Execution {
-	x := &Execution{workers: workers, emit: emit, Done: make(chan struct{}), remaining: map[string]bool{}}
+	x := &Execution{workers: workers, emit: emit, Done: make(chan struct{}), remaining: map[string]bool{}, exited: map[*Worker]bool{}}
 	x.resume = sync.NewCond(&x.mu)
 	owner := map[string]*Worker{}
 	for _, w := range workers {
@@ -215,8 +216,11 @@ func execute(workers []*Worker, ids []string, concurrency int, emit func(...Even
 				inFlight.Done()
 			}
 			// The worker exited: anything it still owed us failed.
+			x.mu.Lock()
+			x.exited[w] = true
+			x.mu.Unlock()
 			for id := range x.pending(w, owner) {
-				x.finish(id, []Result{{Error: ptr("Eval worker exited before this eval finished (run with --verbose to see its output)")}})
+				x.finish(id, workerExited)
 				<-slots
 				inFlight.Done()
 			}
@@ -233,9 +237,15 @@ func execute(workers []*Worker, ids []string, concurrency int, emit func(...Even
 				x.mu.Unlock()
 				break
 			}
+			if x.exited[owner[id]] {
+				x.mu.Unlock()
+				x.finish(id, workerExited)
+				<-slots
+				continue
+			}
 			x.remaining[id] = false
-			x.mu.Unlock()
 			inFlight.Add(1)
+			x.mu.Unlock()
 			emit(Event{Type: "started", ID: id})
 			fmt.Fprintf(owner[id].stdin, "{\"run\": %q}\n", id)
 		}
@@ -297,5 +307,7 @@ func (x *Execution) Stop() {
 	stopWorkers(x.workers)
 	<-x.Done
 }
+
+var workerExited = []Result{{Error: ptr("Eval worker exited before this eval finished (run with --verbose to see its output)")}}
 
 func ptr[T any](v T) *T { return &v }
