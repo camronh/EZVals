@@ -64,9 +64,10 @@ Scenario: Selective run with checkboxes
 
 Scenario: Run behavior
   When the user clicks "Run"
-  Then the current run is overwritten
-  And the run_name stays the same
+  Then the evals run again within the current run, replacing their previous results
+  And the run_name and run_id stay the same
   And the timestamp updates
+  And annotations are kept
 
 Scenario: New run from stats panel
   Given the stats panel shows the current run name
@@ -109,8 +110,13 @@ Scenario: Pause and resume running evaluations
 Scenario: Reload server from UI
   Given the UI is open
   When the user clicks "Reload Server"
-  Then the current serve process is restarted
-  And it comes back on the same port with the same serve command arguments
+  Then evals are rediscovered and ezvals.json is reloaded
+  And the page reloads
+
+Scenario: Code changes are picked up
+  Given the user edits an eval file while the UI is open
+  When the user clicks Run
+  Then the edited code runs (every run starts fresh eval processes)
 ```
 
 ### Result Status Indicators
@@ -210,7 +216,7 @@ Scenario: Add annotation via placeholder link
 Scenario: Save annotation
   Given the user is editing an annotation
   When the user types text and clicks Save
-  Then the annotation saves to the JSON file via PATCH API
+  Then the annotation saves to the run via PATCH API
   And a correction_history entry is appended with field="annotation", before, after, and timestamp
   And the view returns to read-only mode showing the annotation text
   And the annotation persists across page reloads
@@ -273,7 +279,7 @@ Scenario: Edit score from score card
 Scenario: Save score edits
   Given the user is editing a score
   When the user updates fields and clicks Save
-  Then the scores save to the JSON file via PATCH API
+  Then the scores save to the run via PATCH API
   And a correction_history entry is appended with field="scores", before, after, and timestamp
   And the score card returns to read-only mode
   And the edits persist across page reloads
@@ -308,7 +314,7 @@ Scenario: Export as CSV
     - function, dataset, labels
     - input, output, reference
     - scores, error, latency
-    - metadata, trace_data, annotations
+    - metadata, trace_data, annotation
 ```
 
 ### Filtered Exports (Respects Filters & Column Selection)
@@ -523,7 +529,8 @@ The UI is backed by these REST endpoints, also available programmatically.
 |----------|--------|-------------|
 | `/results` | GET | HTML table view |
 | `/runs/{run_id}/results/{index}` | GET | HTML detail view |
-| `/api/runs/{run_id}/results/{index}` | PATCH | Update result fields |
+| `/api/runs/{run_id}/results/{index}` | GET | Result JSON for the detail view |
+| `/api/runs/{run_id}/results/{index}` | PATCH | Update `annotation` and/or `scores` (any run) |
 
 ### Run Control
 
@@ -533,14 +540,17 @@ The UI is backed by these REST endpoints, also available programmatically.
 | `/api/runs/pause` | POST | Pause queued execution after in-flight evals finish |
 | `/api/runs/resume` | POST | Resume pending evals on a paused run |
 | `/api/runs/stop` | POST | Cancel pending/running evals |
-| `/api/server/restart` | POST | Restart the current `ezvals serve` process |
+| `/api/server/restart` | POST | Rediscover evals and reload ezvals.json |
 
 **Rerun Request Body:**
 ```json
 {
-  "indices": [0, 2, 5]  // Optional: specific indices to rerun
+  "indices": [0, 2, 5],  // Optional: result rows to rerun
+  "config_name": "gpt-4" // Optional: config profile; a different profile starts a new run named after it
 }
 ```
+
+A request while a run is in progress returns 409.
 
 ### Export
 
@@ -568,6 +578,8 @@ The UI is backed by these REST endpoints, also available programmatically.
 |----------|--------|-------------|
 | `/api/config` | GET | Get ezvals.json config |
 | `/api/config` | PUT | Update config |
+| `/api/configs` | GET | Config profile names and the active one |
+| `/api/configs/select` | POST | Choose the config profile for the next run |
 
 ```gherkin
 Scenario: Configure completion notifications from Settings
@@ -605,36 +617,32 @@ Scenario: Result index out of range
 
 ## File Storage
 
-Results are stored in `.ezvals/sessions/` with hierarchical session directories:
+Each run is an append-only event log at `.ezvals/sessions/<session>/<run_id>.jsonl` (format in [EXPERIENCE_SPEC_SDK.md](./EXPERIENCE_SPEC_SDK.md#run-format)):
 
 ```
 .ezvals/
-├── sessions/
-│   ├── default/
-│   │   └── swift-falcon_1705312200.json
-│   ├── emojis/
-│   │   ├── baseline_1705312300.json
-│   │   └── fixed_1705312500.json
-│   └── model-upgrade/
-│       ├── gpt5_1705313000.json
-│       └── gpt5-1_1705313200.json
-└── ezvals.json
+└── sessions/
+    ├── default/
+    │   └── 3f9a1c2e.jsonl
+    └── model-upgrade/
+        ├── 7b2d4e61.jsonl   (run_name "gpt5")
+        └── c08e5a93.jsonl   (run_name "gpt5-1")
 ```
 
-**File naming:** `{run_name}_{unix_timestamp}.json`
-- Unix timestamps (integers) for easy sorting
-- Session = directory name
-- Run name = filename prefix
-
-**Overwrite behavior:** When `overwrite=true` (default), running with the same session + run name replaces the existing file.
+- Session = directory name; `run_id` = 8 random hex characters; the run name lives inside the log, so renaming never moves files
+- Results stream into the log as each eval finishes, so a crashed or stopped run keeps everything that completed
+- **Overwrite behavior:** When `overwrite=true` (default), starting a run with the same session + run name deletes the older run
 
 ### JSON Schema
 
+The API, `ezvals run --json` and `ezvals export -f json` present a run as:
+
 ```json
 {
+  "run_id": "3f9a1c2e",
   "session_name": "model-upgrade",
   "run_name": "baseline",
-  "run_id": "1705312200",
+  "created_at": 1705312200,
   "path": "evals/",
   "total_evaluations": 50,
   "total_functions": 10,
@@ -644,6 +652,7 @@ Results are stored in `.ezvals/sessions/` with hierarchical session directories:
   "average_latency": 0.5,
   "results": [
     {
+      "id": "evals/support.py::test_refund",
       "function": "test_refund",
       "dataset": "customer_service",
       "labels": ["production"],
@@ -657,22 +666,22 @@ Results are stored in `.ezvals/sessions/` with hierarchical session directories:
         "metadata": {"model": "gpt-4"},
         "trace_data": {},
         "status": "completed",
+        "annotation": "Good tone",
         "correction_history": [
           {
             "field": "scores",
             "before": [{"key": "pass", "passed": false, "notes": "judge output"}],
             "after": [{"key": "pass", "passed": true, "notes": "human correction"}],
-            "timestamp": "2026-02-20T12:34:56.000000+00:00"
+            "timestamp": "2026-02-20T12:34:56Z"
           }
-        ],
-        "annotations": null
+        ]
       }
     }
   ]
 }
 ```
 
-**Note:** `run_id` is a Unix timestamp (string representation of integer) for sortability.
+`created_at` is when the run last started running (unix seconds). `/results` and `/api/runs/{run_id}/data` add `score_chips`, `eval_path`, and for the active run `is_paused` and `selected_total`.
 
 ---
 
@@ -823,22 +832,3 @@ GET /api/runs/{run_id}/data
 Returns full run data without changing the active run. Used for fetching comparison run data.
 
 Response format: Same as `/results` endpoint (includes `score_chips`).
-
----
-
-## Known Issues
-
-### Limited Test Coverage
-
-| Feature | Coverage |
-|---------|----------|
-| Run/Stop controls | Tested |
-| Result streaming | Tested |
-| JSON export | Tested |
-| CSV export | Partially tested |
-| Inline editing | Annotation editing tested |
-| Keyboard shortcuts | Detail view arrows/Esc tested |
-| Stats bar | Tested |
-| Three-state filtering | Not tested |
-| Filter persistence | Not tested |
-| Comparison mode | Partially tested |

@@ -59,5 +59,5 @@ This assembles ezvals-docs from `docs/` and copies the full skill into `sandbox/
 
 ## Related Work
 
-- The EZVals skill source lives at `ezvals/skills/evals/`
+- The EZVals skill source lives at `cmd/ezvals/skill/`
 - The skill itself is what's being evaluated here — changes to the skill affect these eval results

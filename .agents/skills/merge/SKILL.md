@@ -5,7 +5,7 @@ description: "UAT a feature branch and merge it into dev. Use when: ready to mer
 
 **Arguments:** The feature branch name to UAT and merge into dev.
 
-Assumes tests already passed during `/prepare-merge`. No need to re-run pytest.
+Assumes tests already passed during `/prepare-merge`. No need to re-run them.
 
 Follow these steps in order:
 
@@ -35,23 +35,23 @@ If the rebase has conflicts, abort (`git rebase --abort`), report the conflicts,
 - Run `git log dev..<branch> --oneline` to see commits
 - Read key changed files to understand what was implemented
 - Categorize changes:
-  - **CLI**: `ezvals/cli.py`, `ezvals/runner.py`, `ezvals/discovery.py`, `ezvals/config.py`
-  - **UI**: `ezvals/server/`, `ezvals/templates/`, `ezvals/static/`, `frontend/`
-  - **Python API**: `ezvals/decorators.py`, `ezvals/context.py`, `ezvals/storage.py`
-  - **Docs/Tests only**: `docs/`, `tests/`, `README.md`
+  - **CLI / storage**: `cmd/ezvals/main.go`, `store.go`, `worker.go`, `export.go`
+  - **UI**: `ui/`, `cmd/ezvals/server.go`
+  - **SDKs**: `python/ezvals/`, `typescript/src/`
+  - **Docs/Tests only**: `docs/`, `*_test.go`, `python/tests/`, `typescript/test/`, `conformance/`, `e2e/`, `README.md`
 
 ## 4. UAT Based on What Changed
 
 Consult the relevant spec in `docs/.spec/` for expected behavior.
 
 ### If CLI changes detected:
-- Run `uv run ezvals run examples --visual` and verify the output looks correct
+- Run `make build && uv run --project python ezvals run examples --verbose` and verify the output looks correct
 - If specific CLI flags were added or changed, test those explicitly
 - Verify exit code is 0
 
 ### If UI changes detected:
 - Build frontend if source changed: `cd frontend && npm ci && npm run build && cd ..`
-- Start the server with auto-run: `uv run ezvals serve examples --session merge-uat --run`
+- Start the server with auto-run: `uv run --project python ezvals serve examples --session merge-uat --run`
 - Write and execute Playwright scripts to verify the changes:
   - Use `sync_playwright()` with headless chromium
   - Wait for `networkidle` before inspecting
@@ -60,7 +60,7 @@ Consult the relevant spec in `docs/.spec/` for expected behavior.
 - Kill the server when done
 
 ### If Python API changes detected:
-- Run `uv run ezvals run examples --visual` to verify evals still work
+- Run `uv run --project python ezvals run examples` to verify evals still work
 - If new decorator options or context methods were added, verify the examples exercise them
 
 ### If docs/tests only:

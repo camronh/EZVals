@@ -138,16 +138,15 @@ Run 'ezvals skills add --claude' (or your chosen target flags) to install or fix
 
 ## Skill Content Structure
 
-The skill is installed with the following files:
+The skill is built into the `ezvals` binary from `cmd/ezvals/skill/`, plus a copy of the user docs in `ezvals-docs/`:
 
 ```
 evals/
 ├── SKILL.md              # Main entry, overview + navigation
-├── EZVALS_REFERENCE.md   # EZVals API reference
-├── BEST_PRACTICES.md     # Eval design principles
 ├── GRADERS.md            # Code vs model vs human graders
-├── AGENT_EVALS.md        # Patterns for different agent types
-└── ROADMAP.md            # Zero-to-one guide
+├── datasets.md, targets.md, running.md, synthetic-data.md
+├── use-cases/            # Patterns for different agent types
+└── ezvals-docs/          # The EZVals docs (assembled at build time)
 ```
 
 ### SKILL.md Frontmatter

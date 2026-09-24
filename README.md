@@ -1,39 +1,22 @@
 # EZVals
 
-Unit Testing for AI agents and LLM apps. Write Python functions, use `EvalContext` to track results, and EZVals handles storage, scoring, and a small web UI.
-
-## Installation
-
-EZVals is intended as a development dependency.
-
-```bash
-pip install ezvals
-# or with uv
-uv add --dev ezvals
-```
-
-## Quick start
-
-Look at the [examples](examples/) directory for runnable snippets.
-Run the demo suite and open the UI:
-
-```bash
-ezvals serve examples
-```
+Unit testing for AI agents and LLM apps. Write evals like tests, in Python or TypeScript; EZVals runs them, stores every result, and gives you a web UI to review, annotate and compare runs.
 
 ![UI screenshot](assets/ui.png)
 
-### UI highlights
+## Install
 
-- Expand rows to see inputs, outputs, metadata, scores, and annotations.
-- Edit scores or annotations inline; changes persist to JSON.
-- Export dropdown: JSON, CSV (raw data), PDF, Markdown (filtered view with charts).
+EZVals is a development dependency.
 
-## Authoring evals
+```bash
+uv add --dev ezvals          # or: pip install ezvals
+npm install --save-dev ezvals  # TypeScript (Node >= 22.18)
+```
 
-Write evals like tests. Add a `ctx: EvalContext` parameter, and EZVals auto-injects a mutable context object.
+## Write an eval
 
 ```python
+# evals/support.py
 from ezvals import eval, EvalContext
 
 @eval(input="I want a refund", dataset="customer_service")
@@ -42,352 +25,51 @@ async def test_refund(ctx: EvalContext):
     assert "refund" in ctx.output.lower(), "Should acknowledge refund"
 ```
 
-### EvalContext
+```ts
+// evals/support.eval.ts
+import assert from "node:assert";
+import { evaluate } from "ezvals";
 
-`EvalContext` is a mutable builder for constructing eval results. When your function has a parameter with type annotation `: EvalContext`, EZVals automatically injects an instance.
-
-**Key features:**
-- **Auto-injection**: Just add `ctx: EvalContext` parameter
-- **Direct assignment**: Set `ctx.output`, `ctx.input`, `ctx.reference` directly
-- **Assertion-based scoring**: Use `assert` statements like pytest
-- **Auto-return**: No explicit return needed
-- **Exception safety**: Partial data preserved on errors
-
-**Direct field access:**
-
-```python
-ctx.input = "test input"
-ctx.output = "model response"
-ctx.reference = "expected output"
-ctx.metadata["model"] = "gpt-4"
+evaluate("refund", { input: "I want a refund", dataset: "customer_service" }, async (ctx) => {
+  ctx.output = await runAgent(ctx.input);
+  assert(String(ctx.output).toLowerCase().includes("refund"), "Should acknowledge refund");
+});
 ```
 
-**Scoring with assertions:**
+A failed assertion is a failing score, not an error, and whatever the eval stored before it is kept. Use `cases=` to run one eval over many inputs, `ctx.store(scores=...)` for named or numeric scores, and `target=` to separate calling your agent from scoring it. See the [docs](docs/) and [examples](examples/).
 
-```python
-assert ctx.output is not None, "Got no output"
-assert "expected" in ctx.output.lower(), "Missing expected content"
-```
-
-**Manual scoring (when needed):**
-
-```python
-ctx.add_score(True, "Test passed")  # Boolean
-ctx.add_score(0.95, "High score", key="similarity")  # Numeric
-```
-
-### Writing your first eval
-
-Set context fields in the decorator when possible:
-
-```python
-from ezvals import eval, EvalContext
-
-@eval(
-    input="I want a refund",
-    reference="I'll help you process your refund request.",
-    dataset="customer_service",
-    metadata={"model": "gpt-4"}
-)
-async def test_refund_request(ctx: EvalContext):
-    ctx.output = await run_agent(ctx.input)
-    assert ctx.output == ctx.reference
-```
-
-### Common patterns
-
-**1) Assertions (preferred):**
-
-```python
-@eval(input="What is 2+2?", reference="4", dataset="math")
-async def test_arithmetic(ctx: EvalContext):
-    ctx.output = await calculator(ctx.input)
-    assert ctx.output == ctx.reference
-```
-
-**2) Multiple assertions:**
-
-```python
-@eval(input="Explain quantum computing", dataset="qa")
-async def test_explanation(ctx: EvalContext):
-    ctx.output = await my_agent(ctx.input)
-
-    assert len(ctx.output) > 50, "Response too short"
-    assert "quantum" in ctx.output.lower(), "Should mention quantum"
-```
-
-**3) Multiple named scores:**
-
-```python
-@eval(input="Classify this text", dataset="classification")
-async def test_classifier(ctx: EvalContext):
-    result = await classifier(ctx.input)
-    ctx.output = result["label"]
-
-    ctx.add_score(result["confidence"] > 0.8, "High confidence", key="confidence")
-    ctx.add_score("positive" in result["label"], "Sentiment detected", key="sentiment")
-```
-
-### `@eval` decorator
-
-Wraps a function and records evaluation results.
-
-**Parameters:**
-- `input` (any): Pre-populate ctx.input
-- `reference` (any): Pre-populate ctx.reference
-- `dataset` (str): Groups related evals (defaults to filename)
-- `labels` (list): Filtering tags
-- `metadata` (dict): Pre-populate ctx.metadata
-- `default_score_key` (str): Default key for `add_score()`
-- `timeout` (float): Maximum execution time in seconds
-- `target` (callable): Pre-hook that runs before the eval
-- `evaluators` (list): Callables that add scores to a result
-
-**Examples:**
-
-```python
-# Minimal
-@eval(input="test")
-def test(ctx: EvalContext):
-    ctx.output = process(ctx.input)
-    assert ctx.output
-
-# With timeout
-@eval(input="complex task", timeout=5.0, dataset="performance")
-async def test_with_timeout(ctx: EvalContext):
-    ctx.output = await slow_agent(ctx.input)
-
-# Target hook to run your agent
-def call_agent(ctx: EvalContext):
-    ctx.output = my_agent(ctx.input)
-
-@eval(input="What is the weather?", target=call_agent, dataset="agent")
-def test_with_target(ctx: EvalContext):
-    assert "weather" in ctx.output.lower()
-```
-
-### File-level defaults
-
-Set global properties for all tests in a file using `ezvals_defaults`:
-
-```python
-ezvals_defaults = {
-    "dataset": "sentiment_analysis",
-    "labels": ["production", "nlp"],
-    "metadata": {"model": "gpt-4"}
-}
-
-@eval(input="I love this!")
-def test_positive(ctx: EvalContext):
-    ctx.output = analyze(ctx.input)
-    assert ctx.output == "positive"
-
-@eval(input="This is terrible", labels=["experimental"])  # Override labels
-def test_negative(ctx: EvalContext):
-    ctx.output = analyze(ctx.input)
-    assert ctx.output == "negative"
-```
-
-**Priority:** Decorator parameters > File defaults > Built-in defaults
-
-### Cases (`cases=`)
-
-Generate multiple evals from one function with the `cases=` argument on `@eval`.
-
-Cases are list-of-dict overrides for the same fields you can pass to `@eval` (plus `id`).
-
-```python
-@eval(
-    dataset="sentiment",
-    cases=[
-        {"input": "I love this!", "reference": "positive"},
-        {"input": "This is terrible", "reference": "negative"},
-        {"input": "It's okay I guess", "reference": "neutral"},
-    ],
-)
-def test_sentiment(ctx: EvalContext):
-    ctx.output = analyze_sentiment(ctx.input)
-    assert ctx.output == ctx.reference
-```
-
-**Custom case data:**
-
-```python
-@eval(
-    dataset="math",
-    cases=[
-        {"input": {"a": 2, "b": 3}, "reference": 5},
-        {"input": {"a": 4, "b": 7}, "reference": 28},
-    ],
-)
-def test_calculator(ctx: EvalContext):
-    ctx.output = ctx.input["a"] + ctx.input["b"]
-    assert ctx.output == ctx.reference
-```
-
-**Explicit grids:**
-
-```python
-@eval(
-    dataset="models",
-    cases=[
-        {"input": {"model": "gpt-4", "temperature": 0.0}},
-        {"input": {"model": "gpt-4", "temperature": 0.7}},
-        {"input": {"model": "gpt-4", "temperature": 1.0}},
-        {"input": {"model": "gpt-3.5", "temperature": 0.0}},
-        {"input": {"model": "gpt-3.5", "temperature": 0.7}},
-        {"input": {"model": "gpt-3.5", "temperature": 1.0}},
-    ],
-)
-def test_model_grid(ctx: EvalContext):
-    ctx.output = run_model(ctx.input["model"], ctx.input["temperature"])
-    assert ctx.output is not None
-```
-
-## Reference
-
-### EvalResult schema
-
-`EvalContext` automatically builds an `EvalResult` when the evaluation completes. You can also return `EvalResult` directly:
-
-```python
-from ezvals import EvalResult
-
-@eval(dataset="test")
-def test_direct():
-    return EvalResult(
-        input="...",
-        output="...",
-        reference="...",      # optional
-        latency=0.123,        # optional (auto-calculated if not provided)
-        metadata={"model": "gpt-4"},  # optional
-        run_data={"trace": [...]},     # optional
-        scores=[{"key": "exact", "passed": True}],
-    )
-```
-
-### Score schema
-
-```python
-{
-    "key": "metric_name",    # required
-    "value": 0.95,           # optional: numeric score
-    "passed": True,          # optional: boolean pass/fail
-    "notes": "...",          # optional: justification
-}
-```
-
-### Evaluators
-
-Callables that add scores to results after execution:
-
-```python
-def check_length(result):
-    return {"key": "length", "passed": len(result.output) > 50}
-
-@eval(input="Explain recursion", evaluators=[check_length], dataset="qa")
-async def test_response(ctx: EvalContext):
-    ctx.output = await my_agent(ctx.input)
-```
-
-## CLI
+## Run it
 
 ```bash
-# Run evals headlessly
-ezvals run path/to/evals
-
-# Run with web UI
-ezvals serve path/to/evals
-
-# Run specific function
-ezvals run path/to/evals.py::function_name
+ezvals run evals/                  # headless; saves to .ezvals/sessions/
+ezvals run evals/ --json           # ...and print the results as JSON (handy for agents)
+ezvals serve evals/                # web UI: run, filter, annotate, compare runs
+ezvals run evals/support.py::test_refund -c 8 --timeout 30
 ```
 
-**Common flags:**
-```
--d, --dataset TEXT      Filter by dataset(s)
--l, --label TEXT        Filter by label(s)
--c, --concurrency INT   Number of concurrent evals
---timeout FLOAT         Global timeout in seconds
--v, --verbose           Show stdout from eval functions
-```
+TypeScript projects run the same commands through `npx ezvals`. A directory with both languages runs as one.
 
-**Run flags:**
-```
--o, --output FILE       Save JSON summary
---visual                Show progress dots and results table
---no-save               Output JSON to stdout instead of saving
-```
+## Agent skill
 
-## Frontend Build Artifacts Policy
-
-Generated UI assets in `ezvals/static/` are intentionally not committed in normal development.
-Release packaging builds the UI and bundles these files into published artifacts so installed users can run `ezvals serve` without extra steps.
-
-If you run from a git checkout and UI assets are missing:
+EZVals ships a skill that teaches coding agents to write and analyze evals:
 
 ```bash
-cd ui
-npm ci
-npm run build
+ezvals skills add --claude   # or --codex, --cursor, --windsurf, --kiro, --roo, --agents
 ```
 
-**Serve flags:**
-```
---session TEXT          Session name to group runs
---run-name TEXT         Name for this run
---port INT              Port (default 8000)
---open / --no-open      Automatically open browser (default: open)
-```
+## How it works
 
-## Sessions and runs
+`ezvals` is a single Go binary (`cmd/ezvals/`) that owns the CLI, the web UI (`ui/`, embedded at build time) and storage. To run evals it spawns a small worker from the language SDK (`python/`, `typescript/`) that imports your files and executes evals on request; results stream back and are appended to a per-run event log. Adding a language means writing an SDK against [the SDK spec](docs/.spec/EXPERIENCE_SPEC_SDK.md) and passing the shared `conformance/` fixtures.
 
-Group related eval runs together:
+## Development
+
+Requires Go, Node, and uv.
 
 ```bash
-# Named session and run
-ezvals serve examples --session model-upgrade --run-name baseline
-
-# Auto-generated friendly names (e.g., "swift-falcon")
-ezvals serve examples
+make build                         # UI + host binary (into python/ezvals/bin) + TypeScript SDK
+make test                          # Go (incl. cross-language conformance), Python and TypeScript tests
+make test-e2e                      # browser tests for the web UI
+uv run --project python ezvals serve examples
 ```
 
-Results are saved to `.ezvals/runs/` with the pattern `{run_name}_{timestamp}.json`.
-
-## Agent Skill
-
-EZVals includes a skill that teaches AI coding agents how to write and analyze evals.
-
-### Install from package (version-matched)
-
-```bash
-ezvals skills add --claude
-```
-
-### Install from marketplace (latest)
-
-```bash
-npx skills add camronh/evals-skill
-```
-
-### Check installation
-
-```bash
-ezvals skills doctor
-```
-
-At least one target flag is required (`--agents`, `--claude`, `--codex`, `--cursor`, `--windsurf`, `--kiro`, `--roo`). EZVals installs to selected target directories and symlinks additional selected targets to a canonical source. If `--agents` is selected, `.agents/skills/evals/` is canonical. Invoke with `/evals` in your AI coding agent.
-
-## Contributing
-
-```bash
-make setup-skills # link agent skills for claude and codex
-uv run pytest -q
-uv run ruff check ezvals tests
-```
-
-Demo:
-
-```bash
-uv run ezvals serve examples
-```
+Specs in `docs/.spec/` are the source of truth for behavior.

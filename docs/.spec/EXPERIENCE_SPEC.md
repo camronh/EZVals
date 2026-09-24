@@ -1,8 +1,5 @@
 # Experience Specification: EZVals
 
-**Version:** 0.1.5
-**Generated:** 2025-12-05
-
 This is the canonical source of truth for what EZVals enables users to do and how they do it. If someone deleted all the code but kept these documents, another developer should be able to rebuild the library with identical user-facing behavior.
 
 ---
@@ -11,7 +8,9 @@ This is the canonical source of truth for what EZVals enables users to do and ho
 
 | Document | Covers |
 |----------|--------|
-| [EXPERIENCE_SPEC_PYTHON.md](./EXPERIENCE_SPEC_PYTHON.md) | Python API: `@eval`, `EvalContext`, `cases`, schemas |
+| [EXPERIENCE_SPEC_PYTHON.md](./EXPERIENCE_SPEC_PYTHON.md) | Python API: `@eval`, `EvalContext`, `cases`, schemas. The reference for eval semantics in every language |
+| [EXPERIENCE_SPEC_TYPESCRIPT.md](./EXPERIENCE_SPEC_TYPESCRIPT.md) | TypeScript API: `evaluate`, `EvalContext` |
+| [EXPERIENCE_SPEC_SDK.md](./EXPERIENCE_SPEC_SDK.md) | What every language SDK must implement: the worker protocol and run format |
 | [EXPERIENCE_SPEC_CLI.md](./EXPERIENCE_SPEC_CLI.md) | CLI: `ezvals run`, `ezvals serve`, flags, exit codes |
 | [EXPERIENCE_SPEC_WEBUI.md](./EXPERIENCE_SPEC_WEBUI.md) | Web UI: table view, detail view, editing, export, REST API |
 
@@ -32,6 +31,8 @@ EZVals is a **pytest-inspired, code-first evaluation framework** for LLM applica
 4. **Minimal, not opinionated** - Flexible per-test-case logic, unlike rigid "one function per dataset" frameworks.
 
 5. **Analysis over pass/fail** - Unlike pytest where tests are binary, evals are for analysis. All results matter.
+
+6. **One tool, many languages** - Python and TypeScript evals share one CLI, one UI and one run format, and behave identically.
 
 ### Design Tradeoffs
 
@@ -55,7 +56,7 @@ EZVals is a **pytest-inspired, code-first evaluation framework** for LLM applica
 | `EvalContext` injection | Build results declaratively | [Python](./EXPERIENCE_SPEC_PYTHON.md#evalcontext) |
 | Assertion-based scoring | Pytest-like pass/fail | [Python](./EXPERIENCE_SPEC_PYTHON.md#assertion-based-scoring) |
 | `ezvals run` command | Headless execution | [CLI](./EXPERIENCE_SPEC_CLI.md#ezvals-run) |
-| Results saved to JSON | Persistence and analysis | [CLI](./EXPERIENCE_SPEC_CLI.md#output-options) |
+| Results saved per run | Persistence and analysis | [CLI](./EXPERIENCE_SPEC_CLI.md#output-options) |
 | `ezvals serve` command | Web UI for review | [CLI](./EXPERIENCE_SPEC_CLI.md#ezvals-serve) |
 
 ### Tier 2: Important (Has Workarounds)
@@ -74,7 +75,6 @@ EZVals is a **pytest-inspired, code-first evaluation framework** for LLM applica
 
 | Capability | What It Enables | Spec |
 |------------|-----------------|------|
-| `--visual` output | Rich terminal display | [CLI](./EXPERIENCE_SPEC_CLI.md#output-options) |
 | `--verbose` | Debug output | [CLI](./EXPERIENCE_SPEC_CLI.md#output-options) |
 | `ezvals.json` config | Persistent defaults | [CLI](./EXPERIENCE_SPEC_CLI.md#configuration-file-ezvalsjson) |
 | UI inline editing | Result annotation | [WebUI](./EXPERIENCE_SPEC_WEBUI.md#inline-editing) |
@@ -83,36 +83,21 @@ EZVals is a **pytest-inspired, code-first evaluation framework** for LLM applica
 
 ---
 
-## Data Flow
+## Architecture
 
 ```
-┌─────────────────┐
-│   @eval func    │
-│   + params      │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  EvalContext    │ ◄── ctx.store(input=, output=, scores=)
-│  (mutable)      │
-└────────┬────────┘
-         │ .build()
-         ▼
-┌─────────────────┐
-│  EvalResult     │ ◄── Immutable result
-│  (immutable)    │
-└────────┬────────┘
-         │ evaluators run
-         ▼
-┌─────────────────┐
-│  Final Result   │ ◄── Additional scores merged
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  JSON Storage   │ ◄── .ezvals/runs/{name}_{timestamp}.json
-└─────────────────┘
+ezvals (one Go binary: CLI, web UI, storage)
+   │  spawns one worker per language, per run
+   ├── python -m ezvals.worker  files...     ◄── Python SDK
+   └── node ezvals/dist/worker.js files...   ◄── TypeScript SDK
+          │  JSON lines over stdin/stdout (see EXPERIENCE_SPEC_SDK.md)
+          ▼
+   .ezvals/sessions/<session>/<run_id>.jsonl  ◄── append-only event log per run
 ```
+
+- SDKs only discover and execute user code. Filtering, concurrency, pause/stop, storage, stats, export and the UI live in the host, once.
+- Every run starts fresh worker processes, so edited eval code is always picked up and a crashing eval can't take down the server.
+- Within an SDK: the eval function builds a result via `EvalContext`, assertions become scores, evaluators add scores, and the SDK reports each eval's results back to the host.
 
 ---
 
@@ -136,7 +121,8 @@ EZVals is a **pytest-inspired, code-first evaluation framework** for LLM applica
 1. Target runs before eval body (if specified)
 2. Evaluators run after eval completes
 3. Async functions are properly awaited
-4. Timeout terminates with error, not failed score
+4. Timeout terminates with error, not failed score, and returns at the deadline without waiting for the eval
+5. The same eval produces the same result in every language SDK (enforced by `conformance/`)
 
 ### CLI Exit Codes
 
@@ -146,24 +132,11 @@ EZVals is a **pytest-inspired, code-first evaluation framework** for LLM applica
 
 ---
 
-## Discrepancies: Documentation vs Reality
-
-### Untested (Implemented but No Test Coverage)
-
-| Feature | Risk Level |
-|---------|------------|
-| Global `--timeout` CLI flag | Medium |
-
-### Spec vs Code Gaps
+## Known Gaps
 
 | Spec Feature | Status |
 |-------------|--------|
-| Keyboard shortcut 'e' (export) | **Not implemented** in React UI (lost during JSX-to-React migration) |
-| Keyboard shortcut 'f' (filter) | **Not implemented** in React UI (lost during JSX-to-React migration) |
-| Keyboard shortcut 'r' (refresh) | **Not implemented** in React UI (lost during JSX-to-React migration; E2E test only checks key press doesn't crash) |
-| Score editing in detail view | Backend PATCH endpoint exists; **UI not implemented** in React (no edit controls for scores) |
-| Compact/expanded stats bar toggle | **Removed** (stats bar is expanded-only; no collapse/expand toggle) |
-| Copy session/run name | **Implemented** via `CopyableText` component with clipboard + "Copied!" tooltip |
+| Keyboard shortcuts `e` (export), `f` (filter), `r` (refresh) in the table view | Not implemented in the React UI |
 
 ---
 
@@ -182,29 +155,26 @@ These are mistakes new users commonly make.
 
 | What User Does | Error Message |
 |----------------|---------------|
-| Target without context param | `ValueError: Target functions require... context parameter` |
-| Custom param not in signature | `TypeError: got unexpected keyword argument 'prompt'` |
+| Target without context param | `ValueError: target requires the evaluation function to accept a context parameter` |
+| Unknown case key | `ValueError: Unknown case keys: prompt` |
 | `store(scores=...)` without key and no default | `ValueError: Must specify score key or set default_score_key` |
-| Score missing value and passed | `ValidationError: Either 'value' or 'passed' must be provided` |
+| Score missing value and passed | `ValueError: Either 'value' or 'passed' must be provided in score` |
 | Wrong return type | `ValueError: Evaluation function must return EvalResult, List[EvalResult], EvalContext, or None` |
 | Path doesn't exist | `Error: Path nonexistent.py does not exist` (exit 1) |
-| Invalid path type | `ValueError: Path some_file.txt is neither a Python file nor a directory` |
-| Concurrency = 0 | `ValueError: concurrency must be at least 1, got 0` |
-| Cases count mismatch | `ValueError: Expected 3 values, got 2` |
+| Invalid path type | `Error: Path some_file.txt is neither an eval file nor a directory` (exit 1) |
+| Concurrency = 0 | `Error: concurrency must be at least 1, got 0` (exit 1) |
+| Eval file fails to import | The import error and traceback, exit 1 |
 
 ---
 
-## Test Coverage Recommendations
+## Tests
 
-### Medium Priority
-
-```gherkin
-Scenario: Global --timeout overrides decorator timeout
-Scenario: Three-state filtering (include/exclude/any)
-Scenario: Filter persistence across navigation
-Scenario: Keyboard shortcuts r/e/f in table view (currently not implemented in React UI)
-Scenario: Score editing in detail view (backend exists, no UI controls)
-```
+| Suite | Covers |
+|-------|--------|
+| `conformance/` (run by `go test`) | Every SDK produces identical results for the same fixture: scoring, assertions, errors, timeouts, cases, loaders, file defaults, targets, evaluators |
+| `cmd/ezvals/*_test.go` | Event log folding, storage, filters, the HTTP API with real workers |
+| `python/tests/`, `typescript/test/` | Language-specific API surface |
+| `e2e/` | The web UI in a browser: running, stopping, detail view, annotations, filters, comparison, export |
 
 ---
 
@@ -215,4 +185,4 @@ Scenario: Score editing in detail view (backend exists, no UI controls)
 3. **Forward ref annotations:** `ctx: "EvalContext"` works
 4. **call_async():** `await func.call_async()` for async functions
 5. **Result status field:** "not_started", "pending", "running", "completed", "error", "cancelled"
-6. **Annotations field:** Editable in UI, persists to JSON
+6. **Annotation field:** Editable in UI, persists in the run's event log

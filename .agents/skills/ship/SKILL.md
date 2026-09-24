@@ -12,7 +12,7 @@ Follow these steps in order:
 
 ## 2. Run Tests
 
-- Run tests and ensure all tests pass. (Use `-n auto` to run tests in parallel)
+- Run `make test` and `make test-e2e` and ensure all tests pass.
 - If tests fail, STOP and report the failures
 
 ## 3. Version Bump
@@ -20,13 +20,13 @@ Follow these steps in order:
 - Read `docs/changelog.mdx` to see what's in the `## Unreleased` section
 - Suggest the next version (based on existing versions in the changelog)
 - Update `docs/changelog.mdx`: change `## Unreleased` to `## <version> - <today's date>`
-- Update `pyproject.toml` version to match
-- Run `uv lock` to sync the lock file with the new version
+- Update the version in `python/pyproject.toml` and `typescript/package.json` to match
+- Run `cd python && uv lock` to sync the lock file with the new version
 - Summarize the changes for this version in a human friendly way. Focus on impactful changes and user facing changes.
 
 ## 4. Update Skill Version
 
-- Update the version comment in `ezvals/skills/evals/SKILL.md` (the `<!-- Version: X.X.X -->` line) to match the release version
+- Update the version comment in `cmd/ezvals/skill/SKILL.md` (the `<!-- Version: X.X.X -->` line) to match the release version
 - The skill version **MUST** match the release tag — the Sync Skill to Marketplace workflow will fail otherwise
 
 ## 5. Commit & Push Dev

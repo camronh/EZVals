@@ -13,7 +13,7 @@ from ezvals import eval, EvalResult, TraceData, EvalContext, run_evals, run, Eva
 | Export | Type | Purpose |
 |--------|------|---------|
 | `eval` | decorator | Mark functions as evaluations |
-| `EvalResult` | dataclass | Immutable result container |
+| `EvalResult` | dataclass | Result container |
 | `TraceData` | class | Structured trace/debug data storage |
 | `EvalContext` | class | Mutable builder for results |
 | `run_evals` | function | Programmatic execution |
@@ -29,32 +29,34 @@ from ezvals import eval, EvalResult, TraceData, EvalContext, run_evals, run, Eva
 ```python
 from ezvals import run
 
-result = run(
+run_data = run(
     path="evals.py",
     session="my-session",
     run_name="baseline",
     concurrency=4,
 )
-# result["summary"], result["saved_path"], result["run_id"], ...
+# run_data["results"], run_data["total_passed"], run_data["run_id"], run_data["saved_path"], ...
 ```
+
+Parameters mirror the `ezvals run` flags: `path` (may include `::selectors`), `dataset`, `labels`, `limit`, `output`, `concurrency`, `timeout`, `session`, `run_name`, `no_save`, `config`. The return value is the run JSON (see [the web UI spec](./EXPERIENCE_SPEC_WEBUI.md#json-schema)) plus `saved_path`.
 
 ```gherkin
 Scenario: Programmatic run command
   Given a script calling run(path="evals.py", dataset="qa")
   When run executes
   Then behavior matches shell `ezvals run` for equivalent options
-  And it returns run metadata, summary, and saved path details
+  And it returns the run (ids, names, totals, results) and where it was saved
 
 Scenario: Programmatic command failure
   Given run(path="missing.py")
   When run executes
-  Then it raises a ValueError
+  Then it raises a ValueError with the CLI's error message
 
 Scenario: SDK run does not create config by default
   Given run(path="evals.py", no_save=True)
   When no ezvals.json exists yet
   Then run uses built-in defaults
-  And it does not create ezvals.json
+  And it does not create ezvals.json (nothing creates it except saving settings in the UI)
 ```
 
 ---
@@ -252,7 +254,7 @@ Scenario: Access run metadata in eval function
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `run_id` | str \| None | Unique run identifier (timestamp), read-only |
+| `run_id` | str \| None | Unique run identifier (8 hex characters), read-only |
 | `session_name` | str \| None | Session name for the run, read-only |
 | `run_name` | str \| None | Human-readable run name, read-only |
 | `eval_path` | str \| None | Path to eval file(s) being run, read-only |
@@ -492,20 +494,14 @@ Scenario: Empty loader returns no results
 Scenario: Loader failure creates error result
   Given input_loader raises an exception
   When evaluations run
-  Then one EvalResult with error="input_loader failed: ..."
+  Then one EvalResult with error="Input loader failed: <message>" followed by the traceback
 ```
 
 ### Loader Return Format
 
 The loader can return a list of dicts or objects. Field mapping:
 
-| Dict Key / Object Attr | Maps To | Behavior |
-|------------------------|---------|----------|
-| `input` | ctx.input | Overrides |
-| `reference` | ctx.reference | Overrides |
-| `metadata` | ctx.metadata | Overrides |
-| `dataset` | result dataset | Overrides function dataset |
-| `labels` | result labels | Merges with function labels (no duplicates) |
+Each example is treated exactly like an item of `cases=` (dicts, or objects whose attributes are read): any case field overrides the decorator's value, `labels` and `metadata` merge, and `id` names the variant.
 
 ### Constraints
 
@@ -519,8 +515,8 @@ Scenario: Mutually exclusive with input=/reference=
   Then ValueError raised at decoration time
 
 Scenario: Mutually exclusive with cases
-  Given @eval(input_loader=fn) with cases
-  Then ValueError raised at discovery time
+  Given @eval(input_loader=fn, cases=[...])
+  Then ValueError raised at decoration time
 ```
 
 ---
@@ -590,6 +586,7 @@ def test_two(ctx): ...
 - `metadata`: Merged (decorator values override same keys)
 - `evaluators`: Replaced (not merged)
 - All others: Replaced
+- Unknown keys in `ezvals_defaults` raise `ValueError`
 
 ---
 
@@ -598,33 +595,28 @@ def test_two(ctx): ...
 ### EvalResult
 
 ```python
+@dataclass
 class EvalResult:
     input: Any              # Required
     output: Any             # Required
     reference: Any = None
-    scores: list[Score] = []
+    scores: list[dict] = []
     error: str = None
     latency: float = None
     metadata: dict = {}
     trace_data: TraceData = TraceData()
 
-class TraceData:
+class TraceData(dict):
     messages: List[Any] = []
     trace_url: Optional[str] = None
-    # Plus arbitrary extra properties via __getitem__/__setitem__
+    # Plus arbitrary extra properties via item or attribute access
 ```
 
-**Scores convenience:** Can pass single dict, list of dicts, or list of Score objects.
+**Scores convenience:** Can pass a single dict or a list of dicts.
 
 ### Score
 
-```python
-class Score:
-    key: str = "pass"    # Required, default is "pass"
-    value: float = None         # At least one of
-    passed: bool = None         # these are required
-    notes: str = None
-```
+A dict with `key` (default `"pass"`), `value` (float) and/or `passed` (bool) — at least one of the two is required — and optional `notes`.
 
 ---
 
@@ -635,7 +627,7 @@ class Score:
 ```gherkin
 Scenario: Exception during evaluation
   Given eval function raises ValueError("broke")
-  Then result.error = "ValueError: broke"
+  Then result.error = "ValueError: broke" followed by the traceback
   And result.input/output preserved (if set before error)
   And a score is not added
 ```
@@ -646,6 +638,8 @@ Scenario: Exception during evaluation
 Scenario: Evaluation exceeds timeout
   Given @eval(timeout=5.0) and function takes 10 seconds
   Then result.error = "TimeoutError: Evaluation timed out after 5.0s"
+  And the result is reported after 5 seconds, not 10 (a sync function is abandoned, not awaited)
+  And ctx data set before the timeout is preserved
 ```
 
 ### Validation Errors
@@ -653,11 +647,10 @@ Scenario: Evaluation exceeds timeout
 | Error | Cause |
 |-------|-------|
 | `ValueError: Either 'value' or 'passed' must be provided` | Score missing both |
-| `ValueError: Must specify score key or set default_score_key` | store(scores=...) without key and no default_score_key |
-| `ValueError: Target functions require... context parameter` | target without ctx param |
+| `ValueError: Must specify score key or set default_score_key` | store(scores=...) without key and default_score_key=None |
+| `ValueError: target requires the evaluation function to accept a context parameter` | target (or cases, input_loader) without ctx param |
 | `ValueError: Evaluation function must return EvalResult...` | Wrong return type |
-| `ValueError: Expected N values, got M` | Parametrize mismatch |
-| `TypeError: got unexpected keyword argument` | Parametrize param not in signature |
+| `ValueError: Unknown case keys: ...` | A case has a key that isn't a decorator parameter |
 
 ---
 
