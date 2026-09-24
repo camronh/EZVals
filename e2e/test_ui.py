@@ -83,6 +83,7 @@ def test_detail_view_navigation_and_annotation(app: Page):
     expect(row(app, 1)).to_have_attribute("data-status", "completed")
     row(app, 0).locator("td").nth(1).click()
     expect(app).to_have_url(re.compile(r"/results/0$"))
+    expect(app.locator("#output-panel")).to_contain_text("0")
     app.keyboard.press("ArrowDown")
     expect(app).to_have_url(re.compile(r"/results/1$"))
 
