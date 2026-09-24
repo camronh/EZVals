@@ -138,8 +138,9 @@ async def test_with_error(ctx: EvalContext):
 
 The resulting `EvalResult` will have:
 - `input` and `output` preserved
-- `error` field with the exception message
-- A failing score automatically added
+- `error` set to the exception type, message, and traceback (e.g. `"ValueError: bad response\n<traceback>"`)
+
+Failed assertions are different: they become failing scores, not errors (see [Scoring](/core-concepts/scoring)).
 
 ## Default Scoring
 
@@ -177,10 +178,11 @@ When your eval function runs, the context includes metadata about the current ru
 @eval(dataset="customer_service", labels=["production"])
 async def my_eval(ctx: EvalContext):
     # Run-level metadata (same for all evals in a run)
-    print(ctx.run_id)        # "1705312200"
+    print(ctx.run_id)        # "a1b2c3d4"
     print(ctx.session_name)  # "model-upgrade"
     print(ctx.run_name)      # "baseline"
     print(ctx.eval_path)     # "evals/"
+    print(ctx.config)        # {"model": "gpt-4"} with --config gpt-4
 
     # Per-eval metadata (from decorator)
     print(ctx.function_name) # "my_eval"
@@ -195,10 +197,11 @@ async def my_eval(ctx: EvalContext):
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `run_id` | str \| None | Unique run identifier (timestamp), read-only |
+| `run_id` | str \| None | Unique run identifier (8 hex characters), read-only |
 | `session_name` | str \| None | Session name for the run, read-only |
 | `run_name` | str \| None | Human-readable run name, read-only |
 | `eval_path` | str \| None | Path to eval file(s) being run, read-only |
+| `config` | dict | Named config profile selected with `--config` (empty if none), read-only |
 
 ### Per-Eval Metadata
 
@@ -208,12 +211,30 @@ async def my_eval(ctx: EvalContext):
 | `dataset` | str \| None | Dataset from @eval decorator |
 | `labels` | list[str] \| None | Labels from @eval decorator |
 
+## TypeScript
+
+The TypeScript context works the same way, with camelCase names: `ctx.traceData`, `ctx.store({ traceUrl })`, and run info as `ctx.runId`, `ctx.sessionName`, `ctx.runName`, `ctx.evalPath`, `ctx.config`, `ctx.functionName`, `ctx.dataset`, `ctx.labels`.
+
+```ts
+import { evaluate } from "ezvals";
+
+evaluate("my_eval", { input: "What is 2 + 2?", dataset: "demo" }, async (ctx) => {
+  const result = await myAgent(ctx.input);
+  ctx.store({
+    output: result.text,
+    messages: result.messages,
+    metadata: { model: "gpt-4" },
+    scores: [{ key: "correct", passed: result.text === "4" }],
+  });
+});
+```
+
 ## API Reference
 
 | Method | Description |
 |--------|-------------|
 | `store(input, output, reference, latency, scores, messages, trace_url, metadata, trace_data)` | Set any context fields at once |
-| `build()` | Convert to immutable EvalResult |
+| `build()` | Build the EvalResult (done automatically when the function returns) |
 
 ### store() Parameters
 
@@ -237,4 +258,4 @@ async def my_eval(ctx: EvalContext):
 | `metadata` | dict | Custom metadata |
 | `trace_data` | TraceData | Debug/trace data |
 | `latency` | float | Execution time |
-| `scores` | list | List of Score objects |
+| `scores` | list[dict] | Scores added so far (`{"key", "value" \| "passed", "notes"}`) |

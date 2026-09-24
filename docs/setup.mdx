@@ -25,31 +25,44 @@ This teaches your agent how to write evals, choose grading strategies, and analy
 
 ## Install the Library
 
-If you want to install EZVals directly (or your agent hasn't done it yet):
+If you want to install EZVals directly (or your agent hasn't done it yet), install the package for your language. Both ship the same `ezvals` CLI and web UI.
 
-<CodeGroup>
+<Tabs>
+  <Tab title="Python">
+    <CodeGroup>
 
-```bash uv
-uv add ezvals --dev
-```
+    ```bash uv
+    uv add ezvals --dev
+    ```
 
-```bash pip
-pip install ezvals
-```
+    ```bash pip
+    pip install ezvals
+    ```
 
-```bash poetry
-poetry add ezvals --group dev
-```
+    ```bash poetry
+    poetry add ezvals --group dev
+    ```
 
-</CodeGroup>
+    </CodeGroup>
 
-## How It Works
+    The package has no Python dependencies; it ships a small platform-specific binary that runs the CLI and web UI.
+  </Tab>
+  <Tab title="TypeScript">
+    ```bash
+    npm install --save-dev ezvals
+    ```
 
-<Steps>
-  <Step title="Decorate">
-    Use [`@eval`](/core-concepts/decorators) to define test cases with inputs, references, and datasets.
+    Requires Node 22.18 or newer, which runs `.ts` eval files directly, with no build step. Run the CLI with `npx ezvals`.
+  </Tab>
+</Tabs>
 
-    ```python
+## Your First Eval
+
+<Tabs>
+  <Tab title="Python">
+    Any `.py` file works (files starting with `_` are skipped):
+
+    ```python evals.py
     from ezvals import eval, EvalContext
 
     @eval(input="What is 2+2?", reference="4")
@@ -57,18 +70,49 @@ poetry add ezvals --group dev
         ctx.output = await my_llm(ctx.input)
         assert ctx.output == ctx.reference
     ```
+
+    ```bash
+    ezvals run evals.py
+    ```
+  </Tab>
+  <Tab title="TypeScript">
+    Eval files end in `.eval.ts` (or `.eval.mts`, `.eval.js`, `.eval.mjs`):
+
+    ```ts math.eval.ts
+    import assert from "node:assert";
+    import { evaluate } from "ezvals";
+
+    evaluate("test_math", { input: "What is 2+2?", reference: "4" }, async (ctx) => {
+      ctx.output = await myLlm(ctx.input);
+      assert.equal(ctx.output, ctx.reference);
+    });
+    ```
+
+    ```bash
+    npx ezvals run math.eval.ts
+    ```
+  </Tab>
+</Tabs>
+
+A directory can mix Python and TypeScript evals. `ezvals run evals/` and `ezvals serve evals/` run both into a single run.
+
+## How It Works
+
+<Steps>
+  <Step title="Define">
+    Use [`@eval`](/core-concepts/decorators) (or `evaluate()` in TypeScript) to define test cases with inputs, references, and datasets.
   </Step>
   <Step title="Execute">
-    Your [target function](/core-concepts/eval-context) runs and populates an `EvalContext` with inputs, outputs, and metadata.
+    Your [target function](/core-concepts/eval-context) runs and populates an `EvalContext` with inputs, outputs, and metadata. Each run starts fresh worker processes, so edits to your eval code are always picked up on the next run.
   </Step>
   <Step title="Score">
     [Assertions and evaluators](/core-concepts/scoring) produce scores. Passing assertions score as `pass`, failures capture the assertion message.
   </Step>
   <Step title="Store">
-    Results save as JSON in your repo under `.ezvals/sessions/`. Every run is versioned and grouped by [session](/guides/sessions).
+    Each run is saved in your repo under `.ezvals/sessions/`, grouped by [session](/guides/sessions).
   </Step>
   <Step title="Analyze">
-    View, compare, annotate, and export from the [web dashboard](/guides/web-ui)—or let your agent parse the JSON directly.
+    View, compare, annotate, and export from the [web dashboard](/guides/web-ui), or let your agent read the results as JSON (`ezvals run --json`).
   </Step>
 </Steps>
 
@@ -88,7 +132,7 @@ Opens a local dashboard at `http://127.0.0.1:8000` where you can run, filter, co
 ezvals run evals.py
 ```
 
-Compact output for agents. Results save to `.ezvals/` and can be analyzed programmatically.
+Compact output for agents. Results save to `.ezvals/`; add `--json` to also print the full results to stdout.
 
 See the [CLI Reference](/api-reference/cli) for filtering, sessions, concurrency, and other options.
 
@@ -103,19 +147,21 @@ your-project/
 └── .ezvals/
     └── sessions/
         └── default/
-            └── cool-cloud_a1b2c3d4.json
+            └── a1b2c3d4.jsonl  # One file per run
 ```
 
 ## Configuration
 
-Create `ezvals.json` in your project root to set defaults:
+Optionally create `ezvals.json` in your project root to set defaults:
 
 ```json
 {
   "concurrency": 4,
-  "results_dir": ".ezvals/runs"
+  "timeout": 60
 }
 ```
+
+See the [CLI Reference](/api-reference/cli#configuration-file) for all options.
 
 ## Next Steps
 

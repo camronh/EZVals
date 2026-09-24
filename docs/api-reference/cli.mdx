@@ -11,6 +11,8 @@ EZVals has three main commands:
 - `ezvals run` - Run evaluations headlessly (for CI/CD pipelines)
 - `ezvals export` - Export a run to various formats (JSON, CSV, Markdown)
 
+The CLI is the same whether it's installed from pip (`ezvals ...`) or npm (`npx ezvals ...`). Paths can contain Python eval files (`.py`), TypeScript eval files (`*.eval.ts`, `.mts`, `.js`, `.mjs`), or both; a mixed directory runs as one run.
+
 ## Programmatic Invocation
 
 You can call the SDK equivalent of `ezvals run` from Python:
@@ -18,8 +20,18 @@ You can call the SDK equivalent of `ezvals run` from Python:
 ```python
 from ezvals import run
 
-result = run(path="examples", concurrency=4, session="adhoc")
-print(result["saved_path"])
+result = run("evals/", concurrency=4, session="adhoc")
+print(result["total_passed"], result["saved_path"])
+```
+
+`run(path, dataset=None, labels=None, limit=None, output=None, concurrency=None, timeout=None, session=None, run_name=None, no_save=False, config=None)` takes the same options as `ezvals run` and returns the run as a dict (`run_id`, `session_name`, `run_name`, `total_*` fields, `results`, and `saved_path`). It raises `ValueError` if the CLI fails.
+
+To run evals in-process without the CLI or saving anything, use `run_evals`, which returns a list of `EvalResult`s:
+
+```python
+from ezvals import run_evals
+
+results = run_evals([test_refund, "evals/"], concurrency=4)
 ```
 
 ## ezvals serve
@@ -34,16 +46,16 @@ Where `PATH` can be:
 - A directory: `ezvals serve evals/`
 - A file: `ezvals serve evals/customer_service.py`
 - A specific function: `ezvals serve evals.py::test_refund`
-- A run JSON file: `ezvals serve .ezvals/sessions/default/run_123.json`
+- A run file: `ezvals serve .ezvals/sessions/default/a1b2c3d4.jsonl`
 
-The UI opens automatically in your browser by default. Use `--no-open` to disable browser launch. Evaluations are discovered and displayed but not run until you click the Run button.
+The UI opens automatically in your browser by default. Use `--no-open` to disable browser launch. Evaluations are discovered and displayed but not run until you click the Run button. Stop the server with `Ctrl+C`.
 
 ### Loading Previous Runs
 
-You can load a previous run by passing the JSON file path directly:
+You can load a previous run by passing its run file directly (older `.json` run files are accepted too):
 
 ```bash
-ezvals serve .ezvals/sessions/default/sleek-wolf_1705312200.json
+ezvals serve .ezvals/sessions/default/a1b2c3d4.jsonl
 ```
 
 This opens the UI with that run's results loaded. If the original eval source file still exists, you can rerun evaluations. If the source file was moved or deleted, the UI works in view-only mode.
@@ -66,8 +78,8 @@ ezvals serve evals/ --dataset customer_service
 ezvals serve evals/ --label production -l critical
 ```
 
-<ParamField path="--results-dir" type="string" default=".ezvals/sessions">
-  Directory for JSON results storage.
+<ParamField path="--results-dir" type="string" default=".">
+  Base directory for results. Runs are stored in `{results-dir}/.ezvals/sessions`.
 </ParamField>
 
 ```bash
@@ -83,7 +95,7 @@ ezvals serve evals/ --port 3000
 ```
 
 <ParamField path="--session" type="string">
-  Name for this evaluation session. Groups related runs together.
+  Name for this evaluation session. Groups related runs together. Defaults to a new random name.
 </ParamField>
 
 ```bash
@@ -170,19 +182,19 @@ Where `PATH` can be:
 - A directory: `ezvals run evals/`
 - A file: `ezvals run evals/customer_service.py`
 - A specific function: `ezvals run evals.py::test_refund`
-- A case variant: `ezvals run evals.py::test_math[2-3-5]`
+- A case variant: `ezvals run evals.py::test_math[low]`
 - A list of selectors: `ezvals run evals.py::test_refund,test_escalation`
 - Case IDs with intuitive syntax: `ezvals run evals.py::test_math@low,test_math@high`
 
 ### Filtering Options
 
 <ParamField path="-d, --dataset" type="string" default="all">
-  Filter evaluations by dataset. Can be specified multiple times.
+  Filter evaluations by dataset. Comma-separate multiple datasets.
 </ParamField>
 
 ```bash
 ezvals run evals/ --dataset customer_service
-ezvals run evals/ -d customer_service -d technical_support
+ezvals run evals/ -d customer_service,technical_support
 ```
 
 <ParamField path="-l, --label" type="string" default="all">
@@ -215,7 +227,7 @@ ezvals run evals/ -c 4
 ```
 
 <ParamField path="--timeout" type="float">
-  Global timeout in seconds for all evaluations.
+  Global timeout in seconds for each evaluation. Overrides per-eval `timeout` settings. A timed-out eval stops at the deadline with `error = "TimeoutError: Evaluation timed out after Ns"`.
 </ParamField>
 
 ```bash
@@ -225,7 +237,7 @@ ezvals run evals/ --timeout 30.0
 ### Output Options
 
 <ParamField path="-v, --verbose" type="flag">
-  Show stdout from eval functions (print statements, logs).
+  Show output from eval functions (print statements, logs) and print errors as they happen.
 </ParamField>
 
 ```bash
@@ -233,8 +245,16 @@ ezvals run evals/ --verbose
 ezvals run evals/ -v
 ```
 
+<ParamField path="--json" type="flag">
+  Print the full run as JSON to stdout (`run_id`, `session_name`, `run_name`, totals, `results`, and `saved_path`). Results are still saved.
+</ParamField>
+
+```bash
+ezvals run evals/ --json | jq '.total_passed'
+```
+
 <ParamField path="-o, --output" type="string">
-  Override the default results path. When specified, results are saved only to this path (not to `.ezvals/sessions/`).
+  Write the run as a single JSON file to this path instead of saving it to `.ezvals/sessions/`.
 </ParamField>
 
 ```bash
@@ -243,17 +263,16 @@ ezvals run evals/ -o results.json
 ```
 
 <ParamField path="--no-save" type="flag">
-  Skip saving results to file. Outputs JSON to stdout instead.
+  Don't save anything. Prints the run JSON to stdout instead.
 </ParamField>
 
 ```bash
-# Get results as JSON without writing to disk
 ezvals run evals/ --no-save | jq '.total_passed'
 ```
 
 ### Session Options
 
-<ParamField path="--session" type="string">
+<ParamField path="--session" type="string" default="default">
   Name for this evaluation session. Groups related runs together.
 </ParamField>
 
@@ -262,7 +281,7 @@ ezvals run evals/ --session model-comparison
 ```
 
 <ParamField path="--run-name" type="string">
-  Name for this specific run. Used as file prefix.
+  Name for this specific run. Defaults to the `--config` name, else a random name. Reusing a name in the same session replaces that run (unless `"overwrite": false` in `ezvals.json`).
 </ParamField>
 
 ```bash
@@ -278,15 +297,34 @@ ezvals run evals/ --config gpt-4
 ezvals run evals/ --config claude
 ```
 
+<ParamField path="--rename" type="string">
+  Rename a saved run by ID instead of running evals: `ezvals run --rename RUN_ID NEW_NAME`.
+</ParamField>
+
+```bash
+ezvals run --rename a1b2c3d4 better-name
+```
+
+### Output
+
+Press `Ctrl+C` to stop a run early: finished results are saved and unfinished evals are marked cancelled.
+
+Status lines (`Running …`, `Results saved to …`) go to stderr, so stdout stays clean for `--json`:
+
+```
+Running evals/
+Results saved to .ezvals/sessions/default/a1b2c3d4.jsonl
+```
+
 ## ezvals export
 
 Export a run file to various formats. Useful for sharing results, generating reports, or integrating with other tools.
 
 ```bash
-ezvals export RUN_PATH [OPTIONS]
+ezvals export RUN_FILE [OPTIONS]
 ```
 
-Where `RUN_PATH` is the path to a run JSON file (e.g., `.ezvals/sessions/default/run_123.json`).
+Where `RUN_FILE` is a run file (e.g., `.ezvals/sessions/default/a1b2c3d4.jsonl`). Older `.json` run files are accepted too.
 
 ### Options
 
@@ -295,34 +333,34 @@ Where `RUN_PATH` is the path to a run JSON file (e.g., `.ezvals/sessions/default
 </ParamField>
 
 ```bash
-ezvals export run.json -f md
-ezvals export run.json -f csv
+ezvals export a1b2c3d4.jsonl -f md
+ezvals export a1b2c3d4.jsonl -f csv
 ```
 
 <ParamField path="-o, --output" type="string">
-  Output file path. Defaults to `{run_name}.{format}`.
+  Output file path. Defaults to `{run_name}.{format}` in the current directory.
 </ParamField>
 
 ```bash
-ezvals export run.json -f md -o report.md
+ezvals export a1b2c3d4.jsonl -f md -o report.md
 ```
 
 ### Export Formats
 
 | Format | Description |
 |--------|-------------|
-| `json` | Copy the raw JSON file |
-| `csv` | Flat CSV with all results |
+| `json` | The full run as one JSON document (totals and results) |
+| `csv` | Flat CSV with one row per result, including an `annotation` column |
 | `md` | Markdown with ASCII bar charts and results table |
 
 ### Examples
 
 ```bash
 # Export to Markdown
-ezvals export .ezvals/sessions/default/run_123.json -f md
+ezvals export .ezvals/sessions/default/a1b2c3d4.jsonl -f md
 
 # Export to CSV
-ezvals export run.json -f csv -o results.csv
+ezvals export .ezvals/sessions/default/a1b2c3d4.jsonl -f csv -o results.csv
 ```
 
 ## Examples
@@ -340,7 +378,7 @@ ezvals serve evals/ --port 8080
 ezvals serve evals/ --dataset qa --label production
 
 # Load a previous run to view or continue
-ezvals serve .ezvals/sessions/default/sleek-wolf_1705312200.json
+ezvals serve .ezvals/sessions/default/a1b2c3d4.jsonl
 ```
 
 ### Run All Evaluations
@@ -361,10 +399,16 @@ ezvals run evals/customer_service.py
 ezvals run evals/customer_service.py::test_refund
 ```
 
-### Run Parametrized Variant
+### Run a Case Variant
 
 ```bash
-ezvals run evals/math.py::test_addition[2-3-5]
+ezvals run evals/math.py::test_addition@small
+```
+
+### Run TypeScript Evals
+
+```bash
+npx ezvals run evals/support.eval.ts
 ```
 
 ### Filter by Dataset and Label
@@ -385,8 +429,11 @@ ezvals run evals/ -c 8 --timeout 60.0
 # Results auto-save to .ezvals/sessions/ by default
 ezvals run evals/
 
-# Override output path
+# Write to a single JSON file instead
 ezvals run evals/ -o results.json
+
+# Print the full run as JSON
+ezvals run evals/ --json
 ```
 
 ### Verbose Debug Run
@@ -415,14 +462,15 @@ ezvals run evals/ --session model-comparison --run-name improved
 
 ## Configuration File
 
-EZVals supports a `ezvals.json` config file for persisting default CLI options. The file is auto-generated in your project root on first run.
-
-### Default Config
+EZVals reads an optional `ezvals.json` from the current directory for default CLI options. It's never created automatically: create it yourself, or save settings from the web UI.
 
 ```json
 {
-  "concurrency": 1,
-  "results_dir": "."
+  "concurrency": 4,
+  "timeout": 60,
+  "configs": {
+    "gpt-4": {"model": "gpt-4"}
+  }
 }
 ```
 
@@ -431,10 +479,11 @@ EZVals supports a `ezvals.json` config file for persisting default CLI options. 
 | Option | Type | Description | Used by |
 |--------|------|-------------|---------|
 | `concurrency` | integer | Number of concurrent evaluations | `run` |
-| `timeout` | float | Global timeout in seconds | `run` |
-| `verbose` | boolean | Show stdout from eval functions | `run` |
-| `results_dir` | string | Base directory; runs are stored in `{results_dir}/.ezvals/sessions` | `run`, `serve` |
-| `port` | integer | Web UI server port | `serve` |
+| `timeout` | float | Global timeout in seconds (overrides per-eval timeouts) | `run`, `serve` |
+| `verbose` | boolean | Show output from eval functions | `run`, `serve` |
+| `results_dir` | string | Base directory; runs are stored in `{results_dir}/.ezvals/sessions` (default `.`) | `run`, `serve` |
+| `overwrite` | boolean | Replace an existing run with the same name in a session (default `true`) | `run`, `serve` |
+| `port` | integer | Web UI server port (default `8000`) | `serve` |
 | `configs` | object | Named config profiles selectable via `--config` | `run`, `serve` |
 
 ### Precedence
@@ -461,34 +510,28 @@ Click the settings icon in the web UI header to view and edit config values. Cha
 The CLI does not currently set non-zero exit codes for failed evaluations—only for execution errors. Check the JSON output or summary for pass/fail status.
 </Note>
 
-## Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `EZVALS_CONCURRENCY` | Default concurrency level |
-| `EZVALS_TIMEOUT` | Default timeout in seconds |
-
 ## Output Format
 
-### Minimal Output (Default)
-
-By default, `ezvals run` outputs minimal text optimized for LLM agents and CI pipelines:
-
-```
-Running evals/...
-Results saved to .ezvals/sessions/default/swift-falcon_a1b2c3d4.json
-```
-
-### JSON File Output
-
-Results are always saved as JSON to `.ezvals/sessions/` (or custom path via `-o`):
+Results are saved to `.ezvals/sessions/<session>/<run_id>.jsonl` (see [Sessions & Runs](/guides/sessions)). With `--json`, `--no-save`, or `-o`, you get the run as one JSON document:
 
 ```json
 {
-  "run_id": "2024-01-15T10-30-00Z",
-  "total": 2,
-  "passed": 1,
-  "failed": 1,
-  "results": [...]
+  "run_id": "a1b2c3d4",
+  "session_name": "default",
+  "run_name": "swift-falcon",
+  "total_evaluations": 2,
+  "total_passed": 1,
+  "total_errors": 0,
+  "average_latency": 0.42,
+  "results": [
+    {
+      "id": "evals.py::test_refund",
+      "function": "test_refund",
+      "dataset": "evals",
+      "labels": [],
+      "result": {"input": "...", "output": "...", "scores": [{"key": "pass", "passed": true}], "error": null, "latency": 0.41}
+    }
+  ],
+  "saved_path": ".ezvals/sessions/default/a1b2c3d4.jsonl"
 }
 ```

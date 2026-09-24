@@ -81,7 +81,23 @@ assert ctx.output == "Paris", "Wrong capital"
 }
 ```
 
-When all assertions pass, a passing score is automatically added.
+When all assertions pass and no other score was stored, a passing score is automatically added.
+
+Any other exception is not a score: it's recorded as the result's `error`, with the exception type, message, and traceback.
+
+### In TypeScript
+
+Use `node:assert`. Any thrown error named `AssertionError` becomes a failing score the same way:
+
+```ts
+import assert from "node:assert";
+import { evaluate } from "ezvals";
+
+evaluate("test_answer_quality", { input: "What is the capital of France?", dataset: "qa" }, async (ctx) => {
+  ctx.output = await myAgent(ctx.input);
+  assert(String(ctx.output).toLowerCase().includes("paris"), "Should mention Paris");
+});
+```
 
 ---
 
@@ -114,6 +130,17 @@ async def test_comprehensive(ctx: EvalContext):
         {"passed": len(ctx.output) < 500, "key": "brevity", "notes": f"Length: {len(ctx.output)}"},
         {"value": calculate_similarity(ctx.output, reference), "key": "similarity", "notes": "Semantic similarity"}
     ])
+```
+
+In TypeScript, pass the same shapes to `ctx.store({ scores })`:
+
+```ts
+ctx.store({
+  scores: [
+    { key: "relevance", passed: String(ctx.output).includes("quantum") },
+    { key: "similarity", value: similarity(ctx.output, ctx.reference) },
+  ],
+});
 ```
 
 ### Combining Assertions and store()

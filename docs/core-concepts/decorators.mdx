@@ -39,7 +39,7 @@ async def test_negative_sentiment(ctx: EvalContext):
 ```
 
 <Note>
-If not specified, dataset defaults to the filename (e.g., `evals.py` → `evals`).
+If not specified, dataset defaults to the filename (e.g., `evals.py` → `evals`, `support.eval.ts` → `support`).
 </Note>
 
 ### Labels
@@ -97,7 +97,7 @@ async def test_with_timeout(ctx: EvalContext):
     ctx.output = await slow_agent(ctx.input)
 ```
 
-On timeout, the evaluation fails with an error message.
+At the deadline the eval stops and its result gets `error = "TimeoutError: Evaluation timed out after 5.0s"`. A global `--timeout` on the CLI (or `timeout` in `ezvals.json`) overrides per-eval timeouts.
 
 ### Target Hook
 
@@ -113,7 +113,7 @@ async def test_weather(ctx: EvalContext):
     assert "weather" in ctx.output.lower()
 ```
 
-This separates agent invocation from assertion logic.
+This separates agent invocation from assertion logic. A target can also just return the output; a returned value becomes `ctx.output`.
 
 ### Evaluators
 
@@ -148,11 +148,11 @@ async def test_from_database(ctx: EvalContext):
     assert ctx.output == ctx.reference
 ```
 
-Each example from the loader becomes a separate eval run. The loader is called lazily at eval time (not at import time), making it ideal for fetching from LangSmith, databases, or APIs.
+Each example from the loader becomes a separate eval. The loader runs when evals are discovered (not at import time), making it ideal for fetching from LangSmith, databases, or APIs.
 
-**Loader return format:**
-- Return a list of dicts with `input`, `reference`, and/or `metadata` keys
-- Or return objects with `.input`, `.reference`, `.metadata` attributes
+**Loader return format:** the same shape as [`cases`](/core-concepts/parametrize). Return a list of dicts with any case keys (`id`, `input`, `reference`, `metadata`, `labels`, `dataset`, ...), or objects with matching attributes. Metadata and labels merge with the decorator's, just like cases.
+
+If the loader raises, a single errored result is recorded with `error = "Input loader failed: <message>"`.
 
 <Note>
 `input_loader` cannot be combined with `input=`, `reference=`, or `cases=`.
@@ -181,6 +181,31 @@ def test_batch():
         ))
     return results
 ```
+
+## TypeScript
+
+In TypeScript, `evaluate(name, options, fn)` takes the same options in camelCase. The function receives the context and may be async.
+
+```ts
+import assert from "node:assert";
+import { evaluate, type EvalContext } from "ezvals";
+
+async function callAgent(ctx: EvalContext) {
+  return customerAgent(String(ctx.input)); // returned value becomes ctx.output
+}
+
+evaluate("test_cancellation_handling", {
+  dataset: "customer_service",
+  labels: ["production", "critical"],
+  input: "I want to cancel my subscription",
+  timeout: 10,
+  target: callAgent,
+}, (ctx) => {
+  assert(String(ctx.output).toLowerCase().includes("cancel"), "Should address cancellation");
+});
+```
+
+Options: `input`, `reference`, `dataset`, `labels`, `metadata`, `defaultScoreKey`, `timeout` (seconds), `target`, `evaluators`, `cases`, `inputLoader`. With no options, use `evaluate(name, fn)`. A function can also return an array of results (`{ input, output, scores, ... }`).
 
 ## All Options Reference
 

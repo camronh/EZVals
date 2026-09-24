@@ -14,7 +14,7 @@ description: The evals framework your coding agent wants
   alt="EZVals"
 />
 
-EZVals is an evaluation framework for testing LLMs and Agents
+EZVals is an evaluation framework for testing LLMs and Agents, with SDKs for Python and TypeScript.
 
 What makes EZVals special is that its built to be used by your coding agent. Your agent writes evals, runs them, analyzes results, and iterates while you monitor the situation from the Dashboard.
 
@@ -26,7 +26,7 @@ What makes EZVals special is that its built to be used by your coding agent. You
     [Compare runs](/guides/web-ui), annotate, and export from a local web UI.
   </Card>
   <Card title="Flexible" icon="sliders">
-    Quick smoke tests or deep multi-model comparisons. [Pytest-style assertions](/core-concepts/scoring), clean code.
+    Quick smoke tests or deep multi-model comparisons. [Pytest-style assertions](/core-concepts/scoring), clean code, Python or TypeScript.
   </Card>
   <Card title="Local-Only" icon="laptop-code">
     Code, data, and results live in your repo. No external platforms or auth.
@@ -54,7 +54,7 @@ Help me evaluate hallucinations in my RAG agent @agent.py
 ```
 
 ```text Error Analysis
-Run error analysis on the last eval run @.ezvals/sessions/rag-tests/baseline_a1b2c3d4.json
+Run error analysis on the last eval run @.ezvals/sessions/rag-tests/a1b2c3d4.jsonl
 ```
 
 
@@ -87,6 +87,33 @@ Full comparison: http://127.0.0.1:8000/?compare_run_id=a1b2...&compare_run_id=c3
 />
 
 Results can be exported as JSON, CSV, Markdown, or PNG from the dashboard or CLI.
+
+## What an Eval Looks Like
+
+An eval is a function with an input, a call to your agent, and a check. Write it in whichever language your agent is in; one directory can hold both.
+
+<CodeGroup>
+
+```python Python
+from ezvals import eval, EvalContext
+
+@eval(input="I want a refund", dataset="support")
+async def test_refund(ctx: EvalContext):
+    ctx.output = await support_agent(ctx.input)
+    assert "refund" in ctx.output.lower(), "Should acknowledge the refund"
+```
+
+```ts TypeScript
+import assert from "node:assert";
+import { evaluate } from "ezvals";
+
+evaluate("test_refund", { input: "I want a refund", dataset: "support" }, async (ctx) => {
+  ctx.output = await supportAgent(ctx.input);
+  assert(String(ctx.output).toLowerCase().includes("refund"), "Should acknowledge the refund");
+});
+```
+
+</CodeGroup>
 
 <Card title="Setup Details" icon="gear" href="/setup">
   Install the library directly, configure your project, and learn how EZVals works under the hood.

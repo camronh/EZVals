@@ -29,7 +29,7 @@ A **session** groups related runs together, identified by a name string. Using `
 
 ### Run
 
-A **run** is a single execution of your evaluations. Each run creates a new JSON file containing only the evals that ran in that execution.
+A **run** is a single execution of your evaluations. Each run gets its own file containing only the evals that ran in that execution. By default, starting a run with a name that already exists in the session replaces the old run (set `"overwrite": false` in `ezvals.json` to keep both).
 
 ### Auto-Generated Names
 
@@ -41,33 +41,34 @@ When you don't specify `--session` or `--run-name`, friendly adjective-noun name
 
 This ensures every run has identifiable names without requiring manual input.
 
-## File Naming
+## File Layout
 
-Run files are named with the pattern `{run_name}_{timestamp}.json`:
+Each run is stored at `.ezvals/sessions/<session>/<run_id>.jsonl`, where `run_id` is 8 random hex characters:
 
 ```
-.ezvals/runs/
-├── gpt5-baseline_2024-01-15T10-30-00Z.json   # Named run
-├── gpt5-tuned_2024-01-15T11-00-00Z.json      # Second run in session
-├── swift-falcon_2024-01-15T14-45-00Z.json    # Auto-generated name
-└── latest.json                                # Copy of most recent
+.ezvals/sessions/
+├── model-upgrade/
+│   ├── a1b2c3d4.jsonl    # gpt5-baseline
+│   └── e5f6a7b8.jsonl    # gpt5-tuned
+└── default/
+    └── c9d0e1f2.jsonl    # swift-falcon
 ```
 
-## JSON Schema
-
-Each run file includes session metadata at the top level:
+A run file is an append-only event log: results, reruns, renames, and edits are appended as they happen. To read a run as a single JSON document, use `ezvals run --json` or `ezvals export <run>.jsonl -f json`:
 
 ```json
 {
+  "run_id": "a1b2c3d4",
   "session_name": "model-upgrade",
   "run_name": "gpt5-baseline",
-  "run_id": "2024-01-15T10-30-00Z",
   "total_evaluations": 50,
   "total_passed": 45,
   "total_errors": 2,
   "results": [...]
 }
 ```
+
+Runs saved by older versions as `.json` files are migrated to this format automatically on first use.
 
 ## UI Display
 
@@ -113,7 +114,7 @@ The expanded stats panel shows the current session and run on the left, with tes
     Use session names to track runs across deployments:
 
     ```bash
-    ezvals run evals/ --session "release-${VERSION}" --run-name "build-${BUILD_ID}" -o results.json
+    ezvals run evals/ --session "release-${VERSION}" --run-name "build-${BUILD_ID}" --json > results.json
     ```
   </Accordion>
 
@@ -161,15 +162,17 @@ curl http://localhost:8000/api/sessions/model-upgrade/runs
   "session_name": "model-upgrade",
   "runs": [
     {
-      "run_id": "2024-01-15T11-00-00Z",
+      "run_id": "e5f6a7b8",
       "run_name": "gpt5-tuned",
+      "timestamp": 1705316400,
       "total_evaluations": 50,
       "total_passed": 48,
       "total_errors": 0
     },
     {
-      "run_id": "2024-01-15T10-30-00Z", 
+      "run_id": "a1b2c3d4",
       "run_name": "gpt5-baseline",
+      "timestamp": 1705314600,
       "total_evaluations": 50,
       "total_passed": 45,
       "total_errors": 2
@@ -189,5 +192,5 @@ curl http://localhost:8000/api/sessions/model-upgrade/runs
 </Tip>
 
 <Warning>
-**Storage**: Session metadata is stored in each run's JSON file. There's no separate session file—sessions are virtual groupings based on the `session_name` field.
+**Storage**: A session is just a directory under `.ezvals/sessions/`. There's no separate session file; deleting the directory deletes the session.
 </Warning>

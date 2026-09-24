@@ -22,35 +22,13 @@ ezvals serve evals.py
 
 ## How It Works
 
-The UI discovers all `@eval` decorated functions in your file but doesn't run them until you click **Run**. Results stream in real-time as each evaluation completes.
+The UI discovers all evals at the path (Python `@eval` functions and TypeScript `evaluate()` calls) but doesn't run them until you click **Run**. Results stream in real-time as each evaluation completes.
 
-Results are saved to `.ezvals/sessions/` as JSON files, organized by session subdirectories.
+Every run starts fresh worker processes, so edits to your eval code are picked up on the next run without restarting anything. **Reload Server** (in the overflow menu) re-discovers evals and reloads `ezvals.json`, which is useful after adding or removing evals or files.
 
-## Results Storage
+Runs are saved under `.ezvals/sessions/<session>/<run_id>.jsonl`, one file per run. See [Sessions & Runs](/guides/sessions) for the layout.
 
-```
-.ezvals/
-├── sessions/
-│   ├── model-comparison/
-│   │   ├── baseline_a1b2c3d4.json
-│   │   └── improved_e5f6g7h8.json
-│   └── default/
-│       └── swift-falcon_i9j0k1l2.json
-└── ezvals.json  # Configuration
-```
-
-Each run file includes session metadata:
-
-```json
-{
-  "session_name": "model-upgrade",
-  "run_name": "gpt5-baseline",
-  "run_id": "2024-01-15T10-30-00Z",
-  "total_evaluations": 50,
-  "total_passed": 45,
-  "results": [...]
-}
-```
+Stop the server with `Ctrl+C`.
 
 ## Run Controls
 
@@ -81,12 +59,10 @@ When `input`, `output`, `reference`, or trace `messages` contain chat-style mess
 ## Inline Editing
 
 In the detail page, you can edit:
-- **Dataset**: Reassign to different dataset
-- **Labels**: Add or remove labels
 - **Scores**: Adjust scores or add new ones
-- **Annotations**: Add notes for review
+- **Annotation**: Add a note for review
 
-Changes are saved to the results file.
+Edits work on any run, not just the active one. They're saved to the run file, and each change is recorded in the result's `correction_history`. Annotations survive reruns; score edits are replaced when the eval is rerun.
 
 ## Export
 
@@ -94,7 +70,7 @@ Click the overflow (three-dot) menu in the header, then hover **Download** to op
 
 | Format | Type | Description |
 |--------|------|-------------|
-| JSON | Raw | Full results file as-is |
+| JSON | Raw | The full run as one JSON document |
 | CSV | Raw | All results in flat CSV format |
 | Markdown | Filtered | ASCII bar charts + table with current filters applied |
 | PNG | Visual | Chart image with stats bars, metrics, and branding |
@@ -130,10 +106,10 @@ ezvals serve evals.py --port 3000
 
 ## Loading Previous Runs
 
-To view or continue a previous run, pass the run JSON file directly:
+To view or continue a previous run, pass its run file directly:
 
 ```bash
-ezvals serve .ezvals/sessions/default/sleek-wolf_1705312200.json
+ezvals serve .ezvals/sessions/default/a1b2c3d4.jsonl
 ```
 
 The UI loads with that run's results. If the original eval file still exists, you can rerun evaluations normally. If the source file was moved or deleted, the UI shows a warning and works in view-only mode.
@@ -141,7 +117,7 @@ The UI loads with that run's results. If the original eval file still exists, yo
 This is useful for:
 - Reviewing historical results
 - Continuing an interrupted session
-- Sharing runs between machines (copy the JSON file)
+- Sharing runs between machines (copy the run file; older `.json` run files work too)
 
 ## Comparison Mode
 

@@ -3,17 +3,20 @@ title: Score
 description: The scoring data structure for evaluation metrics
 ---
 
-`Score` represents a single metric or assessment within an evaluation result.
+A score is a single metric or assessment within an evaluation result. Scores are plain dicts (plain objects in TypeScript); there's no class to import.
 
 ## Schema
 
 ```python
-class Score:
-    key: str              # Required: metric identifier
-    value: float = None   # Optional: numeric score
-    passed: bool = None   # Optional: pass/fail status
-    notes: str = None     # Optional: explanation
+{
+    "key": str,       # Metric identifier (defaults to the eval's default_score_key)
+    "value": float,   # Optional: numeric score
+    "passed": bool,   # Optional: pass/fail status
+    "notes": str,     # Optional: explanation
+}
 ```
+
+Shorthands are accepted anywhere a score is: `True`/`False` becomes `{"passed": ...}` and a number becomes `{"value": ...}`, both with the default key.
 
 <Note>
 At least one of `value` or `passed` must be provided.
@@ -21,9 +24,9 @@ At least one of `value` or `passed` must be provided.
 
 ## Fields
 
-### key (required)
+### key
 
-A string identifier for the metric. Use descriptive names:
+A string identifier for the metric. If omitted in `ctx.store()`, the eval's `default_score_key` (`"pass"` by default) is used. Use descriptive names:
 
 ```python
 {"key": "accuracy"}

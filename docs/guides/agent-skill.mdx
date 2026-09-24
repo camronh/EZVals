@@ -23,8 +23,8 @@ Skills are markdown files that provide context and instructions to AI coding age
 Install the skill that matches your installed EZVals version:
 
 ```bash
-pip install ezvals
-ezvals skills add --claude
+ezvals skills add --claude        # Python projects
+npx ezvals skills add --claude    # TypeScript projects
 ```
 
 This installs to your current project directory.
@@ -70,12 +70,14 @@ The skill provides comprehensive guidance across multiple reference files:
 
 | File | Purpose |
 |------|---------|
-| **SKILL.md** | Overview and navigation hub |
-| **EZVALS_REFERENCE.md** | Complete API reference for @eval, EvalContext, @parametrize |
-| **BEST_PRACTICES.md** | Eval design principles from Anthropic's research |
+| **SKILL.md** | Overview, vocabulary, and eval planning flow |
+| **targets.md** | Wrapping your agent as an eval target |
+| **datasets.md** | Sourcing, sizing, and balancing test cases |
 | **GRADERS.md** | Choosing between code, model, and human graders |
-| **AGENT_EVALS.md** | Patterns for coding, conversational, research agents |
-| **ROADMAP.md** | Zero-to-one guide for building evals |
+| **running.md** | Running, sessions, serving, comparing, and parsing results |
+| **synthetic-data.md** | Generating synthetic test cases |
+| **use-cases/** | RAG agents, coding agents, agent skills, and testing internals |
+| **ezvals-docs/** | A copy of these docs, matched to your installed version |
 
 ## Example Prompts
 
@@ -143,6 +145,6 @@ If `--agents` is selected, `.agents/skills/evals/` is the canonical source and o
 When you upgrade EZVals, run `ezvals skills add --claude` again (or your chosen target flags) to get the latest skill content:
 
 ```bash
-pip install --upgrade ezvals
+pip install --upgrade ezvals   # or: npm install --save-dev ezvals@latest
 ezvals skills add --claude
 ```

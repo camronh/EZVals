@@ -67,7 +67,7 @@ async def test_rag_agent(ctx: EvalContext):
         answer=ctx.output,
         reference=ctx.reference
     )
-    assert pass_result.is_correct, pass_result.explanation
+    ctx.store(scores={"passed": pass_result.is_correct, "key": "pass", "notes": pass_result.explanation})
 ```
 
 ## What's Happening
@@ -78,7 +78,7 @@ async def test_rag_agent(ctx: EvalContext):
 
 **Storing context for analysis** — We save the retrieved documents to `ctx.metadata`. This shows up in the results JSON and Web UI, so you can debug retrieval issues.
 
-**Multiple scoring criteria** — We use `ctx.store(scores=...)` for hallucination (a named score) and `assert` for pass (the default score). Both appear in your results.
+**Multiple scoring criteria** — We use `ctx.store(scores=...)` for a numeric hallucination score and a pass/fail `pass` score. Both appear in your results. (A bare `assert` would also work for pass/fail, but once another score is stored, a passing assertion doesn't add a `pass` score of its own; only failures do.)
 
 **LLM-as-judge** — The `hallucination_judge` and `pass_judge` are placeholder functions representing whatever LLM judge you're using (OpenAI, Anthropic, your own prompts, etc.).
 
@@ -97,29 +97,32 @@ ezvals run evals/rag_agent.py --verbose
 
 ## Example Results
 
-After running, you'll have a JSON file with structured results:
+Add `--json` to get the full run as structured results:
 
 ```json
 {
-  "dataset": "rag_qa",
+  "run_id": "a1b2c3d4",
+  "run_name": "swift-falcon",
+  "total_evaluations": 5,
+  "total_passed": 4,
   "results": [
     {
-      "input": "What is our refund policy?",
-      "output": "We offer a 30-day money-back guarantee on all purchases.",
-      "reference": "30-day money-back guarantee",
-      "metadata": {
-        "retrieved_docs": ["policy.md: section 4.2..."],
-        "sources": ["policy.md"]
-      },
-      "scores": {
-        "hallucination": {
-          "passed": true,
-          "message": "Answer is fully grounded in retrieved documents"
+      "function": "test_rag_agent[0]",
+      "dataset": "rag_qa",
+      "labels": [],
+      "result": {
+        "input": "What is our refund policy?",
+        "output": "We offer a 30-day money-back guarantee on all purchases.",
+        "reference": "30-day money-back guarantee",
+        "metadata": {
+          "source_docs": ["policy.md: section 4.2..."]
         },
-        "default": {
-          "passed": true,
-          "message": null
-        }
+        "scores": [
+          {"key": "hallucination", "value": 1.0, "notes": "Answer is fully grounded in retrieved documents"},
+          {"key": "pass", "passed": true, "notes": "Matches the reference"}
+        ],
+        "error": null,
+        "latency": 1.42
       }
     }
   ]

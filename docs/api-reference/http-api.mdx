@@ -17,7 +17,7 @@ Get current run results with aggregated statistics.
 {
   "session_name": "my-session",
   "run_name": "baseline",
-  "run_id": "1704067200",
+  "run_id": "a1b2c3d4",
   "total_evaluations": 10,
   "total_errors": 1,
   "total_passed": 8,
@@ -45,7 +45,7 @@ Get a single result by index.
   "result": {...},
   "index": 0,
   "total": 10,
-  "run_id": "1704067200",
+  "run_id": "a1b2c3d4",
   "session_name": "my-session",
   "run_name": "baseline",
   "eval_path": "evals/"
@@ -56,7 +56,7 @@ Get a single result by index.
 
 ### POST /api/runs/rerun
 
-Rerun evaluations. Omit `indices` to rerun all.
+Rerun evaluations in the active run. Omit `indices` to rerun all. Optionally pass `config_name` to select a named config (a different config starts a new run).
 
 **Request:**
 
@@ -69,12 +69,12 @@ Rerun evaluations. Omit `indices` to rerun all.
 **Response:**
 
 ```json
-{"ok": true, "run_id": "1704067200"}
+{"ok": true, "run_id": "a1b2c3d4"}
 ```
 
 ### POST /api/runs/new
 
-Create a new run.
+Start a new run. Optionally pass `indices` to run only those evals.
 
 **Request:**
 
@@ -87,7 +87,7 @@ Create a new run.
 **Response:**
 
 ```json
-{"ok": true, "run_id": "1704067200", "run_name": "my-run"}
+{"ok": true, "run_id": "a1b2c3d4", "run_name": "my-run"}
 ```
 
 ### POST /api/runs/stop
@@ -99,6 +99,14 @@ Stop all running/pending evaluations.
 ```json
 {"ok": true}
 ```
+
+### POST /api/runs/pause and /api/runs/resume
+
+Pause the active run (running evals finish, pending ones wait), then resume it. Resume also restarts pending evals from an interrupted run.
+
+### POST /api/server/restart
+
+Re-discover evals at the eval path and reload `ezvals.json`, in place. You don't need this to pick up edits to eval code: every run starts fresh worker processes.
 
 ### `PATCH /api/runs/{run_id}`
 
@@ -115,7 +123,7 @@ Rename a run.
 **Response:**
 
 ```json
-{"ok": true, "run": {"run_id": "1704067200", "run_name": "new-name"}}
+{"ok": true, "run": {"run_id": "a1b2c3d4", "run_name": "new-name"}}
 ```
 
 ### `DELETE /api/runs/{run_id}`
@@ -132,7 +140,7 @@ Delete a run.
 
 ### `PATCH /api/runs/{run_id}/results/{index}`
 
-Update annotations or scores on a result.
+Update the annotation or scores on a result. Works on any saved run, not only the active one.
 
 **Request:**
 
@@ -151,6 +159,8 @@ Update annotations or scores on a result.
 {
   "ok": true,
   "result": {
+    "id": "evals.py::test_refund",
+    "function": "test_refund",
     "result": {
       "annotation": "Reviewed - looks good",
       "scores": [{"key": "manual", "passed": true}],
@@ -159,7 +169,7 @@ Update annotations or scores on a result.
           "field": "annotation",
           "before": null,
           "after": "Reviewed - looks good",
-          "timestamp": "2026-02-20T12:34:56.000000+00:00"
+          "timestamp": "2026-02-20T12:34:56Z"
         }
       ]
     }
@@ -168,7 +178,7 @@ Update annotations or scores on a result.
 ```
 
 <Note>
-Only `annotation`, `annotations`, and `scores` fields can be updated.
+Only `annotation` (a string) and `scores` can be updated; other fields are ignored.
 </Note>
 <Note>
 When a PATCH changes one of those fields, EZVals appends a `correction_history` entry with `before`/`after` values and a UTC timestamp.
@@ -210,6 +220,8 @@ Generate a Markdown report with ASCII bar charts and filtered results table.
 
 **Response:** Markdown file download
 
+The JSON export is the full run as one JSON document (totals and results); the CSV includes an `annotation` column.
+
 ## Sessions
 
 ### GET /api/sessions
@@ -235,7 +247,7 @@ List all runs in a session.
   "session_name": "model-comparison",
   "runs": [
     {
-      "run_id": "1704067200",
+      "run_id": "a1b2c3d4",
       "run_name": "baseline",
       "total_evaluations": 10,
       "total_passed": 8,
@@ -263,7 +275,7 @@ Switch the active run being viewed.
 **Response:**
 
 ```json
-{"ok": true}
+{"ok": true, "run_id": "a1b2c3d4", "run_name": "baseline"}
 ```
 
 ### `GET /api/runs/{run_id}/data`
@@ -285,14 +297,18 @@ Get current configuration.
 ```json
 {
   "concurrency": 4,
+  "timeout": 30.0,
   "verbose": false,
-  "timeout": 30.0
+  "results_dir": ".",
+  "overwrite": true,
+  "completion_notifications": false,
+  "port": 8000
 }
 ```
 
 ### PUT /api/config
 
-Update configuration.
+Update configuration. Fields you pass are merged into the current config and written to `ezvals.json` (creating it if needed).
 
 **Request:**
 
@@ -307,4 +323,20 @@ Update configuration.
 
 ```json
 {"ok": true, "config": {...}}
+```
+
+### GET /api/configs
+
+List named config profiles from `ezvals.json` and the active one.
+
+```json
+{"names": ["claude", "gpt-4"], "active": "gpt-4"}
+```
+
+### POST /api/configs/select
+
+Select a named config for the next run.
+
+```json
+{"name": "claude"}
 ```

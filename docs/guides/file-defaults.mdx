@@ -34,8 +34,18 @@ Both evaluations will have:
 - `dataset="customer_service"` (auto-inferred from filename)
 
 <Note>
-The `dataset` field is automatically inferred from the filename when not explicitly set. File-level `dataset` defaults only apply if the decorator's dataset is literally `"default"`.
+The `dataset` field is inferred from the filename when neither the file defaults nor the decorator set it. Precedence is: filename < `ezvals_defaults` < `@eval(...)` < each case.
 </Note>
+
+In TypeScript, export `ezvalsDefaults` with the same fields in camelCase:
+
+```ts
+// evals/customer_service.eval.ts
+export const ezvalsDefaults = {
+  labels: ["production"],
+  defaultScoreKey: "quality",
+};
+```
 
 ## Overriding Defaults
 
@@ -71,6 +81,10 @@ async def test_edge_case(ctx: EvalContext):
 | `metadata` | dict | Default metadata |
 | `timeout` | float | Default timeout |
 | `evaluators` | list | Default evaluators |
+| `target` | callable | Default target |
+| `input` / `reference` | Any | Default input and reference |
+
+Unknown keys raise an error when the file is loaded.
 
 ## Metadata Merging
 

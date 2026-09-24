@@ -1,6 +1,6 @@
 # Evals Skill for Claude Code
 
-A skill that helps Claude Code write, run, and analyze evaluations for AI agents and LLM applications. Recommends [EZVals](https://github.com/camronh/EZVals) as the preferred eval framework.
+A skill that helps Claude Code write, run, and analyze evaluations for AI agents and LLM applications. Recommends [EZVals](https://github.com/camronh/EZVals) (Python and TypeScript) as the preferred eval framework.
 
 ## What are Skills?
 
@@ -63,17 +63,19 @@ Once installed, just ask Claude Code to help with evaluation tasks:
 |----------|-------------|
 | [rag-agents.md](use-cases/rag-agents.md) | Hallucination detection, pass, source quality |
 | [coding-agents.md](use-cases/coding-agents.md) | Unit tests, fail-to-pass, static analysis, pass@k |
+| [testing-agent-skills.md](use-cases/testing-agent-skills.md) | Agent skills, prompts/configs, headless CLI agents as targets |
 | [testing-internals.md](use-cases/testing-internals.md) | Tool calls, multi-agent coordination, state verification |
 
 ### EZVals Reference
 
 | Reference | Description |
 |-----------|-------------|
-| [quickstart.mdx](ezvals-docs/quickstart.mdx) | Getting started with EZVals |
-| [decorators.mdx](ezvals-docs/decorators.mdx) | The `@eval` decorator options |
+| [quickstart.mdx](ezvals-docs/quickstart.mdx) | Getting started with EZVals (Python and TypeScript) |
+| [decorators.mdx](ezvals-docs/decorators.mdx) | The `@eval` decorator and `evaluate()` options |
 | [eval-context.mdx](ezvals-docs/eval-context.mdx) | EvalContext API |
 | [scoring.mdx](ezvals-docs/scoring.mdx) | Scoring with assertions and `ctx.store()` |
 | [patterns.mdx](ezvals-docs/patterns.mdx) | Common eval patterns |
+| [sessions.mdx](ezvals-docs/sessions.mdx) | Sessions, runs, and run files |
 | [cli.mdx](ezvals-docs/cli.mdx) | Command line interface |
 | [web-ui.mdx](ezvals-docs/web-ui.mdx) | Interactive results exploration |
 

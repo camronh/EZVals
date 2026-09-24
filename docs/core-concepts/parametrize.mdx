@@ -81,6 +81,24 @@ Generates:
 - `test_thresholds[mid]`
 - `test_thresholds[high]`
 
+## In TypeScript
+
+`cases` works the same way in `evaluate()` options, with the same override and merge rules:
+
+```ts
+evaluate("test_sentiment", {
+  dataset: "sentiment",
+  labels: ["prod"],
+  cases: [
+    { id: "pos", input: "I love this!", reference: "positive" },
+    { id: "neg", input: "Terrible!", reference: "negative", labels: ["edge"] },
+  ],
+}, async (ctx) => {
+  ctx.output = await analyzeSentiment(ctx.input);
+  assert.equal(ctx.output, ctx.reference);
+});
+```
+
 ## Explicit Grids
 
 You can build explicit grids using list comprehensions:
@@ -106,4 +124,7 @@ ezvals run evals.py::test_math
 
 # Run specific variant
 ezvals run evals.py::test_math[low]
+
+# Same thing, without brackets
+ezvals run evals.py::test_math@low
 ```

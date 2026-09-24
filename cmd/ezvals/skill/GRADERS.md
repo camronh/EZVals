@@ -250,6 +250,7 @@ Every score must have at least one of `value` or `passed`.
 For latency, cost, and other performance metrics, store them as **numeric scores with `value`**, not just pass/fail assertions. The main value of performance evals is tracking numbers over time across runs — a hard threshold tells you "too slow" but doesn't show improvement trends.
 
 ```python
+# ctx.latency is set by your target via ctx.store(latency=...)
 ctx.store(scores=[
     {"value": ctx.latency, "key": "latency_s",
      "passed": ctx.latency < 2.0,  # optional threshold

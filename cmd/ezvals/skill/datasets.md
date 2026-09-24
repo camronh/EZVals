@@ -134,7 +134,7 @@ async def test_from_database(ctx: EvalContext):
     assert ctx.output == ctx.reference
 ```
 
-The loader is called lazily at eval time, not at import time.
+The loader runs when evals are discovered, not at import time. Loaded examples behave exactly like `cases` (any case key works: `id`, `input`, `reference`, `metadata`, `labels`, `dataset`, ...; metadata and labels merge). If the loader raises, you get a single errored result: `Input loader failed: <message>`.
 
 ## Synthetic Data Generation
 

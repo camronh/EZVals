@@ -1,22 +1,23 @@
 ---
 title: EvalResult
-description: The immutable result object for evaluations
+description: The result object for evaluations
 ---
 
-`EvalResult` is the immutable data structure that represents a completed evaluation.
+`EvalResult` is a plain dataclass that represents a completed evaluation.
 
 ## Schema
 
 ```python
+@dataclass
 class EvalResult:
     input: Any              # Required: test input
     output: Any             # Required: system output
     reference: Any = None   # Optional: expected output
-    scores: list[Score] = []  # Optional: list of scores
+    scores: list[dict] = [] # Optional: list of score dicts
     error: str = None       # Optional: error message
     latency: float = None   # Optional: execution time in seconds
     metadata: dict = {}     # Optional: custom metadata
-    trace_data: dict = {}     # Optional: debug/trace data
+    trace_data: TraceData = {}  # Optional: debug/trace data (a dict)
 ```
 
 ## Fields
@@ -59,7 +60,7 @@ EvalResult(
 
 ### scores (optional)
 
-List of `Score` objects representing evaluation metrics.
+List of [score dicts](/api-reference/score) (`{"key", "value" | "passed", "notes"}`). A single score, `True`/`False`, or a number is also accepted and normalized to a list.
 
 ```python
 EvalResult(
@@ -74,13 +75,13 @@ EvalResult(
 
 ### error (optional)
 
-Error message if the evaluation failed with an exception.
+Error message if the evaluation failed with an exception. EZVals sets it to the exception type, message, and traceback, e.g. `"ValueError: bad response\n<traceback>"`, or `"TimeoutError: Evaluation timed out after 5.0s"` on timeout.
 
 ```python
 EvalResult(
     input="test",
     output=None,
-    error="TimeoutError: Evaluation exceeded 5.0 seconds"
+    error="TimeoutError: Evaluation timed out after 5.0s"
 )
 ```
 
@@ -114,7 +115,7 @@ EvalResult(
 
 ### trace_data (optional)
 
-Debug and trace information. Not displayed in main UI views.
+Debug and trace information, shown in the detail view. `messages` (a chat transcript) and `trace_url` (a link to your observability tool) get special rendering; other keys are shown as-is.
 
 ```python
 EvalResult(
@@ -176,8 +177,6 @@ def test_batch():
 
 ## Accessing Fields
 
-Results are immutable after creation:
-
 ```python
 result = EvalResult(input="test", output="result")
 
@@ -188,20 +187,12 @@ print(result.latency)  # None (not set)
 
 ## Serialization
 
-Results serialize to JSON automatically:
+EZVals serializes results for you when saving a run. To get a dict yourself, use `dataclasses.asdict`:
 
 ```python
-result = EvalResult(
-    input="test",
-    output="result",
-    scores=[{"key": "accuracy", "passed": True}]
-)
+from dataclasses import asdict
 
-# To dict
-data = result.model_dump()
-
-# To JSON string
-json_str = result.model_dump_json()
+data = asdict(EvalResult(input="test", output="result"))
 ```
 
 ## Status Determination
@@ -228,6 +219,20 @@ EvalResult(input="x", output="y", error="Something went wrong")
 <Note>
 The pass/fail logic checks if **any** score has `passed=True`, not if **all** scores pass. Mixed results with at least one passing score will show as passed.
 </Note>
+
+## In TypeScript
+
+A TypeScript eval can return an array of plain objects with the same fields (camelCase `traceData`):
+
+```ts
+evaluate("test_batch", { dataset: "batch" }, async () =>
+  Promise.all(["a", "b", "c"].map(async (input) => ({
+    input,
+    output: await myAgent(input),
+    scores: [{ key: "valid", passed: true }],
+  }))),
+);
+```
 
 ## Complete Example
 

@@ -220,10 +220,10 @@ The `[category]` prefixes give the judge context about which eval component each
 
 ```bash
 # Run the evals
-ezvals run evals/ --verbose --run-name baseline
+ezvals run evals/ --verbose --session skill-eval --run-name baseline
 
 # Serve results for review
-ezvals serve evals/
+ezvals serve evals/ --session skill-eval
 ```
 
 Review the judge's reasoning in the UI. The iteration loop:
@@ -231,7 +231,7 @@ Review the judge's reasoning in the UI. The iteration loop:
 1. **Run evals** — get a baseline of how well your skill teaches the agent
 2. **Review failures** — read the plans that failed and the judge's reasoning
 3. **Update your skill** — adjust the skill content to address gaps
-4. **Re-run** — `ezvals run evals/ --run-name v2`
+4. **Re-run** — `ezvals run evals/ --session skill-eval --run-name v2`
 5. **Compare** — use `ezvals serve` to view runs side by side
 6. **Repeat** — until you're satisfied with pass rates
 
