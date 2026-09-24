@@ -1,0 +1,234 @@
+[
+  {
+    "function": "passes",
+    "dataset": "basics",
+    "labels": [],
+    "status": "completed",
+    "input": "hi",
+    "output": "hello",
+    "reference": null,
+    "scores": [
+      {
+        "key": "pass",
+        "passed": true
+      }
+    ],
+    "metadata": {},
+    "trace_data": {}
+  },
+  {
+    "function": "assertion_fails",
+    "dataset": "basics",
+    "labels": [],
+    "status": "completed",
+    "input": "x",
+    "output": "y",
+    "reference": null,
+    "scores": [
+      {
+        "key": "pass",
+        "passed": false,
+        "notes": "wrong output"
+      }
+    ],
+    "metadata": {},
+    "trace_data": {}
+  },
+  {
+    "function": "raises",
+    "dataset": "basics",
+    "labels": [],
+    "status": "error",
+    "input": null,
+    "output": "partial",
+    "reference": null,
+    "scores": [],
+    "error": "ValueError: broke",
+    "metadata": {},
+    "trace_data": {}
+  },
+  {
+    "function": "stores_scores",
+    "dataset": "basics",
+    "labels": [],
+    "status": "completed",
+    "input": null,
+    "output": null,
+    "reference": null,
+    "scores": [
+      {
+        "key": "pass",
+        "passed": true
+      },
+      {
+        "key": "format",
+        "passed": true,
+        "notes": "fixed"
+      },
+      {
+        "key": "quality",
+        "value": 0.5
+      }
+    ],
+    "metadata": {},
+    "trace_data": {}
+  },
+  {
+    "function": "custom_score_key",
+    "dataset": "basics",
+    "labels": [],
+    "status": "completed",
+    "input": null,
+    "output": 1,
+    "reference": null,
+    "scores": [
+      {
+        "key": "overall",
+        "value": 0.9
+      }
+    ],
+    "metadata": {},
+    "trace_data": {}
+  },
+  {
+    "function": "metadata_and_trace",
+    "dataset": "basics",
+    "labels": [],
+    "status": "completed",
+    "input": null,
+    "output": null,
+    "reference": null,
+    "scores": [
+      {
+        "key": "pass",
+        "passed": true
+      }
+    ],
+    "metadata": {
+      "a": 1,
+      "b": 2
+    },
+    "trace_data": {
+      "messages": [
+        {
+          "content": "hi",
+          "role": "user"
+        }
+      ],
+      "tokens": 3,
+      "trace_url": "https://trace"
+    }
+  },
+  {
+    "function": "run_info",
+    "dataset": "basics",
+    "labels": [
+      "x"
+    ],
+    "status": "completed",
+    "input": null,
+    "output": {
+      "config": {},
+      "dataset": "basics",
+      "function": "run_info",
+      "labels": [
+        "x"
+      ],
+      "run_name": "conformance"
+    },
+    "reference": null,
+    "scores": [
+      {
+        "key": "pass",
+        "passed": true
+      }
+    ],
+    "metadata": {},
+    "trace_data": {}
+  },
+  {
+    "function": "returns_results",
+    "dataset": "basics",
+    "labels": [],
+    "status": "completed",
+    "input": 1,
+    "output": 2,
+    "reference": null,
+    "scores": [
+      {
+        "key": "pass",
+        "passed": true
+      }
+    ],
+    "metadata": {},
+    "trace_data": {}
+  },
+  {
+    "function": "returns_results",
+    "dataset": "basics",
+    "labels": [],
+    "status": "completed",
+    "input": 3,
+    "output": 4,
+    "reference": null,
+    "scores": [
+      {
+        "key": "custom",
+        "passed": false
+      }
+    ],
+    "metadata": {},
+    "trace_data": {}
+  },
+  {
+    "function": "times_out",
+    "dataset": "basics",
+    "labels": [],
+    "status": "error",
+    "input": null,
+    "output": "started",
+    "reference": null,
+    "scores": [],
+    "error": "TimeoutError: Evaluation timed out after 0.2s",
+    "metadata": {},
+    "trace_data": {}
+  },
+  {
+    "function": "uses_target",
+    "dataset": "basics",
+    "labels": [],
+    "status": "completed",
+    "input": null,
+    "output": "from target",
+    "reference": null,
+    "scores": [
+      {
+        "key": "pass",
+        "passed": true
+      }
+    ],
+    "metadata": {},
+    "trace_data": {}
+  },
+  {
+    "function": "uses_evaluator",
+    "dataset": "basics",
+    "labels": [],
+    "status": "completed",
+    "input": null,
+    "output": "ok",
+    "reference": null,
+    "scores": [
+      {
+        "key": "pass",
+        "passed": true
+      },
+      {
+        "key": "long",
+        "passed": false
+      }
+    ],
+    "metadata": {},
+    "trace_data": {}
+  }
+]

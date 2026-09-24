@@ -1,0 +1,194 @@
+[
+  {
+    "function": "inherits_defaults",
+    "dataset": "expansion",
+    "labels": [
+      "file"
+    ],
+    "status": "completed",
+    "input": null,
+    "output": {
+      "labels": [
+        "file"
+      ],
+      "metadata": {
+        "f": 1
+      }
+    },
+    "reference": null,
+    "scores": [
+      {
+        "key": "pass",
+        "passed": true
+      }
+    ],
+    "metadata": {
+      "f": 1
+    },
+    "trace_data": {}
+  },
+  {
+    "function": "overrides_defaults",
+    "dataset": "expansion",
+    "labels": [
+      "own"
+    ],
+    "status": "completed",
+    "input": null,
+    "output": {
+      "labels": [
+        "own"
+      ],
+      "metadata": {
+        "f": 1,
+        "g": 2
+      }
+    },
+    "reference": null,
+    "scores": [
+      {
+        "key": "pass",
+        "passed": true
+      }
+    ],
+    "metadata": {
+      "f": 1,
+      "g": 2
+    },
+    "trace_data": {}
+  },
+  {
+    "function": "add[two]",
+    "dataset": "math",
+    "labels": [
+      "base",
+      "extra"
+    ],
+    "status": "completed",
+    "input": [
+      1,
+      1
+    ],
+    "output": 2,
+    "reference": 2,
+    "scores": [
+      {
+        "key": "pass",
+        "passed": true
+      }
+    ],
+    "metadata": {
+      "f": 1,
+      "m": 1
+    },
+    "trace_data": {}
+  },
+  {
+    "function": "add[1]",
+    "dataset": "other",
+    "labels": [
+      "base"
+    ],
+    "status": "completed",
+    "input": [
+      2,
+      2
+    ],
+    "output": 4,
+    "reference": 5,
+    "scores": [
+      {
+        "key": "pass",
+        "passed": false,
+        "notes": "sum mismatch"
+      }
+    ],
+    "metadata": {
+      "f": 1,
+      "m": 1,
+      "n": 2
+    },
+    "trace_data": {}
+  },
+  {
+    "function": "add[2]",
+    "dataset": "math",
+    "labels": [],
+    "status": "completed",
+    "input": [
+      0,
+      0
+    ],
+    "output": 0,
+    "reference": 0,
+    "scores": [
+      {
+        "key": "pass",
+        "passed": true
+      }
+    ],
+    "metadata": {
+      "f": 1,
+      "m": 1
+    },
+    "trace_data": {}
+  },
+  {
+    "function": "loaded[0]",
+    "dataset": "expansion",
+    "labels": [
+      "file"
+    ],
+    "status": "completed",
+    "input": "a",
+    "output": "A",
+    "reference": null,
+    "scores": [
+      {
+        "key": "pass",
+        "passed": true
+      }
+    ],
+    "metadata": {
+      "f": 1
+    },
+    "trace_data": {}
+  },
+  {
+    "function": "loaded[1]",
+    "dataset": "expansion",
+    "labels": [
+      "file",
+      "l"
+    ],
+    "status": "completed",
+    "input": "b",
+    "output": "B",
+    "reference": null,
+    "scores": [
+      {
+        "key": "pass",
+        "passed": true
+      }
+    ],
+    "metadata": {
+      "f": 1
+    },
+    "trace_data": {}
+  },
+  {
+    "function": "loader_fails",
+    "dataset": "expansion",
+    "labels": [
+      "file"
+    ],
+    "status": "error",
+    "input": null,
+    "output": null,
+    "reference": null,
+    "scores": [],
+    "error": "Input loader failed: no data",
+    "metadata": {},
+    "trace_data": {}
+  }
+]

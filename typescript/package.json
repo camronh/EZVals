@@ -1,0 +1,22 @@
+{
+  "name": "ezvals",
+  "version": "0.1.10",
+  "description": "Code-first evals for AI agents and LLM apps",
+  "license": "MIT",
+  "type": "module",
+  "repository": "github:camronh/EZVals",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" }
+  },
+  "bin": { "ezvals": "bin/ezvals.js" },
+  "files": ["dist", "bin"],
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test test/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.2"
+  }
+}

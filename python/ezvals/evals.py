@@ -133,7 +133,7 @@ def expand(fn: EvalFunction, file_defaults: Optional[dict] = None, file: Optiona
         try:
             examples = _run_sync(_call(fn.params["input_loader"]))
         except Exception as e:
-            return [make(name, base, f"input_loader failed: {e}\n{traceback.format_exc()}")]
+            return [make(name, base, f"Input loader failed: {e}\n{traceback.format_exc()}")]
         cases = [ex if isinstance(ex, dict) else {k: getattr(ex, k) for k in PARAMS if hasattr(ex, k)} for ex in examples]
     elif "cases" in fn.params:
         cases = fn.params["cases"]
