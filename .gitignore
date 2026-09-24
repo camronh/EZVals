@@ -84,3 +84,4 @@ cmd/ezvals/web/*
 /ezvals-bin
 typescript/dist/
 node_modules/
+cmd/ezvals/skill/ezvals-docs/

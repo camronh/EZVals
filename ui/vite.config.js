@@ -15,7 +15,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: path.resolve(__dirname, '../ezvals/static'),
+    outDir: path.resolve(__dirname, '../cmd/ezvals/web'),
     assetsDir: 'assets',
     emptyOutDir: true,
   },
