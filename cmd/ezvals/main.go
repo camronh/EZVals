@@ -8,11 +8,13 @@ import (
 	"fmt"
 	mrand "math/rand/v2"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 )
 
 var version = "dev"
@@ -282,7 +284,15 @@ func runCmd(args []string) {
 		}
 	}
 	emit(Event{Type: "evals", Evals: evals}, Event{Type: "queued", IDs: ids(evals)})
-	<-execute(workers, ids(evals), *concurrency, emit).Done
+	x := execute(workers, ids(evals), *concurrency, emit)
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
+	select {
+	case <-x.Done:
+	case <-interrupt:
+		fmt.Fprintln(os.Stderr, "\nStopping...")
+		x.Stop()
+	}
 
 	report := struct {
 		*Run

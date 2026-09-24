@@ -142,6 +142,7 @@ func spawn(cmd *exec.Cmd, info string, verbose bool) (*Worker, error) {
 	if verbose {
 		cmd.Stderr = os.Stderr
 	}
+	isolate(cmd)
 	stdin, _ := cmd.StdinPipe()
 	stdout, _ := cmd.StdoutPipe()
 	if err := cmd.Start(); err != nil {
@@ -167,7 +168,7 @@ func spawn(cmd *exec.Cmd, info string, verbose bool) (*Worker, error) {
 	case !ok:
 		return nil, errors.New("eval worker exited during discovery (run with --verbose to see its output)")
 	case first.Type == "error":
-		cmd.Process.Kill()
+		kill(cmd)
 		return nil, errors.New(strings.TrimSpace(first.Error))
 	}
 	w.evals = first.Evals
@@ -176,7 +177,7 @@ func spawn(cmd *exec.Cmd, info string, verbose bool) (*Worker, error) {
 
 func stopWorkers(workers []*Worker) {
 	for _, w := range workers {
-		w.cmd.Process.Kill()
+		kill(w.cmd)
 	}
 }
 

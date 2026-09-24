@@ -7,7 +7,7 @@ description: Write and analyze evaluations for AI agents and LLM applications. U
 
 # AI Agent Evaluation Skill
 
-Write, run, and analyze evaluations for AI agents and LLM applications. Assume we will use EZVals as the eval framework unless you are in a non-python project or the user specifies otherwise. 
+Write, run, and analyze evaluations for AI agents and LLM applications. Assume we will use EZVals as the eval framework unless the user specifies otherwise. EZVals has Python and TypeScript SDKs; write evals in the language of the code under test. Examples in this skill are Python; see [TypeScript Evals](#typescript-evals) for the equivalents.
 
 ## What Are Evals?
 
@@ -116,7 +116,37 @@ To rerun a specific list of failing evals, use explicit path selectors instead o
 For specific case IDs, use `@case_id` selectors:
 `ezvals run evals.py::test_a@case_id_1,test_a@case_id_2`
 
-This eval runs your RAG agent against each test case and reports which passed. The `cases` parameter generates three separate evals from one function. Failed assertions become failing scores with the assertion message as notes.
+This eval runs your RAG agent against each test case and reports which passed. The `cases` parameter generates three separate evals from one function. Failed assertions become failing scores with the assertion message as notes. Any other exception is recorded as the result's `error` (`"<ExceptionType>: <message>\n<traceback>"`).
+
+Every run starts fresh worker processes, so edits to eval code are always picked up on the next `ezvals run` or UI run; there's no need to restart `ezvals serve`.
+
+## TypeScript Evals
+
+Install with `npm install --save-dev ezvals` (Node >= 22.18 runs `.ts` directly, no build). Eval files must be named `*.eval.ts` (or `.mts`/`.js`/`.mjs`). Run with `npx ezvals run evals/` / `npx ezvals serve evals/`. One directory can mix Python and TypeScript evals; both run into one run.
+
+```ts
+// evals/rag.eval.ts
+import assert from "node:assert";
+import { evaluate, type EvalContext } from "ezvals";
+
+async function ragAgent(ctx: EvalContext) {
+  const docs = await retriever.search(String(ctx.input));
+  ctx.store({ output: await llm.generate(String(ctx.input), docs), traceData: { docs } });
+}
+
+evaluate("test_rag_accuracy", {
+  dataset: "rag_qa",
+  target: ragAgent,
+  cases: [
+    { id: "returns", input: "What is the return policy?", reference: "30 days" },
+    { id: "support", input: "How do I contact support?", reference: "support@example.com" },
+  ],
+}, (ctx) => {
+  assert(String(ctx.output).toLowerCase().includes(String(ctx.reference).toLowerCase()), `Expected '${ctx.reference}' in output`);
+});
+```
+
+The API mirrors Python in camelCase: `evaluate(name, fn)` or `evaluate(name, options, fn)`; options `input`, `reference`, `dataset`, `labels`, `metadata`, `defaultScoreKey`, `timeout` (seconds), `target`, `evaluators`, `cases`, `inputLoader`; file defaults via `export const ezvalsDefaults = {...}`; `ctx.store({ output, scores, messages, traceUrl, metadata, traceData, latency })`; run info `ctx.runId`, `ctx.sessionName`, `ctx.runName`, `ctx.config`. Any thrown `AssertionError` (e.g. from `node:assert`) becomes a failing score. A function can return an array of results `{ input, output, scores, ... }`.
 
 ## Eval Planning Flow
 
@@ -147,7 +177,7 @@ def test_vibes(ctx: EvalContext):
     # No assertions, no scores — just capture outputs to eyeball
 
 if __name__ == "__main__":
-    run(path=__file__, session="debug-vibes", run_name="before", verbose=True)
+    run(__file__, session="debug-vibes", run_name="before")
 ```
 
 The workflow: run it, eyeball outputs in `ezvals serve`, tweak the agent's prompt, rerun with `run_name="after"`, then serve and compare before/after side by side:
@@ -188,7 +218,8 @@ Put together an inventory with a description of what and why you chose: Target(s
 First, verify EZVals is available:
 
 ```bash
-pip show ezvals
+pip show ezvals      # Python
+npm ls ezvals        # TypeScript
 ```
 
 If not, include installation in the plan. Are there any external dependencies you may need to get started? Like API keys, Public Datasets, or libs to install. Include those in the plan. 
@@ -224,7 +255,7 @@ You should have everything you need to plan a good eval from here.
 - Dimension-based generation for variety
 - Validation and mixing with real data
 
-### [graders.md](graders.md)
+### [GRADERS.md](GRADERS.md)
 **When to read:** Scoring outputs, choosing grader types, calibrating LLM judges
 
 - Code vs model vs human graders
@@ -282,13 +313,19 @@ You should have everything you need to plan a good eval from here.
 ### [ezvals-docs/](ezvals-docs/)
 **When to read:** EZVals API reference—decorators, scoring, CLI, web UI
 
-- quickstart.mdx - Getting started
-- decorators.mdx - The @eval decorator options
+- quickstart.mdx - Getting started (Python and TypeScript)
+- decorators.mdx - The @eval decorator / evaluate() options
 - eval-context.mdx - EvalContext API
 - scoring.mdx - Scoring with assertions and ctx.store()
+- parametrize.mdx - Cases
+- file-defaults.mdx - File-level defaults
+- evaluators.mdx - Post-processing evaluators
 - patterns.mdx - Common eval patterns
-- cli.mdx - Command line interface
+- sessions.mdx - Sessions, runs, and run file layout
+- cli.mdx - Command line interface and `run()`
 - web-ui.mdx - Interactive results exploration
+- http-api.mdx - The web server's REST API
+- eval-result.mdx, score.mdx - Result and score shapes
 
 ## Running Evals
 

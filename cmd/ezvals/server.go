@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 )
 
 //go:embed all:web
@@ -188,7 +189,7 @@ func serveCmd(args []string) {
 	}
 	go http.Serve(listener, s.routes())
 	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt)
+	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
 	<-interrupt
 	fmt.Println("\nStopping server...")
 	if s.exec != nil {

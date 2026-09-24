@@ -19,8 +19,10 @@ ezvals serve evals/ --session my-experiment
 
 | Command | Purpose | Output |
 |---------|---------|--------|
-| `ezvals run` | Headless execution for CI/agents | Minimal stdout, JSON file |
+| `ezvals run` | Headless execution for CI/agents | Status lines on stderr, saved run file (`--json` prints the full run to stdout) |
 | `ezvals serve` | Interactive browser UI — can **both run AND view** evals | Web interface at localhost:8000 |
+
+> In TypeScript projects, prefix commands with `npx` (`npx ezvals run evals/`). A directory can mix Python (`.py`) and TypeScript (`*.eval.ts`) evals; both run into one run.
 
 > **Both commands can run evals.** `serve` is NOT view-only — users can click **Run** in the UI to execute evals, or pass `--run` to auto-run on startup. The only difference between `run` and `serve` is that `run` is headless while `serve` provides an interactive web UI.
 
@@ -82,9 +84,9 @@ If you don't specify names, friendly adjective-noun combinations are generated:
 - `gentle-whisper`
 
 ```bash
-# Auto-generated session and run names
+# Session "default", auto-generated run name
 ezvals run evals/
-# Creates: .ezvals/sessions/default/swift-falcon_a1b2c3d4.json
+# Creates: .ezvals/sessions/default/a1b2c3d4.jsonl  (run_name: swift-falcon)
 ```
 
 ### Rename an Existing Saved Run
@@ -93,10 +95,7 @@ Use run-id based rename mode when you want to update a run name from scripts or 
 
 ```bash
 # Rename by run_id
-ezvals run --rename run123 better-name
-
-# Restrict lookup to one session
-ezvals run --rename run123 better-name --session model-comparison
+ezvals run --rename a1b2c3d4 better-name
 ```
 
 ## Running Evals
@@ -141,29 +140,33 @@ ezvals run evals/ --limit 10
 # Run 4 evals in parallel
 ezvals run evals/ --concurrency 4
 
-# Set timeout
+# Set timeout (overrides per-eval timeouts; timed-out evals stop at the deadline)
 ezvals run evals/ --timeout 60.0
 
-# Show verbose output
+# Show eval output (prints, logs) and errors as they happen
 ezvals run evals/ --verbose
-
-# Save to a custom path
-ezvals run evals/ --output results.json
 ```
 
 ### Output Options
 
-```bash
-# Save to custom path
-ezvals run evals/ --output results.json
+Status lines (`Running …`, `Results saved to …`) go to stderr, so stdout is clean JSON when you ask for it.
 
-# Output JSON to stdout (no file)
+```bash
+# Save as usual AND print the full run JSON to stdout (includes saved_path)
+ezvals run evals/ --json
+
+# Print the run JSON to stdout, save nothing
 ezvals run evals/ --no-save
+
+# Write the run as one JSON file instead of the session store
+ezvals run evals/ --output results.json
 ```
+
+**Prefer `--json` when you need to analyze results**: it gives you totals and every result in one document without reading the run file.
 
 ## Temporary Ad-Hoc Runs (No Saved Files)
 
-When you want a quick one-off eval (for example, testing an idea in a temp script) and do **not** want to persist run files, use the SDK `run(...)` with `no_save=True`.
+When you want a quick one-off eval (for example, testing an idea in a temp script) and do **not** want to persist run files, use the SDK `run(...)` with `no_save=True`. It returns the run as a dict (`run_id`, `session_name`, `run_name`, `total_*` fields, `results`, `saved_path`) and raises `ValueError` if the CLI fails.
 
 ```python
 from ezvals import eval, EvalResult, run
@@ -180,12 +183,15 @@ def test_temp_behavior():
 
 if __name__ == "__main__":
     result = run(
-        path=__file__,   # run evals defined in this temp script
-        no_save=True,    # do not write a run JSON file
-        verbose=True,
+        __file__,        # run evals defined in this temp script
+        no_save=True,    # do not write a run file
     )
-    print(result["summary"]["total_evaluations"])
+    print(result["total_evaluations"], result["total_passed"])
 ```
+
+`run()` accepts `path, dataset, labels, limit, output, concurrency, timeout, session, run_name, no_save, config`. For in-process execution returning `EvalResult` objects (no CLI, nothing saved), use `run_evals([fn_or_path, ...], concurrency=1, timeout=None, dataset=None, labels=None, limit=None)`.
+
+From the shell (any language), `ezvals run path --no-save` does the same thing.
 
 Use this pattern for scratch experiments, fast local checks, and agent-generated temp eval files.
 
@@ -270,8 +276,8 @@ http://127.0.0.1:8000/?run_id=1826bc4c&score_passed=pass,true&label_in=qa
 Two ways to view a previous run:
 
 ```bash
-# Option 1: Pass the run JSON file directly
-ezvals serve .ezvals/sessions/default/baseline_a1b2c3d4.json
+# Option 1: Pass the run file directly
+ezvals serve .ezvals/sessions/default/a1b2c3d4.jsonl
 
 # Option 2: Load a session and pick runs from the dropdown
 ezvals serve evals/ --session my-experiment
@@ -287,27 +293,37 @@ ezvals serve evals/ --port 3000
 
 ## Results Storage
 
-Results are saved to `.ezvals/sessions/` organized by session, with the pattern `{run_name}_{run_id}.json`:
+Each run is saved to `.ezvals/sessions/<session>/<run_id>.jsonl`, where `run_id` is 8 random hex characters:
 
 ```
 .ezvals/sessions/
 ├── model-comparison/
-│   ├── baseline_a1b2c3d4.json
-│   └── improved_e5f6g7h8.json
+│   ├── a1b2c3d4.jsonl    # run_name: baseline
+│   └── e5f6a7b8.jsonl    # run_name: improved
 └── default/
-    └── swift-falcon_i9j0k1l2.json
+    └── c9d0e1f2.jsonl    # run_name: swift-falcon
 ```
+
+A run file is an append-only event log (one JSON event per line), not a results document. Don't parse it by hand; get the materialized run as JSON instead:
+
+```bash
+ezvals run evals/ --json > run.json                                           # while running
+ezvals export .ezvals/sessions/default/a1b2c3d4.jsonl -f json -o run.json     # a saved run
+```
+
+Old `.json` run files are migrated automatically on first use. Reusing a run name within a session replaces the earlier run.
 
 ### JSON Structure
 
 ```json
 {
+  "run_id": "a1b2c3d4",
   "session_name": "model-comparison",
   "run_name": "baseline",
-  "run_id": "2024-01-15T10-30-00Z",
   "total_evaluations": 50,
   "total_passed": 45,
   "total_errors": 2,
+  "average_latency": 1.2,
   "results": [...]
 }
 ```
@@ -318,6 +334,7 @@ Each item in `results` has run metadata plus a `result` object that matches `Eva
 
 ```json
 {
+  "id": "evals/support.py::test_answer_quality",
   "function": "test_answer_quality",
   "dataset": "customer-service",
   "labels": ["prod", "regression"],
@@ -326,13 +343,14 @@ Each item in `results` has run metadata plus a `result` object that matches `Eva
     "output": "You can request a refund within 30 days.",
     "reference": "Refunds are allowed within 30 days",
     "scores": [
-      {"key": "pass", "passed": true, "value": 1.0, "notes": null},
+      {"key": "pass", "passed": true},
       {"key": "tone", "passed": true, "value": 0.9, "notes": "Professional"}
     ],
     "error": null,
     "latency": 0.42,
     "metadata": {"model": "gpt-4o-mini"},
-    "trace_data": {"trace_url": "https://trace.example/run/123"}
+    "trace_data": {"trace_url": "https://trace.example/run/123"},
+    "status": "completed"
   }
 }
 ```
@@ -347,7 +365,9 @@ Each item in `results` has run metadata plus a `result` object that matches `Eva
 - `latency` (`number | null`) seconds for this eval
 - `metadata` (`object | null`) user-defined structured metadata
 - `trace_data` (`object | null`) trace payload (often `messages`, `trace_url`, and extras)
-- `correction_history` (`list | null`) append-only manual edit history for score/note edits (`field`, `before`, `after`, `timestamp`)
+- `status` (`string`) `completed`, `error`, `pending`, `running`, `cancelled`, or `not_started`
+- `annotation` (`string | null`) human note added in the UI
+- `correction_history` (`list | null`) append-only manual edit history for score/annotation edits (`field`, `before`, `after`, `timestamp`)
 
 `Score` shape:
 
@@ -363,7 +383,9 @@ At least one of `value` or `passed` is always present on each score.
 ```python
 import json
 
-with open(".ezvals/sessions/default/swift-falcon_a1b2c3d4.json") as f:
+# From: ezvals run evals/ --json > run.json
+#   or: ezvals export .ezvals/sessions/default/a1b2c3d4.jsonl -f json -o run.json
+with open("run.json") as f:
     run = json.load(f)
 
 results = run["results"]
@@ -479,28 +501,31 @@ This makes it easy to see:
 
 ```bash
 # Export to Markdown (good for reports)
-ezvals export .ezvals/runs/baseline.json -f md -o report.md
+ezvals export .ezvals/sessions/default/a1b2c3d4.jsonl -f md -o report.md
 
-# Export to CSV
-ezvals export .ezvals/runs/baseline.json -f csv -o results.csv
+# Export to CSV (includes an annotation column)
+ezvals export .ezvals/sessions/default/a1b2c3d4.jsonl -f csv -o results.csv
+
+# Full run as one JSON document (default output: <run_name>.json)
+ezvals export .ezvals/sessions/default/a1b2c3d4.jsonl -f json
 ```
 
 ### From Web UI
 
 Open the overflow (three-dot) menu in the header, then hover **Download** to export:
-- **JSON**: Raw results file
+- **JSON**: The full run as one document
 - **CSV**: Flat format for spreadsheets
 - **Markdown**: ASCII charts + table (respects current filters)
 - **PNG**: Chart image with stats bars, metrics, and branding
 
 ## Configuration
 
-Create `ezvals.json` in your project root for defaults:
+Optionally create `ezvals.json` in your project root for defaults (it's never created automatically, only when settings are saved from the UI):
 
 ```json
 {
   "concurrency": 4,
-  "results_dir": ".",
+  "timeout": 120,
   "port": 8000
 }
 ```
@@ -513,5 +538,6 @@ CLI flags always override config values.
 2. **Use descriptive run names** - You'll thank yourself later
 3. **Serve results for user review** - Don't just dump JSON
 4. **Run with concurrency** - `--concurrency 4` speeds up large suites
-5. **Use `--verbose` during development** - Surface eval stdout/logging quickly
-6. **Commit the session name** - Include it in PR descriptions for traceability
+5. **Use `--verbose` during development** - Surface eval stdout/logging and errors quickly
+6. **Use `--json` to analyze results** - Parse stdout instead of reading run files
+7. **Commit the session name** - Include it in PR descriptions for traceability
