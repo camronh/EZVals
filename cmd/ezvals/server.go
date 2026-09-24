@@ -41,6 +41,7 @@ type Server struct {
 	discovered    []Eval
 	exec          *Execution
 	selectedTotal *int
+	tracesBase    string // this server's URL; SDKs export spans to its /otlp endpoint
 }
 
 type httpError struct {
@@ -168,6 +169,7 @@ func serveCmd(args []string) {
 		fatal("no available port in %d-%d: %v", *port, *port+9, err)
 	}
 	address := "http://" + listener.Addr().String()
+	s.tracesBase = address
 	if len(query) > 0 {
 		address += "/?" + query.Encode()
 	}
@@ -234,7 +236,7 @@ func (s *Server) discover() {
 		return
 	}
 	stopWorkers(workers)
-	s.discovered = s.filter(evals)
+	s.discovered = expandTrials(s.filter(evals), loadConfig().Trials)
 }
 
 // filter applies the serve command's dataset, label and function filters.
@@ -286,9 +288,6 @@ func (s *Server) run(rows []int, configName *string) error {
 	if s.path == "" {
 		return fail(400, "Rerun unavailable: missing eval path")
 	}
-	if _, err := os.Stat(s.path); err != nil {
-		return fail(400, "Eval path not found: %s", s.path)
-	}
 	existing, err := s.store.Load(s.activeID)
 	if err == nil && configName != nil && *configName != "" && *configName != existing.ConfigName {
 		s.activeID, s.runName, existing = newRunID(), *configName, nil
@@ -311,29 +310,31 @@ func (s *Server) run(rows []int, configName *string) error {
 
 // start spawns workers for the eval path and runs ids (or all evals) in the active run, creating it if needed.
 func (s *Server) start(existing *Run, ids []string, all bool, overwrite bool) error {
-	cfg := loadConfig()
-	profile, _ := cfg.profile(s.configName)
 	runName := s.runName
 	if existing != nil {
 		runName = existing.RunName
 	}
-	info := RunInfo{RunID: s.activeID, SessionName: s.session, RunName: runName, EvalPath: s.path, Config: profile, Timeout: cfg.Timeout}
-	workers, manifest, err := startWorkers(s.path, info, cfg.Verbose)
+	workers, evals, err := s.spawn(runName)
 	if err != nil {
-		return fail(400, "%v", err)
+		return err
 	}
-	s.discovered = s.filter(manifest)
-	known := map[string]bool{}
-	for _, e := range s.discovered {
-		known[e.ID] = true
+	s.discovered = evals
+	byID := map[string]Eval{}
+	for _, e := range evals {
+		byID[e.ID] = e
 	}
 	if all {
-		ids = []string{}
-		for _, e := range s.discovered {
+		ids = ids[:0]
+		for _, e := range evals {
 			ids = append(ids, e.ID)
 		}
 	}
-	ids = slices.DeleteFunc(ids, func(id string) bool { return !known[id] })
+	var todo []Job
+	for _, id := range ids {
+		if e, ok := byID[id]; ok {
+			todo = append(todo, Job{ID: id, Eval: e.sdkID()})
+		}
+	}
 	if existing == nil {
 		header := Event{Type: "run", RunID: s.activeID, SessionName: s.session, RunName: runName, Path: s.path,
 			Dataset: s.dataset, Labels: s.labels, FunctionName: s.functionName, ConfigName: s.configName}
@@ -342,30 +343,81 @@ func (s *Server) start(existing *Run, ids []string, all bool, overwrite bool) er
 			return err
 		}
 	}
+	s.store.Append(s.activeID, Event{Type: "evals", Evals: evals})
+	s.selectedTotal = nil
+	if !all {
+		s.selectedTotal = ptr(len(todo))
+	}
+	s.launch(workers, todo, false)
+	return nil
+}
+
+// regrade re-scores the active run's stored results (rows nil = all) without re-running targets.
+func (s *Server) regrade(rows []int) (int, int, error) {
+	if s.exec != nil {
+		return 0, 0, fail(409, "A run is already in progress")
+	}
+	run, err := s.store.Load(s.activeID)
+	if err != nil {
+		return 0, 0, fail(400, "Run the evals before regrading them")
+	}
+	if s.path == "" {
+		return 0, 0, fail(400, "Regrade unavailable: missing eval path")
+	}
+	workers, evals, err := s.spawn(run.RunName)
+	if err != nil {
+		return 0, 0, err
+	}
+	for _, i := range rows {
+		if i < 0 || i >= len(run.Results) {
+			stopWorkers(workers)
+			return 0, 0, fail(400, "Invalid index %d: only %d results exist", i, len(run.Results))
+		}
+	}
+	todo, noTarget := regradeJobs(run, evals, rows)
+	s.selectedTotal = ptr(len(todo))
+	s.launch(workers, todo, true)
+	return len(todo), noTarget, nil
+}
+
+// spawn starts workers for the active run and returns the evals to show, filtered and expanded into trials.
+func (s *Server) spawn(runName string) ([]*Worker, []Eval, error) {
+	if s.path == "" {
+		return nil, nil, fail(400, "Rerun unavailable: missing eval path")
+	}
+	if _, err := os.Stat(s.path); err != nil {
+		return nil, nil, fail(400, "Eval path not found: %s", s.path)
+	}
+	cfg := loadConfig()
+	profile, _ := cfg.profile(s.configName)
+	info := RunInfo{RunID: s.activeID, SessionName: s.session, RunName: runName, EvalPath: s.path, Config: profile,
+		Timeout: cfg.Timeout, TracesEndpoint: endpoint(s.tracesBase, s.activeID)}
+	workers, manifest, err := startWorkers(s.path, info, cfg.Verbose)
+	if err != nil {
+		return nil, nil, fail(400, "%v", err)
+	}
+	return workers, expandTrials(s.filter(manifest), cfg.Trials), nil
+}
+
+// launch queues jobs in the active run and executes them in the background.
+func (s *Server) launch(workers []*Worker, todo []Job, grade bool) {
+	if len(todo) == 0 {
+		stopWorkers(workers)
+		return
+	}
 	runID := s.activeID
 	emit := func(es ...Event) {
-		for _, e := range es {
-			for _, r := range e.Results {
-				if r.Error != nil {
-					fmt.Fprintf(os.Stderr, "\nERROR in %s:\n%s\n", e.ID, *r.Error)
-				}
-			}
-		}
+		printErrors(es)
 		if err := s.store.Append(runID, es...); err != nil {
 			fmt.Fprintf(os.Stderr, "Error saving run: %v\n", err)
 		}
 	}
-	emit(Event{Type: "evals", Evals: s.discovered})
-	s.selectedTotal = nil
-	if !all {
-		s.selectedTotal = ptr(len(ids))
+	queued := Event{Type: "queued", Grade: grade}
+	for _, job := range todo {
+		queued.IDs = append(queued.IDs, job.ID)
 	}
-	if len(ids) == 0 {
-		stopWorkers(workers)
-		return nil
-	}
-	emit(Event{Type: "queued", IDs: ids})
-	x := execute(workers, ids, cfg.Concurrency, emit)
+	emit(queued)
+	x := execute(workers, todo, loadConfig().Concurrency, emit)
 	s.exec = x
 	go func() {
 		<-x.Done
@@ -375,7 +427,6 @@ func (s *Server) start(existing *Run, ids []string, all bool, overwrite bool) er
 		}
 		s.mu.Unlock()
 	}()
-	return nil
 }
 
 func (s *Server) routes() http.Handler {
@@ -451,7 +502,9 @@ func (s *Server) routes() http.Handler {
 		if err != nil {
 			return nil, err
 		}
-		return map[string]any{"result": run.Results[i], "index": i, "total": len(run.Results), "run_id": run.RunID,
+		row := run.Results[i]
+		row.Spans = run.SpansFor(row.ID)
+		return map[string]any{"result": row, "index": i, "total": len(run.Results), "run_id": run.RunID,
 			"session_name": run.SessionName, "run_name": run.RunName, "eval_path": run.Path}, nil
 	})
 	handle("PATCH /api/runs/{id}/results/{index}", func(r *http.Request) (any, error) {
@@ -490,6 +543,17 @@ func (s *Server) routes() http.Handler {
 			return nil, err
 		}
 		return map[string]any{"ok": true, "run_id": s.activeID}, nil
+	})
+	handle("POST /api/runs/regrade", func(r *http.Request) (any, error) {
+		var body struct{ Indices []int }
+		if err := decode(r, &body); err != nil {
+			return nil, err
+		}
+		regraded, noTarget, err := s.regrade(body.Indices)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"ok": true, "regraded": regraded, "skipped_without_target": noTarget}, nil
 	})
 	handle("POST /api/runs/new", func(r *http.Request) (any, error) {
 		var body struct {
@@ -717,6 +781,8 @@ func (s *Server) routes() http.Handler {
 			download(w, run.RunID+".md", "text/markdown", []byte(renderMarkdown(body.RunName, body.SessionName, rows, body.VisibleColumns, body.Stats)))
 		}
 	})
+
+	mux.Handle("POST /otlp/{run}/v1/traces", &Collector{save: func(runID string, events ...Event) { s.store.Append(runID, events...) }})
 
 	web, _ := fs.Sub(webFiles, "web")
 	index := func(w http.ResponseWriter) {

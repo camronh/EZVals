@@ -17,7 +17,8 @@ from typing import Any, Callable, Optional
 from ezvals.context import EvalContext, EvalResult, normalize_score
 
 # Parameters that file defaults and individual cases can set.
-PARAMS = {"input", "reference", "dataset", "labels", "metadata", "default_score_key", "timeout", "target", "evaluators"}
+PARAMS = {"input", "reference", "dataset", "labels", "metadata", "default_score_key", "timeout", "target", "evaluators",
+          "trials"}
 _UNSET = object()
 
 
@@ -43,8 +44,8 @@ class EvalFunction:
 
 def eval(func=None, *, input=_UNSET, reference=_UNSET, dataset=_UNSET, labels=_UNSET, metadata=_UNSET,
          default_score_key=_UNSET, timeout=_UNSET, target=_UNSET, evaluators=_UNSET, input_loader=_UNSET,
-         cases=_UNSET):
-    """Mark a function as an evaluation. Usable as @eval or @eval(...)."""
+         cases=_UNSET, trials=_UNSET):
+    """Mark a function as an evaluation. Usable as @eval or @eval(...). `ezvals run` runs it `trials` times."""
     params = {k: v for k, v in locals().items() if k != "func" and v is not _UNSET}
     if func is not None:
         return EvalFunction(func, params)
@@ -61,18 +62,22 @@ class Eval:
     params: dict
     error: Optional[str] = None
 
-    async def run(self, run_info: Optional[dict] = None) -> list:
-        run_info = run_info or {}
+    async def run(self, run_info: Optional[dict] = None, grade: Optional[dict] = None) -> list:
+        """Run the eval. With `grade` (a stored result), skip the target and score that result's output again."""
+        run_info = {k: v for k, v in (run_info or {}).items() if k != "traces_endpoint"}
         p = self.params
         if self.error:
             return [EvalResult(input=None, output=None, error=self.error)]
         ctx = EvalContext(input=p.get("input"), reference=p.get("reference"), metadata=p.get("metadata"),
                           default_score_key=p["default_score_key"], function_name=self.name,
                           dataset=p["dataset"], labels=p["labels"], **run_info) if self.ctx_param else None
+        if grade:
+            ctx.store(input=grade.get("input"), output=grade.get("output"), latency=grade.get("latency"),
+                      metadata=grade.get("metadata"), trace_data=grade.get("trace_data"))
         timeout = run_info.get("timeout") or p.get("timeout")
         start = time.perf_counter()
         try:
-            returned = await asyncio.wait_for(self._call_with_target(ctx), timeout)
+            returned = await asyncio.wait_for(self._call_with_target(ctx, skip_target=bool(grade)), timeout)
             if returned is None and ctx is not None:
                 returned = ctx
             if isinstance(returned, EvalContext):
@@ -105,8 +110,8 @@ class Eval:
                 result.latency = (time.perf_counter() - start) / len(results)
         return results
 
-    async def _call_with_target(self, ctx):
-        if self.params.get("target"):
+    async def _call_with_target(self, ctx, skip_target):
+        if self.params.get("target") and not skip_target:
             out = await _call(self.params["target"], ctx)
             if isinstance(out, EvalResult):
                 ctx.store(output=out.output, latency=out.latency, trace_data=out.trace_data, metadata=out.metadata)

@@ -14,12 +14,23 @@ import (
 var update = flag.Bool("update", false, "rewrite conformance/*.expected.json from the Python SDK's output")
 
 // Every SDK must produce the same results for the same fixture (conformance/<name>.py, <name>.eval.ts, ...).
-func TestConformance(t *testing.T) {
-	root, _ := filepath.Abs("../..")
-	binary := filepath.Join(t.TempDir(), "ezvals")
+func buildBinary(t *testing.T) (root, binary string) {
+	root, _ = filepath.Abs("../..")
+	binary = filepath.Join(t.TempDir(), "ezvals")
 	if out, err := exec.Command("go", "build", "-o", binary, ".").CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, out)
 	}
+	return root, binary
+}
+
+func sdkEnv(root string, extra ...string) []string {
+	return append(append(os.Environ(),
+		"EZVALS_PYTHON="+filepath.Join(root, "python", ".venv", "bin", "python"),
+		"EZVALS_NODE_WORKER="+filepath.Join(root, "typescript", "src", "worker.ts")), extra...)
+}
+
+func TestConformance(t *testing.T) {
+	root, binary := buildBinary(t)
 	fixtures, _ := filepath.Glob(filepath.Join(root, "conformance", "*.expected.json"))
 	if *update {
 		fixtures, _ = filepath.Glob(filepath.Join(root, "conformance", "*.py"))
@@ -31,9 +42,7 @@ func TestConformance(t *testing.T) {
 			t.Run(file, func(t *testing.T) {
 				cmd := exec.Command(binary, "run", filepath.Join("conformance", file), "--no-save", "--run-name", "conformance", "-c", "4")
 				cmd.Dir = root
-				cmd.Env = append(os.Environ(),
-					"EZVALS_PYTHON="+filepath.Join(root, "python", ".venv", "bin", "python"),
-					"EZVALS_NODE_WORKER="+filepath.Join(root, "typescript", "src", "worker.ts"))
+				cmd.Env = sdkEnv(root)
 				start := time.Now()
 				out, err := cmd.Output()
 				if err != nil {
@@ -58,12 +67,44 @@ func TestConformance(t *testing.T) {
 	}
 }
 
+// Regrading re-runs the eval body and evaluators on stored outputs without calling the target again.
+func TestConformanceRegrade(t *testing.T) {
+	root, binary := buildBinary(t)
+	for _, file := range []string{"features.py", "features.eval.ts"} {
+		t.Run(file, func(t *testing.T) {
+			dir := t.TempDir()
+			ezvals := func(env []string, args ...string) *Run {
+				cmd := exec.Command(binary, args...)
+				cmd.Dir, cmd.Env = dir, sdkEnv(root, env...)
+				out, err := cmd.Output()
+				if err != nil {
+					t.Fatalf("%v: %v\n%s", args, err, err.(*exec.ExitError).Stderr)
+				}
+				var run Run
+				json.Unmarshal(out, &run)
+				return &run
+			}
+			first := ezvals([]string{"TARGET_OUTPUT=a"}, "run", filepath.Join(root, "conformance", file+"::graded"), "--json")
+			regraded := ezvals([]string{"TARGET_OUTPUT=b", "EXPECTED=z"}, "regrade", first.RunID, "--json")
+			before, after := first.Results[0], regraded.Results[0]
+			if !*before.Result.Scores[0].Passed || before.SpanCount != 2 {
+				t.Fatalf("first run: %+v", before)
+			}
+			if after.Result.Output != "a" || *after.Result.Scores[0].Passed || after.SpanCount != 3 || *after.Result.Latency != *before.Result.Latency {
+				t.Fatalf("regrade should keep the output, latency and target spans, add a grade span, and fail against EXPECTED=z: %+v", after)
+			}
+		})
+	}
+}
+
 // normalize keeps the language-independent parts of each result: no ids, latencies, or error tracebacks.
 func normalize(rows []Row) string {
 	type result struct {
 		Function  string   `json:"function"`
 		Dataset   *string  `json:"dataset"`
 		Labels    []string `json:"labels"`
+		Trial     int      `json:"trial,omitempty"`
+		SpanCount int      `json:"span_count,omitempty"`
 		Status    string   `json:"status"`
 		Input     any      `json:"input"`
 		Output    any      `json:"output"`
@@ -80,7 +121,7 @@ func normalize(rows []Row) string {
 		if r.Error != nil {
 			errLine, _, _ = strings.Cut(*r.Error, "\n")
 		}
-		out = append(out, result{row.Function, row.Dataset, row.Labels, r.Status, r.Input, r.Output, r.Reference, r.Scores, errLine, r.Metadata, r.TraceData})
+		out = append(out, result{row.Function, row.Dataset, row.Labels, row.Trial, row.SpanCount, r.Status, r.Input, r.Output, r.Reference, r.Scores, errLine, r.Metadata, r.TraceData})
 	}
 	data, _ := json.MarshalIndent(out, "", "  ")
 	return string(data) + "\n"

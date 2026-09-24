@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -18,8 +19,9 @@ import (
 //
 //	run        header: run_id, session_name, run_name, path, filters, config_name, at
 //	evals      the eval manifest (replaces any earlier manifest)
-//	queued     ids scheduled to run
+//	queued     ids scheduled to run (grade: re-score stored results instead of re-running)
 //	started    one eval began
+//	spans      OpenTelemetry spans recorded while one eval ran
 //	result     one eval's results
 //	cancelled  ids stopped before finishing
 //	edit       a human edit to one result row's annotation or scores
@@ -42,6 +44,8 @@ type Event struct {
 	N            int             `json:"n,omitempty"`
 	Field        string          `json:"field,omitempty"`
 	Value        json.RawMessage `json:"value,omitempty"`
+	Grade        bool            `json:"grade,omitempty"`
+	Spans        []Span          `json:"spans,omitempty"`
 }
 
 type Eval struct {
@@ -52,6 +56,31 @@ type Eval struct {
 	Input     any      `json:"input"`
 	Reference any      `json:"reference"`
 	Metadata  any      `json:"metadata"`
+	Trials    int      `json:"trials,omitempty"` // requested by the eval; the host expands them
+	Target    bool     `json:"target,omitempty"` // the eval has a target, so its results can be regraded
+	Trial     int      `json:"trial,omitempty"`    // this eval is trial N of TrialOf
+	TrialOf   string   `json:"trial_of,omitempty"` // the SDK's id for the eval
+}
+
+// sdkID is the id the eval's SDK knows it by.
+func (e Eval) sdkID() string {
+	if e.TrialOf != "" {
+		return e.TrialOf
+	}
+	return e.ID
+}
+
+// Span is an OpenTelemetry span recorded while an eval ran.
+type Span struct {
+	TraceID       string         `json:"trace_id"`
+	SpanID        string         `json:"span_id"`
+	ParentSpanID  string         `json:"parent_span_id,omitempty"`
+	Name          string         `json:"name"`
+	Start         int64          `json:"start"` // unix nanoseconds
+	End           int64          `json:"end"`
+	Attributes    map[string]any `json:"attributes,omitempty"`
+	Status        string         `json:"status,omitempty"` // "ok" or "error"
+	StatusMessage string         `json:"status_message,omitempty"`
 }
 
 type Score struct {
@@ -83,11 +112,15 @@ type Correction struct {
 }
 
 type Row struct {
-	ID       string   `json:"id"`
-	Function string   `json:"function"`
-	Dataset  *string  `json:"dataset"`
-	Labels   []string `json:"labels"`
-	Result   Result   `json:"result"`
+	ID        string   `json:"id"`
+	Function  string   `json:"function"`
+	Dataset   *string  `json:"dataset"`
+	Labels    []string `json:"labels"`
+	Trial     int      `json:"trial,omitempty"`
+	TrialOf   string   `json:"trial_of,omitempty"`
+	SpanCount int      `json:"span_count,omitempty"`
+	Spans     []Span   `json:"spans,omitempty"` // only in single-result responses
+	Result    Result   `json:"result"`
 }
 
 // Run is the materialized view of a run's events.
@@ -107,7 +140,11 @@ type Run struct {
 	TotalPassed      int      `json:"total_passed"`
 	TotalWithScores  int      `json:"total_with_scores"`
 	AverageLatency   float64  `json:"average_latency"`
+	Trials           int      `json:"trials,omitempty"`
+	PassAtK          *float64 `json:"pass_at_k,omitempty"`  // share of evals with at least one passing trial
+	PassAllK         *float64 `json:"pass_all_k,omitempty"` // share of evals whose trials all passed
 	Results          []Row    `json:"results"`
+	spans            map[string][]Span
 }
 
 func materialize(events []Event) *Run {
@@ -115,6 +152,7 @@ func materialize(events []Event) *Run {
 	var manifest []Eval
 	status := map[string]string{}
 	results := map[string][]Result{}
+	run.spans = map[string][]Span{}
 	var edits []Event
 	for _, e := range events {
 		switch e.Type {
@@ -130,7 +168,12 @@ func materialize(events []Event) *Run {
 			for _, id := range e.IDs {
 				status[id] = "pending"
 				edits = keepAnnotationEdits(edits, id)
+				if !e.Grade {
+					delete(run.spans, id)
+				}
 			}
+		case "spans":
+			run.spans[e.ID] = append(run.spans[e.ID], e.Spans...)
 		case "started":
 			status[e.ID] = "running"
 		case "result":
@@ -151,7 +194,7 @@ func materialize(events []Event) *Run {
 	firstRow := map[string]int{}
 	for _, ev := range manifest {
 		firstRow[ev.ID] = len(run.Results)
-		row := Row{ID: ev.ID, Function: ev.Function, Dataset: ev.Dataset, Labels: ev.Labels}
+		row := Row{ID: ev.ID, Function: ev.Function, Dataset: ev.Dataset, Labels: ev.Labels, Trial: ev.Trial, TrialOf: ev.TrialOf, SpanCount: len(run.spans[ev.ID])}
 		if s, ok := status[ev.ID]; ok || len(results[ev.ID]) == 0 {
 			if !ok {
 				s = "not_started"
@@ -221,7 +264,49 @@ func (run *Run) computeTotals() {
 	}
 	run.TotalEvaluations = len(run.Results)
 	run.TotalFunctions = len(functions)
+
+	trials := map[string][]bool{}
+	var order []string
+	for _, row := range run.Results {
+		if row.Trial == 0 {
+			continue
+		}
+		if _, seen := trials[row.TrialOf]; !seen {
+			order = append(order, row.TrialOf)
+		}
+		trials[row.TrialOf] = append(trials[row.TrialOf], passed(row.Result))
+		run.Trials = max(run.Trials, row.Trial)
+	}
+	if len(order) > 0 {
+		anyPassed, allPassed := 0.0, 0.0
+		for _, id := range order {
+			if slices.Contains(trials[id], true) {
+				anyPassed++
+			}
+			if !slices.Contains(trials[id], false) {
+				allPassed++
+			}
+		}
+		run.PassAtK, run.PassAllK = ptr(anyPassed/float64(len(order))), ptr(allPassed/float64(len(order)))
+	}
 }
+
+// passed is true for a finished result whose pass/fail scores all passed.
+func passed(r Result) bool {
+	sawPass := false
+	for _, s := range r.Scores {
+		if s.Passed != nil {
+			if !*s.Passed {
+				return false
+			}
+			sawPass = true
+		}
+	}
+	return sawPass && r.Error == nil && r.Status == "completed"
+}
+
+// SpansFor returns the spans recorded for an eval.
+func (run *Run) SpansFor(id string) []Span { return run.spans[id] }
 
 // keepAnnotationEdits drops score edits for an eval that is being re-run; annotations survive reruns.
 func keepAnnotationEdits(edits []Event, id string) []Event {

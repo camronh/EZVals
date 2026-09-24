@@ -30,7 +30,7 @@ def after(ctx: EvalContext):
 	}
 	var mu sync.Mutex
 	errors := map[string]bool{}
-	x := execute(workers, ids(evals), 1, func(es ...Event) {
+	x := execute(workers, jobs(evals), 1, func(es ...Event) {
 		mu.Lock()
 		defer mu.Unlock()
 		for _, e := range es {

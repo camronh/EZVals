@@ -68,6 +68,23 @@ type RunInfo struct {
 	EvalPath    string         `json:"eval_path"`
 	Config      map[string]any `json:"config"`
 	Timeout     float64        `json:"timeout,omitempty"`
+	// Where the SDK sends OpenTelemetry spans, if the user's project has OpenTelemetry installed.
+	TracesEndpoint string `json:"traces_endpoint,omitempty"`
+}
+
+// Job asks a worker to run an eval, or to regrade a stored result without re-running the eval's target.
+type Job struct {
+	ID    string  `json:"id"`  // the host's id: an eval, or one trial of it
+	Eval  string  `json:"run"` // the SDK's id for the eval
+	Grade *Result `json:"grade,omitempty"`
+}
+
+func jobs(evals []Eval) []Job {
+	out := make([]Job, len(evals))
+	for i, e := range evals {
+		out[i] = Job{ID: e.ID, Eval: e.sdkID()}
+	}
+	return out
 }
 
 type message struct {
@@ -121,13 +138,13 @@ func startWorkers(path string, info RunInfo, verbose bool) ([]*Worker, []Eval, e
 			continue
 		}
 		cmd, err := workerCommand(lang, files[lang])
+		var w *Worker
 		if err == nil {
-			var w *Worker
 			w, err = spawn(cmd, string(infoJSON), verbose)
+		}
+		if err == nil {
 			workers = append(workers, w)
-			if w != nil {
-				evals = append(evals, w.evals...)
-			}
+			evals = append(evals, w.evals...)
 		}
 		if err != nil {
 			stopWorkers(workers)
@@ -194,17 +211,17 @@ type Execution struct {
 	Done      chan struct{}
 }
 
-func execute(workers []*Worker, ids []string, concurrency int, emit func(...Event)) *Execution {
+func execute(workers []*Worker, jobs []Job, concurrency int, emit func(...Event)) *Execution {
 	x := &Execution{workers: workers, emit: emit, Done: make(chan struct{}), remaining: map[string]bool{}, exited: map[*Worker]bool{}}
 	x.resume = sync.NewCond(&x.mu)
-	owner := map[string]*Worker{}
+	owner := map[string]*Worker{} // by SDK eval id
 	for _, w := range workers {
 		for _, e := range w.evals {
 			owner[e.ID] = w
 		}
 	}
-	for _, id := range ids {
-		x.remaining[id] = true
+	for _, job := range jobs {
+		x.remaining[job.ID] = true
 	}
 	slots := make(chan struct{}, concurrency)
 	var inFlight sync.WaitGroup
@@ -219,7 +236,7 @@ func execute(workers []*Worker, ids []string, concurrency int, emit func(...Even
 			x.mu.Lock()
 			x.exited[w] = true
 			x.mu.Unlock()
-			for id := range x.pending(w, owner) {
+			for _, id := range x.pending(w, jobs, owner) {
 				x.finish(id, workerExited)
 				<-slots
 				inFlight.Done()
@@ -227,7 +244,8 @@ func execute(workers []*Worker, ids []string, concurrency int, emit func(...Even
 		}()
 	}
 	go func() {
-		for _, id := range ids {
+		for _, job := range jobs {
+			id, w := job.ID, owner[job.Eval]
 			slots <- struct{}{}
 			x.mu.Lock()
 			for x.paused && !x.stopped {
@@ -237,7 +255,7 @@ func execute(workers []*Worker, ids []string, concurrency int, emit func(...Even
 				x.mu.Unlock()
 				break
 			}
-			if x.exited[owner[id]] {
+			if x.exited[w] {
 				x.mu.Unlock()
 				x.finish(id, workerExited)
 				<-slots
@@ -247,7 +265,8 @@ func execute(workers []*Worker, ids []string, concurrency int, emit func(...Even
 			inFlight.Add(1)
 			x.mu.Unlock()
 			emit(Event{Type: "started", ID: id})
-			fmt.Fprintf(owner[id].stdin, "{\"run\": %q}\n", id)
+			request, _ := json.Marshal(job)
+			w.stdin.Write(append(request, '\n'))
 		}
 		inFlight.Wait()
 		for _, w := range workers {
@@ -258,14 +277,14 @@ func execute(workers []*Worker, ids []string, concurrency int, emit func(...Even
 	return x
 }
 
-// pending returns the ids this worker was asked to run that have not reported back.
-func (x *Execution) pending(w *Worker, owner map[string]*Worker) map[string]bool {
+// pending returns the jobs this worker was sent that have not reported back.
+func (x *Execution) pending(w *Worker, jobs []Job, owner map[string]*Worker) []string {
 	x.mu.Lock()
 	defer x.mu.Unlock()
-	ids := map[string]bool{}
-	for id, queued := range x.remaining {
-		if !queued && owner[id] == w {
-			ids[id] = true
+	var ids []string
+	for _, job := range jobs {
+		if queued, ok := x.remaining[job.ID]; ok && !queued && owner[job.Eval] == w {
+			ids = append(ids, job.ID)
 		}
 	}
 	return ids

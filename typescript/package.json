@@ -6,17 +6,42 @@
   "type": "module",
   "repository": "github:camronh/EZVals",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
   },
-  "bin": { "ezvals": "bin/ezvals.js" },
-  "files": ["dist", "bin"],
-  "engines": { "node": ">=22.18" },
+  "bin": {
+    "ezvals": "bin/ezvals.js"
+  },
+  "files": [
+    "dist",
+    "bin"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
     "build": "tsc",
     "test": "node --test test/*.test.ts"
   },
   "devDependencies": {
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/exporter-trace-otlp-proto": "^0.222.0",
+    "@opentelemetry/sdk-trace-node": "^2.11.0",
     "@types/node": "^24.0.0",
     "typescript": "^5.9.2"
+  },
+  "peerDependencies": {
+    "@opentelemetry/sdk-trace-node": ">=2",
+    "@opentelemetry/exporter-trace-otlp-proto": ">=0.200"
+  },
+  "peerDependenciesMeta": {
+    "@opentelemetry/sdk-trace-node": {
+      "optional": true
+    },
+    "@opentelemetry/exporter-trace-otlp-proto": {
+      "optional": true
+    }
   }
 }

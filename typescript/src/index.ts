@@ -42,6 +42,8 @@ export interface EvalOptions {
   defaultScoreKey?: string;
   /** Seconds. */
   timeout?: number;
+  /** How many times `ezvals run` runs the eval (each run is a separate result). */
+  trials?: number;
   /** Runs before the eval body; a returned value becomes `ctx.output`. */
   target?: Target;
   /** Run on each result; returned scores are added. */
@@ -167,6 +169,7 @@ interface Params {
   metadata?: Record<string, unknown> | null;
   defaultScoreKey: string;
   timeout?: number;
+  trials?: number;
   target?: Target;
   evaluators?: Evaluator[];
 }
@@ -195,7 +198,7 @@ export interface Eval {
   error?: string;
 }
 
-const PARAMS = ["input", "reference", "dataset", "labels", "metadata", "defaultScoreKey", "timeout", "target", "evaluators"];
+const PARAMS = ["input", "reference", "dataset", "labels", "metadata", "defaultScoreKey", "timeout", "trials", "target", "evaluators"];
 
 function pick(options: Record<string, unknown>): Partial<Params> {
   return Object.fromEntries(Object.entries(options).filter(([k]) => PARAMS.includes(k)));
@@ -266,16 +269,21 @@ export interface WireResult {
   trace_data: TraceData;
 }
 
-export async function runEval(e: Eval, info: RunInfo = {}): Promise<WireResult[]> {
+/** Run an eval. With `grade` (a stored result), skip the target and score that result's output again. */
+export async function runEval(e: Eval, info: RunInfo = {}, grade?: WireResult): Promise<WireResult[]> {
   const p = e.params;
   if (e.error) return [toWire({ input: null, output: null, error: e.error }, p.defaultScoreKey)];
   const ctx = new EvalContext(p, e.name, info);
+  if (grade) {
+    ctx.store({ input: grade.input, output: grade.output, metadata: grade.metadata, traceData: grade.trace_data });
+    ctx.latency = grade.latency;
+  }
   const timeout = info.timeout || p.timeout;
   const start = performance.now();
   let results: EvalResult[];
   try {
     const body = async () => {
-      if (p.target) {
+      if (p.target && !grade) {
         const out = await p.target(ctx);
         if (out !== undefined && !(out instanceof EvalContext)) ctx.store({ output: out });
       }

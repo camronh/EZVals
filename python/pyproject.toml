@@ -14,6 +14,10 @@ classifiers = [
 ]
 dependencies = []
 
+[project.optional-dependencies]
+# Record OpenTelemetry spans (LLM calls, tool calls, ...) with each eval's results.
+otel = ["opentelemetry-sdk>=1.20", "opentelemetry-exporter-otlp-proto-http>=1.20"]
+
 [project.scripts]
 ezvals = "ezvals.cli:main"
 
@@ -26,6 +30,8 @@ dev = [
     "pytest>=8.4.1",
     "playwright>=1.56.0",
     "pytest-playwright>=0.9.0",
+    "opentelemetry-sdk>=1.20",
+    "opentelemetry-exporter-otlp-proto-http>=1.20",
 ]
 
 [build-system]

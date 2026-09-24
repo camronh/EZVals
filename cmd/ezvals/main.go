@@ -7,6 +7,8 @@ import (
 	"flag"
 	"fmt"
 	mrand "math/rand/v2"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -24,6 +26,8 @@ const usage = `EZVals: code-first evals for AI agents and LLM apps.
 Usage:
   ezvals run PATH[::function,...] [flags]   Run evals headlessly and save the results
   ezvals serve PATH [flags]                 Open the web UI to browse and run evals
+  ezvals regrade RUN [flags]                Re-score a run's results without re-running targets
+  ezvals query "SQL" [--json]               Query saved runs with SQL (see: ezvals query --schema)
   ezvals export RUN_FILE [-f json|csv|md]   Export a saved run
   ezvals skills add|remove|doctor           Manage the evals skill for coding agents
 
@@ -41,6 +45,10 @@ func main() {
 		runCmd(args)
 	case "serve":
 		serveCmd(args)
+	case "regrade":
+		regradeCmd(args)
+	case "query":
+		queryCmd(args)
 	case "export":
 		exportCmd(args)
 	case "skills":
@@ -75,6 +83,7 @@ func (m *multiFlag) Set(v string) error { *m = append(*m, v); return nil }
 
 type Config struct {
 	Concurrency             int                       `json:"concurrency"`
+	Trials                  int                       `json:"trials,omitempty"`
 	Timeout                 float64                   `json:"timeout,omitempty"`
 	Verbose                 bool                      `json:"verbose,omitempty"`
 	ResultsDir              string                    `json:"results_dir"`
@@ -178,6 +187,100 @@ func ids(evals []Eval) []string {
 	return out
 }
 
+// expandTrials turns an eval with N trials into N evals, <id>~1 ... <id>~N. A positive override applies to every eval.
+func expandTrials(evals []Eval, override int) []Eval {
+	var out []Eval
+	for _, e := range evals {
+		n := e.Trials
+		if override > 0 {
+			n = override
+		}
+		if n <= 1 {
+			out = append(out, e)
+			continue
+		}
+		for t := 1; t <= n; t++ {
+			trial := e
+			trial.ID, trial.Trial, trial.TrialOf = fmt.Sprintf("%s~%d", e.ID, t), t, e.ID
+			out = append(out, trial)
+		}
+	}
+	return out
+}
+
+// regradeJobs re-scores stored results (rows nil = every row). Only finished results of evals with a target
+// qualify: the target produced the output, so the eval body and evaluators can score it again without it.
+func regradeJobs(run *Run, manifest []Eval, rows []int) (jobs []Job, noTarget int) {
+	current := map[string]Eval{}
+	for _, e := range manifest {
+		current[e.ID] = e
+	}
+	resultsPerEval := map[string]int{}
+	for _, row := range run.Results {
+		resultsPerEval[row.ID]++
+	}
+	if rows == nil {
+		for i := range run.Results {
+			rows = append(rows, i)
+		}
+	}
+	for _, i := range rows {
+		row := run.Results[i]
+		eval, ok := current[Eval{ID: row.ID, TrialOf: row.TrialOf}.sdkID()]
+		if row.Result.Status != "completed" || !ok || resultsPerEval[row.ID] > 1 {
+			continue
+		}
+		if !eval.Target {
+			noTarget++
+			continue
+		}
+		stored := row.Result
+		jobs = append(jobs, Job{ID: row.ID, Eval: eval.ID, Grade: &stored})
+	}
+	return jobs, noTarget
+}
+
+// listenForTraces starts a collector on a free local port for the lifetime of the command.
+func listenForTraces() (*Collector, string) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		fatal("%v", err)
+	}
+	collector := &Collector{}
+	mux := http.NewServeMux()
+	mux.Handle("POST /otlp/{run}/v1/traces", collector)
+	go http.Serve(listener, mux)
+	return collector, "http://" + listener.Addr().String()
+}
+
+// runJobs executes jobs until they finish or the user interrupts, which cancels whatever hasn't finished.
+func runJobs(workers []*Worker, jobs []Job, concurrency int, emit func(...Event)) {
+	x := execute(workers, jobs, concurrency, emit)
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
+	select {
+	case <-x.Done:
+	case <-interrupt:
+		fmt.Fprintln(os.Stderr, "\nStopping...")
+		x.Stop()
+	}
+}
+
+func printErrors(events []Event) {
+	for _, e := range events {
+		for _, r := range e.Results {
+			if r.Error != nil {
+				fmt.Fprintf(os.Stderr, "\nERROR in %s:\n%s\n", e.ID, *r.Error)
+			}
+		}
+	}
+}
+
+type report struct {
+	*Run
+	SavedPath string `json:"saved_path,omitempty"`
+}
+
 func runCmd(args []string) {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
 	var labels multiFlag
@@ -191,6 +294,7 @@ func runCmd(args []string) {
 	concurrency := fs.Int("concurrency", -1, "evals to run in parallel (default: ezvals.json, else 1)")
 	fs.IntVar(concurrency, "c", -1, "shorthand for --concurrency")
 	timeout := fs.Float64("timeout", 0, "per-eval timeout in seconds")
+	trials := fs.Int("trials", 0, "run every eval this many times (default: each eval's own trials)")
 	verbose := fs.Bool("verbose", false, "show eval output and errors")
 	fs.BoolVar(verbose, "v", false, "shorthand for --verbose")
 	session := fs.String("session", "default", "session name")
@@ -226,6 +330,9 @@ func runCmd(args []string) {
 	if *timeout == 0 {
 		*timeout = cfg.Timeout
 	}
+	if *trials == 0 {
+		*trials = cfg.Trials
+	}
 	*verbose = *verbose || cfg.Verbose
 	profile, err := cfg.profile(*configName)
 	if err != nil {
@@ -239,7 +346,9 @@ func runCmd(args []string) {
 	}
 
 	path, selectors := splitSelector(positional[0])
+	collector, tracesBase := listenForTraces()
 	info := RunInfo{RunID: newRunID(), SessionName: sanitize(*session), RunName: sanitize(*runName), EvalPath: path, Config: profile, Timeout: *timeout}
+	info.TracesEndpoint = endpoint(tracesBase, info.RunID)
 	fmt.Fprintf(os.Stderr, "Running %s\n", positional[0])
 	workers, manifest, err := startWorkers(path, info, *verbose)
 	if err != nil {
@@ -254,6 +363,7 @@ func runCmd(args []string) {
 		fmt.Fprintln(os.Stderr, "No evaluations found")
 		return
 	}
+	evals = expandTrials(evals, *trials)
 
 	header := Event{Type: "run", RunID: info.RunID, SessionName: info.SessionName, RunName: info.RunName, Path: path,
 		Dataset: *dataset, Labels: labels, FunctionName: strings.Join(selectors, ","), ConfigName: *configName}
@@ -275,29 +385,15 @@ func runCmd(args []string) {
 				fatal("%v", err)
 			}
 		}
-		for _, e := range es {
-			for _, r := range e.Results {
-				if *verbose && r.Error != nil {
-					fmt.Fprintf(os.Stderr, "\nERROR in %s:\n%s\n", e.ID, *r.Error)
-				}
-			}
+		if *verbose {
+			printErrors(es)
 		}
 	}
+	collector.Track(info.RunID, emit)
 	emit(Event{Type: "evals", Evals: evals}, Event{Type: "queued", IDs: ids(evals)})
-	x := execute(workers, ids(evals), *concurrency, emit)
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
-	select {
-	case <-x.Done:
-	case <-interrupt:
-		fmt.Fprintln(os.Stderr, "\nStopping...")
-		x.Stop()
-	}
+	runJobs(workers, jobs(evals), *concurrency, emit)
 
-	report := struct {
-		*Run
-		SavedPath string `json:"saved_path,omitempty"`
-	}{Run: materialize(events)}
+	report := report{Run: materialize(events)}
 	if *output != "" {
 		data, _ := json.MarshalIndent(report.Run, "", "  ")
 		os.MkdirAll(filepath.Dir(*output), 0o755)
@@ -315,6 +411,76 @@ func runCmd(args []string) {
 	if report.SavedPath != "" {
 		fmt.Fprintf(os.Stderr, "Results saved to %s\n", report.SavedPath)
 	}
+}
+
+func regradeCmd(args []string) {
+	fs := flag.NewFlagSet("regrade", flag.ExitOnError)
+	concurrency := fs.Int("concurrency", 0, "results to regrade in parallel (default: ezvals.json, else 1)")
+	fs.IntVar(concurrency, "c", 0, "shorthand for --concurrency")
+	verbose := fs.Bool("verbose", false, "show eval output and errors")
+	fs.BoolVar(verbose, "v", false, "shorthand for --verbose")
+	jsonOut := fs.Bool("json", false, "print the regraded run JSON to stdout")
+	positional := parseFlags(fs, args)
+	if len(positional) != 1 {
+		fatal("usage: ezvals regrade RUN_ID|RUN_FILE [flags]")
+	}
+	cfg := loadConfig()
+	if *concurrency == 0 {
+		*concurrency = cfg.Concurrency
+	}
+	store := openStore(cfg.sessionsDir())
+	runID := positional[0]
+	if _, err := os.Stat(runID); err == nil {
+		if runID, err = store.Import(runID); err != nil {
+			fatal("%v", err)
+		}
+	}
+	run, err := store.Load(runID)
+	if err != nil {
+		fatal("Run '%s' not found.", runID)
+	}
+	if _, err := os.Stat(run.Path); err != nil {
+		fatal("Eval path %s not found: regrading runs the eval code again", run.Path)
+	}
+	profile, _ := cfg.profile(run.ConfigName)
+	collector, tracesBase := listenForTraces()
+	info := RunInfo{RunID: run.RunID, SessionName: run.SessionName, RunName: run.RunName, EvalPath: run.Path, Config: profile,
+		Timeout: cfg.Timeout, TracesEndpoint: endpoint(tracesBase, run.RunID)}
+	workers, manifest, err := startWorkers(run.Path, info, *verbose)
+	if err != nil {
+		fatal("%v", err)
+	}
+	jobs, noTarget := regradeJobs(run, manifest, nil)
+	if noTarget > 0 {
+		fmt.Fprintf(os.Stderr, "Skipping %d result(s) from evals without a target: their output can't be regraded without re-running them.\n", noTarget)
+	}
+	if len(jobs) == 0 {
+		stopWorkers(workers)
+		fmt.Fprintln(os.Stderr, "Nothing to regrade")
+		return
+	}
+	emit := func(es ...Event) {
+		if err := store.Append(run.RunID, es...); err != nil {
+			fatal("%v", err)
+		}
+		if *verbose {
+			printErrors(es)
+		}
+	}
+	collector.Track(run.RunID, emit)
+	fmt.Fprintf(os.Stderr, "Regrading %d result(s) of %s\n", len(jobs), run.RunName)
+	queued := Event{Type: "queued", Grade: true}
+	for _, job := range jobs {
+		queued.IDs = append(queued.IDs, job.ID)
+	}
+	emit(queued)
+	runJobs(workers, jobs, *concurrency, emit)
+	path, _ := store.file(run.RunID)
+	if *jsonOut {
+		regraded, _ := store.Load(run.RunID)
+		json.NewEncoder(os.Stdout).Encode(report{Run: regraded, SavedPath: path})
+	}
+	fmt.Fprintf(os.Stderr, "Results saved to %s\n", path)
 }
 
 // loadRunFile materializes a run file: an event log (.jsonl) or a legacy run (.json).
