@@ -85,3 +85,4 @@ cmd/ezvals/web/*
 typescript/dist/
 node_modules/
 cmd/ezvals/skill/ezvals-docs/
+examples/typescript/package-lock.json
