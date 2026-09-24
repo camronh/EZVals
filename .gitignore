@@ -69,7 +69,6 @@ AGENTS.md
 ezvals.json
 
 # Docs assembled by workflow (not tracked in git)
-ezvals/skills/evals/ezvals-docs/
 
 # Skills sandbox (synced via `make sync-skill-sandbox`)
 skills-sandbox/sandbox/.claude/
@@ -77,5 +76,11 @@ skills-sandbox/.ezvals/
 skills-sandbox/.venv/
 
 # Generated frontend build artifacts (packaged at release time, not tracked in commits)
-ezvals/static/index.html
-ezvals/static/assets/
+
+# Built host binary and embedded UI
+python/ezvals/bin/
+cmd/ezvals/web/*
+!cmd/ezvals/web/.gitkeep
+/ezvals-bin
+typescript/dist/
+node_modules/
