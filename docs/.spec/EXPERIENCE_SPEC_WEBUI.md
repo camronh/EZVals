@@ -19,8 +19,10 @@ Starts at `http://127.0.0.1:8000` (browser opens by default unless `--no-open` i
 The dashboard is three stacked regions above the results table:
 
 1. **Header**: the EZVals mark, the session and run name (the run picker), and the run actions on the right: Compare, New run, a "⋯" menu (Regrade, Reload evals, Settings) and the primary Run button.
-2. **Summary**: the run's headline numbers and one horizontal bar per score key (see [Summary](#summary)).
+2. **Summary**: the run's headline numbers and outcome bar, plus each score key when there is more than one (see [Summary](#summary)).
 3. **Filter bar**: the outcome switch (All / Failed / Errors, each with a count), search, Filters, Columns and Export. When rows are selected, the bar shows how many.
+
+Most runs are graded by a single pass/fail score, so the UI is built around one metric: the pass rate and each row's outcome icon carry it, and per-key detail appears only when a run has several keys (two or three is normal; more is unusual but supported).
 
 The UI uses one neutral palette with a single blue accent; green, red and amber only ever mean passed, failed and in progress. Text uses the system font; monospace is reserved for code and data (inputs, outputs, ids, latencies).
 
@@ -67,11 +69,22 @@ Scenario: Eval cell
   Then each row's eval cell shows the eval name, with dataset, labels, trial "#n" and span count on a quieter line beneath it
   And a leading icon shows the row's outcome (see Result Status Indicators)
 
-Scenario: Score chips
-  Then a passed score shows as a green "✓ key" chip
-  And a failed score shows as a red "✗ key" chip
-  And a numeric score without pass/fail shows as a neutral "key 0.83" chip
+Scenario: Scores cell with one metric
+  Given the run's only score key is pass/fail
+  Then the Scores cell shows no chips, since the row's outcome icon already says passed or failed
+  And a failed score's notes show in the cell
+
+Scenario: Scores cell with several metrics
+  Given the run has more than one score key, or a numeric one
+  Then a failed pass/fail score shows as a red "✗ key" chip (passed ones are implied by the outcome icon)
+  And a numeric score shows as a neutral "key 0.83" chip
+  And failed scores' notes show beneath the chips
   And hovering a chip shows its full value and notes
+
+Scenario: Score chips elsewhere
+  Given scores appear without an outcome icon (comparison cells and cards)
+  Then a passed score shows as a green "✓ key" chip, a failed one as a red "✗ key" chip, and a numeric one as "key 0.83"
+  And failed scores' notes show beneath the chips
 ```
 
 ### Table Sorting
@@ -225,6 +238,10 @@ Scenario: Detail view contents
     - Spans (count; opens the span waterfall), if any were recorded
     - Latency
     - Error message (if any; a long traceback is capped in height, scrollable and expandable)
+
+Scenario: Scores lead the sidebar
+  Given the result has scores
+  Then they are the first section of the sidebar, each with its pass/fail mark or value and its notes in full
 
 Scenario: Message-format data rendering
   Given the detail view is open
@@ -543,13 +560,22 @@ Scenario: Change since the previous run
   Then the pass rate shows the change in points since that run (e.g. "▲ 4 pts")
   And clicking it compares the two runs
 
-Scenario: Score bars
-  Then each score key has a horizontal bar with its name, pass rate (or average) and "passed/total"
+Scenario: Outcome bar
+  Then under the headline a bar splits the rows into passed (green), failed (red) and errored (faded red) shares
+  And rows not yet finished leave the rest of the bar empty
+
+Scenario: One metric
+  Given the run's only score key is pass/fail
+  Then the summary shows just the headline and outcome bar, with no per-key breakdown
+
+Scenario: Several metrics
+  Given the run has more than one score key, or a numeric one
+  Then each key is listed beside the headline with its pass rate (or average), "passed/total" (or "avg") and a small bar
   And bars are green at ≥80%, amber at ≥50% and red below
 
 Scenario: Progress while running
   Given a run is in progress
-  Then the summary shows a progress bar with "completed/total"
+  Then the outcome bar fills as results arrive, with "completed/total" beside it
 
 Scenario: Not run yet
   Given no row has been run
@@ -557,7 +583,7 @@ Scenario: Not run yet
 
 Scenario: Stats update with filters
   Given filters, search or the outcome switch narrow the rows
-  Then the counts, pass rate, latency and score bars describe the visible rows only
+  Then the counts, pass rate, latency, outcome bar and per-key stats describe the visible rows only
   And the eval count reads "5 of 20 evals"
 ```
 
@@ -843,7 +869,7 @@ Scenario: Comparison summary
   Then the summary is a table with one row per run:
     - color dot and run name
     - pass rate
-    - one column per score key (pass rate or average)
+    - one column per score key (pass rate or average), only when the runs have more than one key or a numeric one
     - average latency
   And the best value in each column is emphasized
   And non-primary rows have a remove (×) button

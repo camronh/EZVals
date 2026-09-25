@@ -3,7 +3,7 @@ import { expect, fn, userEvent, within } from 'storybook/test'
 import type { RunSummary } from '../../types'
 import { withColors } from '../../lib/comparison'
 import { runProgress, statsFor, trialStats } from '../../lib/stats'
-import { completedRun, improvedRun, notStartedRun, runningRun, sessionRuns, trialsRun } from '../../stories/fixtures'
+import { completedRun, improvedRun, multiMetricRun, notStartedRun, runningRun, sessionRuns, trialsRun } from '../../stories/fixtures'
 import { StatsPanel } from './StatsPanel'
 
 const props = (run: RunSummary) => ({
@@ -21,7 +21,20 @@ const meta: Meta<typeof StatsPanel> = {
 export default meta
 type Story = StoryObj<typeof StatsPanel>
 
-export const Completed: Story = { args: props(completedRun) }
+/** One pass/fail key: the pass rate is the whole story, so no per-key breakdown. */
+export const Completed: Story = {
+  args: props(completedRun),
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelector('#outcome-bar')).toBeVisible()
+    await expect(canvasElement.querySelector('#score-metrics')).toBeNull()
+  },
+}
+export const SeveralMetrics: Story = {
+  args: props(multiMetricRun),
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelectorAll('.score-metric')).toHaveLength(3)
+  },
+}
 export const Improved: Story = {
   args: { ...props(improvedRun), delta: { points: 17, previous: 'baseline', onCompare: fn() } },
   play: async ({ canvasElement, args }) => {
@@ -43,7 +56,13 @@ const comparing = (runs: RunSummary[]) => ({
     onMove: fn(), onRemove: fn(), onAdd: fn(),
   },
 })
-export const ComparingTwoRuns: Story = { args: comparing([completedRun, improvedRun]) }
+export const ComparingTwoRuns: Story = {
+  args: comparing([completedRun, improvedRun]),
+  play: async ({ canvasElement }) => {
+    const headers = [...canvasElement.querySelectorAll('#comparison-summary th')].map((th) => th.textContent)
+    await expect(headers).toEqual(['Run', 'Pass rate', 'Latency', ''])
+  },
+}
 export const ComparingFourRuns: Story = {
   args: comparing([completedRun, improvedRun, { ...completedRun, run_id: 'x1', run_name: 'gpt-5-mini' }, { ...improvedRun, run_id: 'x2', run_name: 'haiku' }]),
 }

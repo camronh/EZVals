@@ -41,6 +41,11 @@ export function chipStats(chip: ScoreChip) {
   return { pct, value: avg.toFixed(2) }
 }
 
+/** The score keys worth showing beside the pass rate: none when the only key is pass/fail, since the pass rate already says it. */
+export function extraChips(chips: ScoreChip[]) {
+  return chips.length === 1 && chips[0].type === 'ratio' ? [] : chips
+}
+
 export function barTone(pct: number) {
   return pct >= 80 ? 'tone-good' : pct >= 50 ? 'tone-mid' : 'tone-bad'
 }

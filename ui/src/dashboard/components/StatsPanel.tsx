@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import type { ComparisonRun, ScoreChip, SessionRun } from '../../types'
 import { Icon } from '../../components/Icon'
-import { barTone, chipStats, type SubsetStats } from '../../lib/stats'
+import { barTone, chipStats, extraChips, type SubsetStats } from '../../lib/stats'
 import { RunsMenu } from './Header'
 
 export type Comparison = {
@@ -28,23 +28,19 @@ const pct = (v: number) => `${Math.round(v * 100)}%`
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 const chipText = (chip: ScoreChip) => (chip.type === 'ratio' ? `${chipStats(chip).pct}%` : chipStats(chip).value)
 
-function Bar({ value, tone }: { value: number; tone: string }) {
-  return <div className={`summary-bar ${tone}`}><div style={{ width: `${Math.max(value, 0)}%` }} /></div>
-}
-
-function ScoreBars({ chips }: { chips: ScoreChip[] }) {
-  if (!chips.length) return null
+function Metrics({ chips }: { chips: ScoreChip[] }) {
   return (
-    <div id="score-bars" className="grid min-w-0 flex-1 grid-cols-[repeat(auto-fill,minmax(240px,1fr))] content-center gap-x-8 gap-y-2.5">
+    <div id="score-metrics" className="grid min-w-0 flex-[1.4] grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-x-6 gap-y-3">
       {chips.map((chip) => {
         const { pct: value, value: detail } = chipStats(chip)
         return (
-          <div key={chip.key} className="score-bar grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-1">
-            <span className="truncate text-[13px] text-theme-text-secondary" title={chip.key}>{chip.key}</span>
-            <span className="font-mono text-[12px] tabular-nums text-theme-text">
-              {chip.type === 'ratio' ? <>{value}%<span className="ml-1.5 text-theme-text-muted">{detail}</span></> : <>{detail}<span className="ml-1.5 text-theme-text-muted">avg</span></>}
-            </span>
-            <div className="col-span-2"><Bar value={value} tone={barTone(value)} /></div>
+          <div key={chip.key} className="score-metric min-w-0">
+            <div className="truncate text-[12px] text-theme-text-muted" title={chip.key}>{chip.key}</div>
+            <div className="mt-0.5 flex items-baseline gap-1.5">
+              <span className="text-[17px] font-semibold tabular-nums text-theme-text">{chip.type === 'ratio' ? `${value}%` : detail}</span>
+              <span className="font-mono text-[11px] tabular-nums text-theme-text-muted">{chip.type === 'ratio' ? detail : 'avg'}</span>
+            </div>
+            <div className={`summary-bar mt-1.5 !h-1 ${barTone(value)}`}><div style={{ width: `${Math.max(value, 0)}%` }} /></div>
           </div>
         )
       })}
@@ -72,7 +68,7 @@ function Headline({ stats, total, progress, trials, delta }: Props) {
     trials && trials.k > 1 ? <span key="a" id="stats-pass-all-k" title={`Evals where all ${trials.k} trials passed`}>pass^{trials.k} {pct(trials.passAllK)}</span> : null,
   ].filter(Boolean)
   return (
-    <div className="min-w-[220px]">
+    <div className="min-w-[260px] flex-1">
       <div className="flex items-baseline gap-2.5">
         {stats.rate != null ? (
           <span id="pass-rate" className="text-3xl font-semibold tabular-nums tracking-tight text-theme-text">{pct(stats.rate)}</span>
@@ -92,12 +88,17 @@ function Headline({ stats, total, progress, trials, delta }: Props) {
         ) : null}
       </div>
       <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[13px] text-theme-text-secondary">{facts}</div>
-      {progress.running ? (
-        <div id="run-progress" className="mt-3 flex items-center gap-2.5">
-          <div className="summary-bar tone-progress w-40"><div style={{ width: `${progress.total ? (progress.completed / progress.total) * 100 : 0}%` }} /></div>
-          <span className="font-mono text-[12px] tabular-nums text-theme-text-muted">{progress.completed}/{progress.total}</span>
+      <div className="mt-3 flex items-center gap-3">
+        <div id="outcome-bar" className="flex h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-theme-bg-elevated">
+          {([
+            [stats.passed, 'bg-accent-success'],
+            [stats.failed, 'bg-accent-error'],
+            [stats.errors, 'bg-accent-error opacity-50'],
+            [stats.finished - stats.passed - stats.failed - stats.errors, 'bg-theme-text-muted opacity-40'],
+          ] as const).map(([n, tone]) => (n ? <div key={tone} className={`${tone} transition-[width] duration-500`} style={{ width: `${(n / stats.count) * 100}%` }} /> : null))}
         </div>
-      ) : null}
+        {progress.running ? <span id="run-progress" className="font-mono text-[12px] tabular-nums text-theme-text-muted">{progress.completed}/{progress.total}</span> : null}
+      </div>
     </div>
   )
 }
@@ -106,7 +107,8 @@ function ComparisonSummary({ comparison, sessionRuns }: { comparison: Comparison
   const [adding, setAdding] = useState(false)
   const anchor = useRef<HTMLButtonElement | null>(null)
   const available = sessionRuns.filter((r) => !comparison.runs.some((c) => c.runId === r.run_id))
-  const keys = [...new Set(comparison.runs.flatMap((run) => comparison.stats[run.runId].chips.map((c) => c.key)))]
+  const chips = comparison.runs.flatMap((run) => comparison.stats[run.runId].chips)
+  const keys = extraChips([...new Map(chips.map((c) => [c.key, c])).values()]).map((c) => c.key)
   // Each column: a sortable number per run (higher is better unless `lower`) and its text.
   const columns = [
     { key: 'Pass rate', lower: false, cell: (s: SubsetStats) => (s.rate == null ? null : { n: s.rate, text: pct(s.rate) }) },
@@ -167,16 +169,16 @@ function ComparisonSummary({ comparison, sessionRuns }: { comparison: Comparison
   )
 }
 
-/** How the run did at a glance: pass rate, counts and one bar per score key; in comparison mode, a table of runs. */
+/** How the run did at a glance: pass rate, counts and an outcome bar, plus each score key when there is more than one; in comparison mode, a table of runs. */
 export function StatsPanel(props: Props) {
   return (
     <section id="stats-expanded" className="rounded-lg border border-theme-border bg-theme-bg-secondary p-4">
       {props.comparison ? (
         <ComparisonSummary comparison={props.comparison} sessionRuns={props.sessionRuns} />
       ) : (
-        <div className="flex flex-wrap items-center gap-x-10 gap-y-4">
+        <div className="flex flex-wrap items-start gap-x-12 gap-y-4">
           <Headline {...props} />
-          <ScoreBars chips={props.stats.chips} />
+          {extraChips(props.stats.chips).length ? <Metrics chips={props.stats.chips} /> : null}
         </div>
       )}
     </section>

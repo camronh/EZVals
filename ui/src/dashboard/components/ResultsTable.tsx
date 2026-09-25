@@ -23,6 +23,8 @@ type Props = {
   onSaveAnnotation: (runId: string, index: number, annotation: string | null) => Promise<void>
   /** Shown when there are no rows; without it, the table explains that no evals were found in `evalPath`. */
   emptyText?: string
+  /** The run's only score key is pass/fail, so the outcome icon says it all and rows show just its notes. */
+  oneMetric?: boolean
   evalPath?: string
 }
 
@@ -115,7 +117,7 @@ function useColumnResize(widths: Record<string, number>, onWidths: (w: Record<st
   return { headers, start, recentlyResized }
 }
 
-export function ResultsTable({ runId, rows, hidden, sort, widths, selected, onSelect, onSort, onWidths, onOpen, onSaveAnnotation, emptyText, evalPath }: Props) {
+export function ResultsTable({ runId, rows, hidden, sort, widths, selected, onSelect, onSort, onWidths, onOpen, onSaveAnnotation, emptyText, evalPath, oneMetric }: Props) {
   const preview = useHoverPreview<PreviewTarget>()
   const lastChecked = useRef<number | null>(null)
   const selectAll = useRef<HTMLInputElement | null>(null)
@@ -266,7 +268,7 @@ export function ResultsTable({ runId, rows, hidden, sort, widths, selected, onSe
                   </div>
                 ))}
                 {cell('error', r.error ? <div className="line-clamp-4 text-[12px] text-accent-error">{r.error}</div> : empty, hover(row, 'error'))}
-                {cell('scores', running ? <Skeleton widths={['w-14', 'w-10']} /> : done && r.scores?.length ? <ScoreBadges scores={r.scores} /> : empty, hover(row, 'scores'))}
+                {cell('scores', running ? <Skeleton widths={['w-14', 'w-10']} /> : done && r.scores?.length ? <ScoreBadges scores={r.scores} passFail={oneMetric ? 'none' : 'failed'} /> : empty, hover(row, 'scores'))}
                 {cell('latency', r.latency != null ? <span className="latency-value font-mono text-[12px] tabular-nums text-theme-text-muted">{r.latency.toFixed(2)}s</span> : running ? <div className="latency-skeleton ml-auto h-3 w-8 animate-pulse rounded bg-theme-bg-elevated" /> : empty)}
               </tr>
             )

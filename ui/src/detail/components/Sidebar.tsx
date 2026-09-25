@@ -140,6 +140,25 @@ export function Sidebar({ row, runId, onSaveAnnotation, onSaveScores, onOpenMess
 
   return (
     <div id="sidebar-panel" className="flex min-h-0 flex-col overflow-auto bg-theme-bg-secondary">
+      {scores.length ? (
+        <div className="border-b border-theme-border">
+          <div className={`${label} flex h-10 items-center px-4`}>Scores</div>
+          <div className="space-y-1.5 px-3 pb-3">
+            {scores.map((score, i) => editing === i ? (
+              <ScoreEditor
+                key={`${score.key}-${i}`}
+                score={score}
+                onCancel={() => setEditing(null)}
+                onSave={async (edited) => {
+                  await onSaveScores(scores.map((s, j) => (j === i ? edited : s)))
+                  setEditing(null)
+                }}
+              />
+            ) : <ScoreCard key={`${score.key}-${i}`} score={score} onEdit={() => setEditing(i)} />)}
+          </div>
+        </div>
+      ) : null}
+
       <div className="space-y-2.5 border-b border-theme-border px-4 py-3.5">
         <Row name="Status">
           <span className={`rounded-md px-1.5 py-0.5 text-[12px] font-medium ${r.status === 'error' ? 'bg-accent-error-bg text-accent-error' : r.status === 'running' || r.status === 'pending' ? 'bg-theme-bg-elevated text-accent-warn' : 'bg-theme-bg-elevated text-theme-text-secondary'}`}>{r.status ?? 'completed'}</span>
@@ -165,25 +184,6 @@ export function Sidebar({ row, runId, onSaveAnnotation, onSaveScores, onOpenMess
 
       {messages.length ? <DrawerButton title="Messages" count={messages.length} onClick={onOpenMessages} /> : null}
       {row.spans?.length ? <DrawerButton title="Spans" count={row.spans.length} onClick={onOpenTrace} /> : null}
-
-      {scores.length ? (
-        <div className="border-b border-theme-border">
-          <div className={`${label} flex h-10 items-center px-4`}>Scores</div>
-          <div className="space-y-1.5 px-3 pb-3">
-            {scores.map((score, i) => editing === i ? (
-              <ScoreEditor
-                key={`${score.key}-${i}`}
-                score={score}
-                onCancel={() => setEditing(null)}
-                onSave={async (edited) => {
-                  await onSaveScores(scores.map((s, j) => (j === i ? edited : s)))
-                  setEditing(null)
-                }}
-              />
-            ) : <ScoreCard key={`${score.key}-${i}`} score={score} onEdit={() => setEditing(i)} />)}
-          </div>
-        </div>
-      ) : null}
 
       {metadata.length ? (
         <Collapsible title="Metadata" defaultOpen>

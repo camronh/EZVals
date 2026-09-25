@@ -11,6 +11,10 @@ Scores are what you compare across runs, so pick the simplest mechanism that say
 | A numeric score, or several named metrics | `ctx.store(scores=...)` |
 | The same check on many evals | An evaluator |
 
+<Tip>
+Start with one pass/fail check per eval. A single pass rate is the easiest thing to compare between runs, and the web UI is built around it. Add a second or third score only when it answers a question the first can't, such as tracking tone separately from correctness.
+</Tip>
+
 ## Assertions
 
 Write checks the way you would in pytest. In TypeScript, use `node:assert` or any library that throws an error named `AssertionError`, such as chai.

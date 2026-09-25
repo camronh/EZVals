@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { http, HttpResponse } from 'msw'
 import { readQuery } from '../lib/urlState'
-import { apiHandlers, completedRun, emptyRun, improvedRun, notStartedRun, pausedRun, runningRun, trialsRun } from '../stories/fixtures'
+import { apiHandlers, completedRun, emptyRun, improvedRun, multiMetricRun, notStartedRun, pausedRun, runningRun, trialsRun } from '../stories/fixtures'
 import { DashboardPage } from './DashboardPage'
 
 const meta: Meta<typeof DashboardPage> = {
@@ -14,6 +14,7 @@ export default meta
 type Story = StoryObj<typeof DashboardPage>
 
 export const Completed: Story = { parameters: { msw: { handlers: apiHandlers(completedRun) } } }
+export const SeveralMetrics: Story = { parameters: { msw: { handlers: apiHandlers(multiMetricRun) } } }
 export const NotStarted: Story = { parameters: { msw: { handlers: apiHandlers(notStartedRun) } } }
 export const Running: Story = { parameters: { msw: { handlers: apiHandlers(runningRun) } } }
 export const Paused: Story = { parameters: { msw: { handlers: apiHandlers(pausedRun) } } }

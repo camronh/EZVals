@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test'
-import { completedRows } from '../../stories/fixtures'
+import { completedRows, multiMetricRun } from '../../stories/fixtures'
 import { Sidebar } from './Sidebar'
 
 const meta: Meta<typeof Sidebar> = {
@@ -22,6 +22,7 @@ type Story = StoryObj<typeof Sidebar>
 
 export const Everything: Story = { args: { row: completedRows[0] } }
 export const FailedScores: Story = { args: { row: completedRows[1] } }
+export const SeveralScores: Story = { args: { row: multiMetricRun.results[5] } }
 export const StructuredResult: Story = { args: { row: completedRows[3] } }
 export const Minimal: Story = { args: { row: { function: 'greeting', result: { status: 'completed', scores: [] } } } }
 

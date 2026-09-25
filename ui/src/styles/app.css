@@ -120,11 +120,9 @@ tr[data-row="main"] { transition: opacity 0.3s ease-out, background-color 0.15s 
 .tone-good > div { background: #16a34a; }
 .tone-mid > div { background: #d97706; }
 .tone-bad > div { background: #dc2626; }
-.tone-progress > div { background: #2563eb; }
 .dark .tone-good > div { background: #22c55e; }
 .dark .tone-mid > div { background: #f59e0b; }
 .dark .tone-bad > div { background: #ef4444; }
-.dark .tone-progress > div { background: #3b82f6; }
 
 /* ── Run picker ────────────────────────────────────────────── */
 .menu-popover {

@@ -25,7 +25,7 @@ export function ScoreCard({ score, onEdit }: { score: Score; onEdit?: () => void
           ) : null}
         </div>
       </div>
-      {score.notes ? <div className="mt-1 text-[12px] text-theme-text-muted">{score.notes}</div> : null}
+      {score.notes ? <div className="mt-1 text-[13px] text-theme-text-secondary">{score.notes}</div> : null}
     </div>
   )
 }

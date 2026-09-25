@@ -5,7 +5,7 @@ import { Toasts, useToasts } from '../components/Toasts'
 import { useDebouncedValue, useLocalState, useSessionState } from '../hooks/storage'
 import { buildComparison } from '../lib/comparison'
 import { defaultFilters, matchesFilters, type FilterableRow } from '../lib/filters'
-import { passRate, runProgress, statsFor, trialStats } from '../lib/stats'
+import { passRate, runProgress, statsFor, trialStats, extraChips } from '../lib/stats'
 import { COLUMNS, COLUMN_KEYS, DEFAULT_HIDDEN_COLUMNS, comparisonSearchText, filterable, sortBy, sortValue, tableRows, toggleSort } from '../lib/table'
 import { writeQuery, type DashboardQuery } from '../lib/urlState'
 import { ComparisonTable, type ComparisonRow } from './components/ComparisonTable'
@@ -279,6 +279,7 @@ export function DashboardPage({ query }: { query: DashboardQuery }) {
             onWidths={setWidths}
             onOpen={(index) => { window.location.href = `/runs/${data.run_id}/results/${index}` }}
             onSaveAnnotation={saveAnnotation}
+            oneMetric={!extraChips(data.score_chips ?? []).length}
             emptyText={filtering && data.results.length ? 'No results match the current filters' : undefined}
             evalPath={data.discovery_error ? undefined : data.eval_path ?? data.path ?? undefined}
           />

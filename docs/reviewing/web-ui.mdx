@@ -25,11 +25,11 @@ This opens `http://127.0.0.1:8000` with your evals listed but not yet run. Add `
 - **Regrade** scores the stored outputs again without calling your agent. See [Regrading](/writing-evals/targets-and-regrading#regrading).
 - **Settings** sets concurrency, timeout, trials, where runs are stored, completion notifications and the theme. Saving writes them to `ezvals.json`.
 
-Each row's icon shows its outcome: not run, queued, running, passed, failed, error, scored (numeric scores only) or cancelled.
+Each row's icon shows its outcome: not run, queued, running, passed, failed, error, scored (numeric scores only) or cancelled. A failed row also shows why, from the failing score's notes or the assertion that failed.
 
 ## Review failures
 
-The summary above the table shows the pass rate, counts, average latency and one bar per score key, plus pass@k and pass^k for [trials](/writing-evals/trials). When the session has an earlier run, it also shows how much the pass rate changed since then.
+The summary above the table shows the pass rate, counts, average latency and a bar of passed, failed and errored rows, plus pass@k and pass^k for [trials](/writing-evals/trials). If your evals store more than one score, each score key gets its own stat beside the pass rate, and the table shows which checks failed. When the session has an earlier run, it also shows how much the pass rate changed since then.
 
 To narrow the table:
 

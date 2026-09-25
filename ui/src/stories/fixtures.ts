@@ -36,7 +36,7 @@ export const completedRows: RunResultRow[] = [
     input: 'I want a refund for order A-1001',
     reference: 'Acknowledge the refund and give a timeline',
     output: 'Your refund of $42.50 was issued on Sept 20. It usually shows up within 3-5 business days.',
-    scores: [pass(), { key: 'helpfulness', value: 0.92 }],
+    scores: [pass()],
     latency: 1.24,
     metadata: { model: 'claude-sonnet-5', temperature: 0.2 },
     trace_data: { messages, trace_url: 'https://smith.langchain.com/trace/abc' },
@@ -46,7 +46,7 @@ export const completedRows: RunResultRow[] = [
     input: 'Money back please',
     reference: 'Acknowledge the refund and give a timeline',
     output: 'Could you share your order number so I can look into this?',
-    scores: [fail('pass', 'Did not mention the refund policy'), { key: 'helpfulness', value: 0.41 }],
+    scores: [fail('pass', 'Asked for the order number instead of confirming the refund')],
     latency: 0.87,
   }, { labels: ['production'], regradable: true }),
   row('greeting', 'smalltalk', { input: 'Hello!', output: 'Hi! How can I help you today?', scores: [pass()], latency: 0.21 }),
@@ -54,7 +54,7 @@ export const completedRows: RunResultRow[] = [
     input: { order_id: 'A-1002', user: 'dana@example.com' },
     output: { status: 'shipped', eta: '2026-09-27', carrier: 'UPS' },
     reference: { status: 'shipped' },
-    scores: [pass('correct_status'), pass('valid_json')],
+    scores: [pass()],
     latency: 2.8,
   }, { labels: ['tools', 'regression'] }),
   row('escalation', 'support', {
@@ -67,7 +67,7 @@ export const completedRows: RunResultRow[] = [
   row('long_answer', 'smalltalk', {
     input: 'Explain how refunds work in detail.',
     output: '## How refunds work\n\n1. Request a refund within **30 days**.\n2. We review it within 2 business days.\n3. The money goes back to the original payment method.\n\nQuestions? Reply to this message.',
-    scores: [{ key: 'helpfulness', value: 0.78 }, pass('format', 'Uses a numbered list')],
+    scores: [pass()],
     latency: 3.4,
   }),
 ]
@@ -102,10 +102,23 @@ export const runningRun = { ...run('a1b2c3d4', 'baseline', withStatus(completedR
 export const pausedRun = { ...runningRun, is_paused: true }
 export const emptyRun = run('a1b2c3d4', 'empty', [])
 
+/** The same run graded on three keys: the pass/fail check plus a numeric judge score and a second check. */
+const extraScores: (Score[] | null)[] = [
+  [{ key: 'helpfulness', value: 0.92 }, pass('concise')],
+  [{ key: 'helpfulness', value: 0.41 }, pass('concise')],
+  [{ key: 'helpfulness', value: 0.85 }, pass('concise')],
+  [{ key: 'helpfulness', value: 0.7 }, pass('concise')],
+  null,
+  [{ key: 'helpfulness', value: 0.78 }, fail('concise', 'Over 40 words')],
+]
+export const multiMetricRun = run('a1b2c3d4', 'baseline', completedRows.map((r, i) => (
+  extraScores[i] ? { ...r, result: { ...r.result, scores: [...(r.result.scores ?? []), ...extraScores[i]!] } } : r
+)))
+
 export const improvedRun = run('e5f6a7b8', 'improved', completedRows.map((r, i) => ({
   ...r,
   result: i === 1
-    ? { ...r.result, output: 'Your refund is on its way and should arrive within 5 days.', scores: [pass(), { key: 'helpfulness', value: 0.88 }] }
+    ? { ...r.result, output: 'Your refund is on its way and should arrive within 5 days.', scores: [pass()] }
     : i === 4 ? { ...r.result, error: null, output: 'I am sorry for the trouble. Escalating to a human now.', scores: [pass()] } : r.result,
 })), { created_at: 1_790_290_000 })
 
