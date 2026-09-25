@@ -51,9 +51,9 @@ export function SettingsModal({ config, configNames, activeConfig, onConfigSelec
             })
           }}
         >
-          {field('concurrency', 'Concurrency', {})}
+          {field('concurrency', 'Concurrency', { min: '1' })}
           {field('timeout', 'Timeout (s)', { step: '0.1', placeholder: 'none' })}
-          {field('trials', 'Trials', { placeholder: 'per eval', title: 'Run every eval this many times' })}
+          {field('trials', 'Trials', { min: '1', placeholder: 'per eval', title: 'Run every eval this many times' })}
           <div className="flex items-center justify-between">
             <label className="text-theme-text-muted" htmlFor="settings-results-dir">Results dir</label>
             <input id="settings-results-dir" name="results_dir" type="text" className={`w-32 ${inputClass}`} value={form.results_dir} onChange={(e) => setForm({ ...form, results_dir: e.target.value })} />

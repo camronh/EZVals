@@ -20,6 +20,7 @@ export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
   const [error, setError] = useState<Error | null>(null)
   const [compared, setCompared] = useState<ComparedRun[] | null>(null)
   const [busy, setBusy] = useState<'rerun' | 'regrade' | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [drawer, setDrawer] = useState<'messages' | 'trace' | null>(null)
   const [editing, setEditing] = useState(false)
   const { layout, container, start } = useResizableLayout()
@@ -56,8 +57,9 @@ export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
 
   const runAgain = async (kind: 'rerun' | 'regrade') => {
     setBusy(kind)
+    setActionError(null)
     try {
-      await (kind === 'rerun' ? api.run([index]) : api.regrade([index]))
+      await (kind === 'rerun' ? api.run([index], null, runId) : api.regrade([index], runId))
       let next = await api.result(runId, index)
       setDetail(next)
       while (!finished(next)) {
@@ -65,6 +67,8 @@ export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
         next = await api.result(runId, index)
         setDetail(next)
       }
+    } catch (err) {
+      setActionError(`${kind === 'rerun' ? 'Rerun' : 'Regrade'} failed: ${(err as Error).message}`)
     } finally {
       setBusy(null)
     }
@@ -95,6 +99,7 @@ export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
         onRerun={comparing ? undefined : () => runAgain('rerun')}
         onRegrade={comparing || !row.regradable || r.status !== 'completed' ? undefined : () => runAgain('regrade')}
       />
+      {actionError ? <ErrorBanner error={actionError} /> : null}
       {r.error ? <ErrorBanner error={r.error} /> : null}
       <div ref={container} className="flex min-h-0 flex-1 overflow-hidden">
         <div id="main-panel" className="flex min-w-0 flex-1 flex-col">

@@ -112,6 +112,13 @@ func TestStoreLifecycle(t *testing.T) {
 	if run, _ := store.Load("r3"); run.Results[0].Result.Output != "x" {
 		t.Fatalf("appended events not loaded: %+v", run)
 	}
+	path, _ := store.file("r3")
+	f, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	f.WriteString(`{"type":"result","id":"a","res`) // an append in progress
+	f.Close()
+	if run, err := store.Load("r3"); err != nil || run.Results[0].Result.Output != "x" {
+		t.Fatalf("a torn last line should be ignored: %v", err)
+	}
 	if store.Delete("r3") != nil || store.DeleteSession("s") != nil || len(store.Sessions()) != 0 {
 		t.Fatal("delete failed")
 	}

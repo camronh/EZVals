@@ -29,10 +29,11 @@ export const api = {
   sessionRuns: (session: string) =>
     request<{ runs: SessionRun[] }>(`/api/sessions/${encodeURIComponent(session)}/runs`).then((r) => r.runs),
 
-  run: (indices?: number[], configName?: string | null) =>
-    send('POST', '/api/runs/rerun', { indices, config_name: configName ?? undefined }),
-  regrade: (indices?: number[]) =>
-    send<{ regraded: number; skipped_without_target: number }>('POST', '/api/runs/regrade', { indices }),
+  /** Runs rows of the active run, or of `runId` (which then becomes the active run). */
+  run: (indices?: number[], configName?: string | null, runId?: string) =>
+    send('POST', '/api/runs/rerun', { indices, config_name: configName ?? undefined, run_id: runId }),
+  regrade: (indices?: number[], runId?: string) =>
+    send<{ regraded: number; skipped_without_target: number }>('POST', '/api/runs/regrade', { indices, run_id: runId }),
   newRun: () => send('POST', '/api/runs/new', { indices: [] }),
   stop: () => send('POST', '/api/runs/stop'),
   pause: () => send('POST', '/api/runs/pause'),

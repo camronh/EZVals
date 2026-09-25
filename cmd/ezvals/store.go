@@ -84,10 +84,10 @@ type Span struct {
 }
 
 type Score struct {
-	Key    string   `json:"key"`
-	Value  *float64 `json:"value,omitempty"`
-	Passed *bool    `json:"passed,omitempty"`
-	Notes  *string  `json:"notes,omitempty"`
+	Key    string  `json:"key"`
+	Value  any     `json:"value,omitempty"` // usually a number; SDKs and edits may also store strings or booleans
+	Passed *bool   `json:"passed,omitempty"`
+	Notes  *string `json:"notes,omitempty"`
 }
 
 type Result struct {
@@ -350,8 +350,8 @@ func scoreChips(rows []Row) []ScoreChip {
 					c.Passed++
 				}
 			}
-			if s.Value != nil {
-				c.Avg += *s.Value
+			if v, ok := s.Value.(float64); ok {
+				c.Avg += v
 				c.Count++
 			}
 		}
@@ -455,10 +455,15 @@ func readEvents(path string) ([]Event, error) {
 	var events []Event
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(nil, 256<<20)
+	var bad error
 	for scanner.Scan() {
+		if bad != nil { // only the last line may be unreadable: it can be mid-append
+			return nil, bad
+		}
 		var e Event
 		if err := json.Unmarshal(scanner.Bytes(), &e); err != nil {
-			return nil, fmt.Errorf("%s: %w", path, err)
+			bad = fmt.Errorf("%s: %w", path, err)
+			continue
 		}
 		events = append(events, e)
 	}

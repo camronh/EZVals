@@ -31,7 +31,8 @@ CREATE TABLE spans (
   start_ms REAL, duration_ms REAL, status TEXT, attributes JSON
 );`
 
-const queryHelp = `Every saved run is loaded into these tables (results.passed: the row finished and all its pass/fail scores passed):
+const queryHelp = `Every saved run is loaded into these tables (results.passed: the row finished and all its pass/fail scores passed;
+scores.value: a number, or text for scores whose value isn't one):
 
 %s
 
@@ -121,7 +122,7 @@ func loadRunsDB(store *Store) (*sql.DB, error) {
 					row.Dataset, jsonString(row.Labels), row.Trial, r.Status, passed(r), jsonString(r.Input), jsonString(r.Output),
 					jsonString(r.Reference), r.Error, r.Latency, jsonString(r.Metadata), jsonString(r.TraceData), r.Annotation)
 				for _, s := range r.Scores {
-					tx.Exec(`INSERT INTO scores VALUES (?,?,?,?,?,?,?,?)`, run.RunID, i, row.ID, row.Function, s.Key, s.Value, s.Passed, s.Notes)
+					tx.Exec(`INSERT INTO scores VALUES (?,?,?,?,?,?,?,?)`, run.RunID, i, row.ID, row.Function, s.Key, scoreValue(s.Value), s.Passed, s.Notes)
 				}
 			}
 			for id, spans := range run.spans {
@@ -133,4 +134,12 @@ func loadRunsDB(store *Store) (*sql.DB, error) {
 		}
 	}
 	return db, tx.Commit()
+}
+
+func scoreValue(v any) any {
+	switch v.(type) {
+	case nil, float64, bool, string:
+		return v
+	}
+	return jsonString(v)
 }

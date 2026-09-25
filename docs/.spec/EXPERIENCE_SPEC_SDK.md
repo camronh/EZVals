@@ -82,7 +82,7 @@ The host owns concurrency (it never has more than `--concurrency` evals in fligh
  "error": null, "latency": 0.42, "metadata": {}, "trace_data": {"messages": [], "trace_url": "..."}}
 ```
 
-An eval reports one result, or several when the function returns a list of results. Values that aren't JSON serializable are converted to strings.
+An eval reports one result, or several when the function returns a list of results. Values that aren't JSON serializable are converted to strings, and NaN or infinite numbers to null. A score's `value` is usually a number but may be a string or boolean.
 
 ---
 

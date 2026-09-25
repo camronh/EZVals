@@ -580,7 +580,8 @@ The UI is backed by these REST endpoints, also available programmatically.
 ```json
 {
   "indices": [0, 2, 5],  // Optional: result rows to rerun
-  "config_name": "gpt-4" // Optional: config profile; a different profile starts a new run named after it
+  "config_name": "gpt-4", // Optional: config profile; a different profile starts a new run named after it
+  "run_id": "a1b2c3d4"    // Optional: run to rerun rows of; it becomes the active run (rerun and regrade)
 }
 ```
 

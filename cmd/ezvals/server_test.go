@@ -128,9 +128,22 @@ func TestNewRunKeepsThePreviousOne(t *testing.T) {
 	if len(runs["runs"].([]any)) != 2 {
 		t.Fatalf("runs = %v", runs)
 	}
-	call(t, ts, "POST", "/api/runs/"+first+"/activate", "")
-	if got := rowStatuses(t, ts); got[0] != "completed" {
-		t.Fatalf("activated run = %v", got)
+	call(t, ts, "PUT", "/api/pending-run-name", `{"run_name": "renamed"}`)
+	if run, _ := s.store.Load(body["run_id"].(string)); run.RunName != "renamed" {
+		t.Fatalf("renaming a new, unstarted run = %q", run.RunName)
+	}
+
+	// Rerunning a row of another run switches to that run first.
+	second := s.activeID
+	call(t, ts, "POST", "/api/runs/rerun", `{"indices": [1], "run_id": "`+first+`"}`)
+	if s.activeID != first {
+		t.Fatal("rerun with run_id should activate that run")
+	}
+	if got := waitFor(t, ts, func(st []string) bool { return st[1] == "completed" }); got[0] != "completed" {
+		t.Fatalf("rerun of %s = %v", first, got)
+	}
+	if run, _ := s.store.Load(second); run.Results[1].Result.Status == "completed" {
+		t.Fatal("the other run was rerun")
 	}
 }
 

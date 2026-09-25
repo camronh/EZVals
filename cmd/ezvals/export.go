@@ -83,7 +83,7 @@ func scoreMarks(scores []Score, withValues bool) string {
 		case s.Passed != nil:
 			parts = append(parts, "❌ "+s.Key)
 		case s.Value != nil && withValues:
-			parts = append(parts, fmt.Sprintf("%s:%v", s.Key, *s.Value))
+			parts = append(parts, fmt.Sprintf("%s:%v", s.Key, s.Value))
 		}
 	}
 	return strings.Join(parts, " ")

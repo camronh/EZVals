@@ -172,8 +172,12 @@ func spawn(cmd *exec.Cmd, info string, verbose bool) (*Worker, error) {
 		for scanner.Scan() {
 			var m message
 			if err := json.Unmarshal(scanner.Bytes(), &m); err != nil {
-				fmt.Fprintln(os.Stderr, "Ignoring invalid eval worker output:", scanner.Text())
-				continue
+				// A result we can't read still has to finish its eval, or the run would wait for it forever.
+				if json.Unmarshal(scanner.Bytes(), &struct{ Type, ID *string }{&m.Type, &m.ID}); m.Type != "result" || m.ID == "" {
+					fmt.Fprintln(os.Stderr, "Ignoring invalid eval worker output:", scanner.Text())
+					continue
+				}
+				m.Results = []Result{{Error: ptr("Invalid result from eval worker: " + err.Error())}}
 			}
 			w.messages <- m
 		}
@@ -223,7 +227,7 @@ func execute(workers []*Worker, jobs []Job, concurrency int, emit func(...Event)
 	for _, job := range jobs {
 		x.remaining[job.ID] = true
 	}
-	slots := make(chan struct{}, concurrency)
+	slots := make(chan struct{}, max(concurrency, 1))
 	var inFlight sync.WaitGroup
 	for _, w := range workers {
 		go func() {

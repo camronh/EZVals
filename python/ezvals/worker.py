@@ -22,7 +22,11 @@ def main():
     os.dup2(2, 1)
 
     def send(message):
-        protocol.write(json.dumps(message, default=_jsonable) + "\n")
+        try:
+            line = json.dumps(message, default=_jsonable, allow_nan=False)
+        except ValueError:  # NaN/Infinity aren't JSON: send them as null
+            line = json.dumps(json.loads(json.dumps(message, default=_jsonable), parse_constant=lambda _: None))
+        protocol.write(line + "\n")
 
     run_info = json.loads(os.environ.get("EZVALS_RUN") or "{}")
     try:

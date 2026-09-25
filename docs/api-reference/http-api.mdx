@@ -78,7 +78,7 @@ Get a single result by index. The `result` row also includes `spans`, the full l
 
 ### POST /api/runs/rerun
 
-Rerun evaluations in the active run. Omit `indices` to rerun all. Optionally pass `config_name` to select a named config (a different config starts a new run).
+Rerun evaluations in the active run. Omit `indices` to rerun all. Optionally pass `config_name` to select a named config (a different config starts a new run), or `run_id` to rerun rows of another saved run (it becomes the active run).
 
 **Request:**
 
@@ -96,7 +96,7 @@ Rerun evaluations in the active run. Omit `indices` to rerun all. Optionally pas
 
 ### POST /api/runs/regrade
 
-Re-score stored results in the active run without re-running targets. Omit `indices` to regrade all results. Results of evals without a target are skipped and counted.
+Re-score stored results in the active run without re-running targets. Omit `indices` to regrade all results. Results of evals without a target are skipped and counted. Like rerun, accepts `run_id`.
 
 **Request:**
 

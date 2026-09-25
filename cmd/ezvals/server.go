@@ -224,6 +224,21 @@ func (s *Server) activate(id string) error {
 	return nil
 }
 
+// switchTo activates the run a rerun or regrade targets, when that isn't the active run already.
+func (s *Server) switchTo(id string) error {
+	if id == "" || id == s.activeID {
+		return nil
+	}
+	if s.exec != nil {
+		return fail(409, "A run is already in progress")
+	}
+	if err := s.activate(id); err != nil {
+		return err
+	}
+	s.discover()
+	return nil
+}
+
 // discover lists the evals at the eval path without running them.
 func (s *Server) discover() {
 	s.discovered = nil
@@ -535,8 +550,12 @@ func (s *Server) routes() http.Handler {
 		var body struct {
 			Indices    []int
 			ConfigName *string `json:"config_name"`
+			RunID      string  `json:"run_id"`
 		}
 		if err := decode(r, &body); err != nil {
+			return nil, err
+		}
+		if err := s.switchTo(body.RunID); err != nil {
 			return nil, err
 		}
 		if err := s.run(body.Indices, body.ConfigName); err != nil {
@@ -545,8 +564,14 @@ func (s *Server) routes() http.Handler {
 		return map[string]any{"ok": true, "run_id": s.activeID}, nil
 	})
 	handle("POST /api/runs/regrade", func(r *http.Request) (any, error) {
-		var body struct{ Indices []int }
+		var body struct {
+			Indices []int
+			RunID   string `json:"run_id"`
+		}
 		if err := decode(r, &body); err != nil {
+			return nil, err
+		}
+		if err := s.switchTo(body.RunID); err != nil {
 			return nil, err
 		}
 		regraded, noTarget, err := s.regrade(body.Indices)
@@ -685,6 +710,8 @@ func (s *Server) routes() http.Handler {
 		}
 		if body.RunName != "" {
 			s.runName = sanitize(body.RunName)
+			// A run created by "New run" but not started yet already has a file: rename it too.
+			s.store.Append(s.activeID, Event{Type: "renamed", RunName: s.runName})
 		}
 		return map[string]any{"ok": true, "run_name": s.runName}, nil
 	})
