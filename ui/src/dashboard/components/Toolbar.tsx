@@ -73,18 +73,18 @@ export function Toolbar(props: Props) {
   const activeFilters = countActiveFilters(props.filters)
   return (
     <header className="sticky top-0 z-40 border-b border-theme-border bg-theme-bg/95 backdrop-blur-sm">
-      <div className="flex items-center justify-between px-4 py-2">
+      <div className="flex items-center justify-between gap-2 px-4 py-2">
         <a href="https://ezvals.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3">
           <img src="/logo.png" alt="EZVals" className="h-7 w-7" />
-          <span className="font-mono text-base font-semibold tracking-tight text-theme-text">EZVals</span>
+          <span className="hidden font-mono text-base font-semibold tracking-tight text-theme-text sm:inline">EZVals</span>
         </a>
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
           <div className="relative">
             <Icon name="search" className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-theme-text-muted" />
             <input
               id="search-input"
               type="search"
-              className="w-56 rounded border border-theme-border bg-theme-bg-secondary py-1.5 pl-7 pr-3 text-xs text-theme-text placeholder:text-theme-text-muted focus:border-blue-500 focus:outline-none"
+              className="w-28 rounded border sm:w-56 border-theme-border bg-theme-bg-secondary py-1.5 pl-7 pr-3 text-xs text-theme-text placeholder:text-theme-text-muted focus:border-blue-500 focus:outline-none"
               placeholder="Search..."
               value={props.search}
               onChange={(e) => props.onSearch(e.target.value)}

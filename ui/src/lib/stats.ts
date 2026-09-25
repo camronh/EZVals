@@ -35,7 +35,7 @@ export function chipStats(chip: ScoreChip) {
     const total = chip.total ?? 0
     return { pct: total > 0 ? Math.round(((chip.passed ?? 0) / total) * 100) : 0, value: `${chip.passed}/${total}` }
   }
-  const avg = chip.avg ?? 0
+  const avg = Number((chip.avg ?? 0).toFixed(2)) // so the bar and its label agree
   const pct = avg <= 1 ? Math.round(avg * 100) : avg <= 10 ? Math.round(avg * 10) : Math.min(Math.round(avg), 100)
   return { pct, value: avg.toFixed(2) }
 }
@@ -44,12 +44,32 @@ export function barTone(pct: number) {
   return pct >= 80 ? 'vbar-green' : pct >= 50 ? 'vbar-amber' : 'vbar-red'
 }
 
-/** Score chips and average latency for any subset of rows (e.g. the filtered view). */
-export function statsFor(rows: RunResultRow[]) {
+const passedResult = (r: RunResultRow['result']) =>
+  (r.status ?? 'completed') === 'completed' && !r.error && (r.scores ?? []).some((s) => s.passed != null) && (r.scores ?? []).every((s) => s.passed !== false)
+
+/** pass@k and pass^k over the finished trial rows among `rows` (null when there are none), matching the server's definition. */
+export function trialStats(rows: RunResultRow[]) {
+  const groups = new Map<string, boolean[]>()
+  let k = 0
+  for (const row of rows) {
+    const status = row.result.status ?? 'completed'
+    if (!row.trial || !row.trial_of || (status !== 'completed' && status !== 'error')) continue
+    k = Math.max(k, row.trial)
+    groups.set(row.trial_of, [...(groups.get(row.trial_of) ?? []), passedResult(row.result)])
+  }
+  if (!groups.size) return null
+  const all = [...groups.values()]
+  return { k, passAtK: all.filter((g) => g.includes(true)).length / all.length, passAllK: all.filter((g) => !g.includes(false)).length / all.length }
+}
+
+/** Score chips, errors and average latency for any subset of rows (e.g. the filtered view). Chips follow `order` (keys) when given. */
+export function statsFor(rows: RunResultRow[], order: string[] = []) {
+  let errors = 0
   let latencySum = 0
   let latencyCount = 0
   const byKey = new Map<string, { passed: number; bools: number; sum: number; values: number }>()
   for (const { result } of rows) {
+    if (result.error) errors += 1
     if (typeof result.latency === 'number') {
       latencySum += result.latency
       latencyCount += 1
@@ -61,9 +81,8 @@ export function statsFor(rows: RunResultRow[]) {
         d.bools += 1
         if (s.passed) d.passed += 1
       }
-      const value = Number(s.value)
-      if (s.value != null && !Number.isNaN(value)) {
-        d.sum += value
+      if (typeof s.value === 'number' && Number.isFinite(s.value)) {
+        d.sum += s.value
         d.values += 1
       }
     }
@@ -73,7 +92,9 @@ export function statsFor(rows: RunResultRow[]) {
     if (d.bools > 0) chips.push({ key, type: 'ratio', passed: d.passed, total: d.bools })
     else if (d.values > 0) chips.push({ key, type: 'avg', avg: d.sum / d.values, count: d.values })
   })
-  return { count: rows.length, avgLatency: latencyCount ? latencySum / latencyCount : 0, chips }
+  const rank = (key: string) => (order.includes(key) ? order.indexOf(key) : order.length)
+  chips.sort((a, b) => rank(a.key) - rank(b.key))
+  return { count: rows.length, errors, avgLatency: latencyCount ? latencySum / latencyCount : 0, chips }
 }
 
 export type SubsetStats = ReturnType<typeof statsFor>

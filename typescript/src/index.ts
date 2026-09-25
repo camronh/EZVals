@@ -294,17 +294,15 @@ export async function runEval(e: Eval, info: RunInfo = {}, grade?: WireResult): 
       ? Promise.race([body(), new Promise((_, reject) => (timer = setTimeout(() => reject(new Timeout()), timeout * 1000)))])
       : body()
     ).finally(() => clearTimeout(timer));
+    // Code that blocks the event loop can't be interrupted, but running past the deadline is still a timeout.
+    if (timeout && performance.now() - start > timeout * 1000) throw new Timeout();
     results = returned === undefined || returned instanceof EvalContext ? [ctx.build()] : toArray(returned as EvalResult | EvalResult[]);
-    for (let i = 0; i < results.length; i++) {
-      for (const evaluator of p.evaluators ?? []) {
-        const scored = await evaluator(results[i]);
-        if (scored && typeof scored === "object" && "output" in scored) results[i] = scored as EvalResult;
-        else if (scored != null) results[i].scores = [...toArray(results[i].scores), ...toArray(scored as ScoreInput)];
-      }
+    if (!results.every((r) => r !== null && typeof r === "object" && !Array.isArray(r))) {
+      throw new Error(`Evaluation function must return an EvalResult, an array of them, the EvalContext, or nothing, got ${Array.isArray(returned) ? "array" : typeof returned}`);
     }
   } catch (err) {
     if (err instanceof Timeout) {
-      ctx.error = `TimeoutError: Evaluation timed out after ${timeout}s`;
+      ctx.error = `TimeoutError: Evaluation timed out after ${Number.isInteger(timeout) ? timeout!.toFixed(1) : timeout}s`;
     } else if (err instanceof Error && err.name === "AssertionError") {
       ctx.store({ scores: { passed: false, notes: err.message || "Assertion failed" } });
     } else {
@@ -313,7 +311,20 @@ export async function runEval(e: Eval, info: RunInfo = {}, grade?: WireResult): 
     results = [ctx.build()];
   }
   const elapsed = (performance.now() - start) / 1000;
-  return results.map((r) => ({ ...toWire(r, p.defaultScoreKey), latency: r.latency ?? elapsed / results.length }));
+  try {
+    // Evaluators score every finished result, including ones a failed assertion scored.
+    for (let i = 0; i < results.length; i++) {
+      for (const evaluator of results[i].error ? [] : (p.evaluators ?? [])) {
+        const scored = await evaluator(results[i]);
+        if (scored && typeof scored === "object" && "output" in scored) results[i] = scored as EvalResult;
+        else if (scored != null) results[i].scores = [...toArray(results[i].scores), ...toArray(scored as ScoreInput)];
+      }
+    }
+    return results.map((r) => ({ ...toWire(r, p.defaultScoreKey), latency: r.latency ?? elapsed / results.length }));
+  } catch (err) {
+    ctx.error = describe(err);
+    return [{ ...toWire(ctx.build(), p.defaultScoreKey), latency: ctx.latency ?? elapsed }];
+  }
 }
 
 function toWire(r: EvalResult, defaultScoreKey: string): WireResult {

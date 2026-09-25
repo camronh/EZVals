@@ -17,6 +17,7 @@ class EvalCase(TypedDict, total=False):
     timeout: float
     target: Callable
     evaluators: list
+    trials: int
 
 
 __all__ = ["eval", "EvalContext", "EvalResult", "TraceData", "EvalCase", "run_evals", "run"]

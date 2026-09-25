@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from ezvals import EvalContext, eval
 
 ezvals_defaults = {"labels": ["file"], "metadata": {"f": 1}}
@@ -24,7 +26,7 @@ def add(ctx: EvalContext):
 
 
 def load_examples():
-    return [{"input": "a"}, {"input": "b", "labels": ["l"]}]
+    return [{"input": "a"}, {"input": "b", "labels": ["l"]}, SimpleNamespace(id="obj", input="c")]
 
 
 @eval(input_loader=load_examples)

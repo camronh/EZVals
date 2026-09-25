@@ -11,7 +11,7 @@ const props = (run: RunSummary) => ({ stats: summarizeStats(run), sessionName: r
 const meta: Meta<typeof StatsPanel> = {
   title: 'Dashboard/StatsPanel',
   component: StatsPanel,
-  args: { sessionRuns, onRename: fn(), onRenameRun: fn(), onSelectRun: fn(), onNewRun: fn(), onCompare: fn() },
+  args: { sessionRuns, onRename: fn(), onRenameRun: fn(), onDeleteRun: fn(), onSelectRun: fn(), onNewRun: fn(), onCompare: fn() },
 }
 export default meta
 type Story = StoryObj<typeof StatsPanel>

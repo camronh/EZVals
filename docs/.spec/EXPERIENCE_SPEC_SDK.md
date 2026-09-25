@@ -56,7 +56,7 @@ The environment variable `EZVALS_RUN` holds `{"run_id", "session_name", "run_nam
 When `traces_endpoint` is set and the project has OpenTelemetry installed, the SDK exports spans there over OTLP/HTTP (protobuf):
 
 - every span started while a request runs gets the attribute `ezvals.eval_id` = the request id
-- each request runs inside a root span named `eval <function>` (or `grade <function>` when regrading)
+- each request runs inside a root span named `eval <function>` (or `grade <function>` when regrading), with the attribute `ezvals.root` = true. It is stored and shown in the waterfall, but not counted in a result's `span_count`, so an eval that recorded nothing of its own shows 0 spans
 - spans are flushed before the result is sent, so a result's spans are always stored with it
 - the SDK attaches to the project's own tracer provider when it has one, so spans keep flowing to other backends too
 

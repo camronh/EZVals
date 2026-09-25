@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ComparisonRun, RunSummary, ScoreChip } from '../../types'
 import { useDebouncedValue } from '../../hooks/storage'
+import { useDismiss } from '../../hooks/useDismiss'
 import {
   DEFAULT_SCORE_COLORS,
   renderPngCanvas,
@@ -41,6 +42,8 @@ export function PngExportModal({
   sessionName,
 }: PngExportModalProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const panel = useRef<HTMLDivElement | null>(null)
+  useDismiss(open, [panel], onClose)
   const renderSeqRef = useRef(0)
 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -184,8 +187,8 @@ export function PngExportModal({
 
   return (
     <div id="png-export-modal" className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="absolute left-1/2 top-1/2 w-full max-w-5xl -translate-x-1/2 -translate-y-1/2 rounded-lg border border-theme-border bg-theme-bg p-5 shadow-xl">
+      <div className="absolute inset-0 bg-black/60" />
+      <div ref={panel} className="absolute left-1/2 top-1/2 w-full max-w-5xl -translate-x-1/2 -translate-y-1/2 rounded-lg border border-theme-border bg-theme-bg p-5 shadow-xl">
         <div className="mb-3 flex items-center justify-between">
           <span className="text-sm font-medium text-theme-text">Export PNG</span>
           <div className="flex items-center gap-2">
@@ -254,6 +257,7 @@ export function PngExportModal({
               </label>
             </div>
 
+            {showRunControls ? null : (
             <div className="flex flex-wrap items-center gap-3 text-xs text-theme-text-muted">
               <label className="inline-flex items-center gap-1.5">
                 <input
@@ -276,6 +280,7 @@ export function PngExportModal({
                 Show average latency
               </label>
             </div>
+            )}
 
             {showRunControls ? (
               <div id="png-export-run-overrides" className="space-y-2">

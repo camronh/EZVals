@@ -40,18 +40,23 @@ interface Request { id: string; run: string; grade?: WireResult }
 
 async function run(request: Request) {
   const e = evals.get(request.run)!;
-  const results = await currentEval.run(request.id, () =>
-    tracing
-      ? tracing.tracer.startActiveSpan(`${request.grade ? "grade" : "eval"} ${e.name}`, async (span: { end(): void }) => {
-          try {
-            return await runEval(e, runInfo, request.grade);
-          } finally {
-            span.end();
-          }
-        })
-      : runEval(e, runInfo, request.grade));
-  await tracing?.provider.forceFlush();
-  send({ type: "result", id: request.id, results });
+  try {
+    const results = await currentEval.run(request.id, () =>
+      tracing
+        ? tracing.tracer.startActiveSpan(`${request.grade ? "grade" : "eval"} ${e.name}`, { attributes: { "ezvals.root": true } }, async (span: { end(): void }) => {
+            try {
+              return await runEval(e, runInfo, request.grade);
+            } finally {
+              span.end();
+            }
+          })
+        : runEval(e, runInfo, request.grade));
+    await tracing?.provider.forceFlush();
+    send({ type: "result", id: request.id, results });
+  } catch (err) {
+    // The host waits for every result, so one that can't be reported (e.g. a circular output) becomes an error.
+    send({ type: "result", id: request.id, results: [{ error: err instanceof Error ? err.stack : String(err) }] });
+  }
 }
 
 const running: Promise<void>[] = [];

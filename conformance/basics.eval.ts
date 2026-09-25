@@ -53,3 +53,16 @@ const lengthCheck = (result: EvalResult) => ({ key: "long", passed: String(resul
 evaluate("uses_evaluator", { evaluators: [lengthCheck] }, (ctx) => {
   ctx.output = "ok";
 });
+
+evaluate("returns_false_score", () => [{ input: 1, output: 2, scores: false }]);
+
+evaluate("evaluator_after_assertion", { evaluators: [() => ({ key: "judge", passed: true })] }, (ctx) => {
+  ctx.output = "x";
+  assert(false, "failed first");
+});
+
+evaluate("blocks_past_timeout", { timeout: 0.2 }, (ctx) => {
+  ctx.output = "started";
+  const end = Date.now() + 500;
+  while (Date.now() < end); // blocks the event loop, so it can't be interrupted
+});

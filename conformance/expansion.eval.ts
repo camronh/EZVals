@@ -26,7 +26,7 @@ evaluate("add", {
   assert(ctx.output === ctx.reference, "sum mismatch");
 });
 
-evaluate("loaded", { inputLoader: () => [{ input: "a" }, { input: "b", labels: ["l"] }] }, (ctx) => {
+evaluate("loaded", { inputLoader: () => [{ input: "a" }, { input: "b", labels: ["l"] }, { id: "obj", input: "c" }] }, (ctx) => {
   ctx.output = (ctx.input as string).toUpperCase();
 });
 

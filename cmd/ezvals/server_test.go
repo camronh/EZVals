@@ -172,3 +172,60 @@ func TestErrorStates(t *testing.T) {
 		t.Errorf("no path: %d %v", code, body)
 	}
 }
+
+func TestDiscoveryErrorStillServesAnEmptyRun(t *testing.T) {
+	s, ts, _ := newTestServer(t)
+	for _, source := range []string{"import missing_module\n", "x = 1\n"} {
+		os.WriteFile("evals.py", []byte(source), 0o644)
+		call(t, ts, "POST", "/api/server/restart", "")
+		code, body := call(t, ts, "GET", "/results", "")
+		results, _ := body["results"].([]any)
+		if code != 200 || body["run_id"] != s.activeID || body["run_name"] != "first" || results == nil || len(results) != 0 {
+			t.Fatalf("%q: %d %v", source, code, body)
+		}
+		discoveryError, _ := body["discovery_error"].(string)
+		if strings.Contains(source, "import") != strings.Contains(discoveryError, "No module named 'missing_module'") {
+			t.Fatalf("%q: discovery_error = %q", source, discoveryError)
+		}
+		if _, data := call(t, ts, "GET", "/api/runs/latest/data", ""); data["discovery_error"] != body["discovery_error"] {
+			t.Fatalf("/data: %v", data)
+		}
+	}
+}
+
+func TestConfigPutReplacesEditableKeys(t *testing.T) {
+	_, ts, _ := newTestServer(t)
+	os.WriteFile("ezvals.json", []byte(`{"concurrency": 3, "timeout": 5, "trials": 2, "port": 9000, "overwrite": false, "configs": {"gpt": {"model": "x"}}}`), 0o644)
+	if code, _ := call(t, ts, "PUT", "/api/config", `{"concurrency": 4, "timeout": null, "completion_notifications": true}`); code != 200 {
+		t.Fatal(code)
+	}
+	cfg := loadConfig()
+	if cfg.Concurrency != 4 || cfg.Timeout != 0 || cfg.Trials != 0 || cfg.ResultsDir != "." || !cfg.CompletionNotifications ||
+		cfg.Port != 9000 || cfg.Overwrite || cfg.Configs["gpt"]["model"] != "x" {
+		t.Fatalf("config = %+v", cfg)
+	}
+}
+
+func TestRunNamesKeepSpacesAndRejectBlank(t *testing.T) {
+	s, ts, _ := newTestServer(t)
+	call(t, ts, "POST", "/api/runs/new", `{"run_name": "  baseline run (v2) "}`)
+	if run, _ := s.store.Load(s.activeID); run == nil || run.RunName != "baseline run (v2)" {
+		t.Fatalf("saved run = %+v", run)
+	}
+	if s.runName != "baseline run (v2)" {
+		t.Fatalf("new run name = %q", s.runName)
+	}
+	if code, body := call(t, ts, "PATCH", "/api/runs/"+s.activeID, `{"run_name": "   "}`); code != 400 {
+		t.Fatalf("blank rename: %d %v", code, body)
+	}
+	if code, body := call(t, ts, "PATCH", "/api/runs/"+s.activeID, `{"run_name": " gpt-5 run! "}`); code != 200 || body["run"].(map[string]any)["run_name"] != "gpt-5 run!" {
+		t.Fatalf("rename: %d %v", code, body)
+	}
+	if run, _ := s.store.FindByName("s", "gpt-5 run!"); run == nil || run.RunID != s.activeID {
+		t.Fatalf("FindByName = %v", run)
+	}
+	call(t, ts, "PUT", "/api/pending-run-name", `{"run_name": "next one"}`)
+	if s.runName != "next one" {
+		t.Fatalf("pending name = %q", s.runName)
+	}
+}

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { FilterState, TriState, ValueRule } from '../../types'
 import { cyclePill, cycleTriState, defaultFilters } from '../../lib/filters'
+import { Icon } from '../../components/Icon'
 
 export type ScoreKeyMeta = Record<string, { numeric: boolean; passed: boolean }>
 
@@ -13,12 +14,12 @@ type Props = {
 }
 
 const selectClass = 'rounded border border-theme-border bg-theme-bg-elevated px-1.5 py-0.5 text-[11px] text-theme-text focus:border-blue-500 focus:outline-none'
-const pillTone = (state: TriState) => (state === true ? 'bg-blue-600 text-white' : state === false ? 'bg-rose-500/30 text-rose-300' : 'bg-theme-bg-elevated text-theme-text-muted hover:bg-theme-btn-bg-hover hover:text-theme-text-secondary')
+const pillTone = (state: TriState) => (state === true ? 'bg-blue-600 text-white' : state === false ? 'bg-rose-500/30 text-rose-700 dark:text-rose-300' : 'bg-theme-bg-elevated text-theme-text-muted hover:bg-theme-btn-bg-hover hover:text-theme-text-secondary')
 
 function TriStateToggle({ id, label, value, onChange }: { id: string; label: string; value: TriState; onChange: (v: TriState) => void }) {
   return (
     <button id={id} className={`rounded px-2 py-0.5 text-[10px] font-medium ${pillTone(value)}`} title="Click to cycle: include → exclude → any" onClick={() => onChange(cycleTriState(value))}>
-      {value === false ? <><span className="mr-0.5">✕</span>{label}</> : `Has ${label}`}
+      {value === false ? <span className="inline-flex items-center"><Icon name="close" className="mr-1 h-2.5 w-2.5" />{label}</span> : `Has ${label}`}
     </button>
   )
 }
@@ -38,7 +39,7 @@ function Pills({ id, title, values, selection, onChange }: {
           const state = selection.include.includes(value) ? true : selection.exclude.includes(value) ? false : null
           return (
             <button key={value} title={value} className={`inline-flex max-w-full items-center rounded px-2 py-0.5 text-[10px] font-medium ${pillTone(state)}`} onClick={() => onChange(cyclePill(selection, value))}>
-              {state === false ? <span className="mr-1">x</span> : null}
+              {state === false ? <Icon name="close" className="mr-1 h-2.5 w-2.5" /> : null}
               <span className="filter-pill-text max-w-[220px] truncate">{value}</span>
             </button>
           )
@@ -52,7 +53,7 @@ function ActiveFilter({ tone, children, onRemove }: { tone: string; children: Re
   return (
     <span className={`inline-flex max-w-full items-center gap-1 rounded px-2 py-0.5 text-[10px] ${tone}`}>
       <span className="filter-pill-text max-w-[180px] truncate">{children}</span>
-      <button className="ml-1 hover:text-white" onClick={onRemove}>x</button>
+      <button className="ml-0.5 opacity-70 hover:opacity-100" aria-label="Remove filter" onClick={onRemove}><Icon name="close" className="h-2.5 w-2.5" /></button>
     </span>
   )
 }
@@ -126,27 +127,27 @@ export function FiltersPanel({ filters, onChange, scoreKeys, datasets, labels }:
       <Pills id="label-pills" title="Labels" values={labels} selection={filters.selectedLabels} onChange={(selectedLabels) => set({ selectedLabels })} />
       <div id="active-filters" className="flex flex-wrap gap-1 border-t border-theme-border pt-2">
         {filters.valueRules.map((r, i) => (
-          <ActiveFilter key={`v${i}`} tone="bg-blue-500/20 text-blue-300" onRemove={() => set({ valueRules: remove(filters.valueRules, i) })}>{r.key} {r.op} {r.value}</ActiveFilter>
+          <ActiveFilter key={`v${i}`} tone="bg-blue-500/20 text-blue-700 dark:text-blue-300" onRemove={() => set({ valueRules: remove(filters.valueRules, i) })}>{r.key} {r.op} {r.value}</ActiveFilter>
         ))}
         {filters.passedRules.map((r, i) => (
-          <ActiveFilter key={`p${i}`} tone="bg-blue-500/20 text-blue-300" onRemove={() => set({ passedRules: remove(filters.passedRules, i) })}>{r.key} = {r.value ? 'pass' : 'fail'}</ActiveFilter>
+          <ActiveFilter key={`p${i}`} tone="bg-blue-500/20 text-blue-700 dark:text-blue-300" onRemove={() => set({ passedRules: remove(filters.passedRules, i) })}>{r.key} = {r.value ? 'pass' : 'fail'}</ActiveFilter>
         ))}
-        {filters.annotation !== 'any' ? <ActiveFilter tone="bg-blue-500/20 text-blue-300" onRemove={() => set({ annotation: 'any' })}>note: {filters.annotation}</ActiveFilter> : null}
+        {filters.annotation !== 'any' ? <ActiveFilter tone="bg-blue-500/20 text-blue-700 dark:text-blue-300" onRemove={() => set({ annotation: 'any' })}>note: {filters.annotation}</ActiveFilter> : null}
         {filters.selectedDatasets.include.map((d) => (
-          <ActiveFilter key={`di${d}`} tone="bg-emerald-500/20 text-emerald-300" onRemove={() => set({ selectedDatasets: without(filters.selectedDatasets, d) })}>{d}</ActiveFilter>
+          <ActiveFilter key={`di${d}`} tone="bg-emerald-500/20 text-emerald-700 dark:text-emerald-300" onRemove={() => set({ selectedDatasets: without(filters.selectedDatasets, d) })}>{d}</ActiveFilter>
         ))}
         {filters.selectedDatasets.exclude.map((d) => (
-          <ActiveFilter key={`de${d}`} tone="bg-rose-500/20 text-rose-300" onRemove={() => set({ selectedDatasets: without(filters.selectedDatasets, d) })}>x {d}</ActiveFilter>
+          <ActiveFilter key={`de${d}`} tone="bg-rose-500/20 text-rose-700 dark:text-rose-300" onRemove={() => set({ selectedDatasets: without(filters.selectedDatasets, d) })}>not {d}</ActiveFilter>
         ))}
         {filters.selectedLabels.include.map((l) => (
-          <ActiveFilter key={`li${l}`} tone="bg-amber-500/20 text-amber-300" onRemove={() => set({ selectedLabels: without(filters.selectedLabels, l) })}>{l}</ActiveFilter>
+          <ActiveFilter key={`li${l}`} tone="bg-amber-500/20 text-amber-700 dark:text-amber-300" onRemove={() => set({ selectedLabels: without(filters.selectedLabels, l) })}>{l}</ActiveFilter>
         ))}
         {filters.selectedLabels.exclude.map((l) => (
-          <ActiveFilter key={`le${l}`} tone="bg-rose-500/20 text-rose-300" onRemove={() => set({ selectedLabels: without(filters.selectedLabels, l) })}>x {l}</ActiveFilter>
+          <ActiveFilter key={`le${l}`} tone="bg-rose-500/20 text-rose-700 dark:text-rose-300" onRemove={() => set({ selectedLabels: without(filters.selectedLabels, l) })}>not {l}</ActiveFilter>
         ))}
-        {filters.hasError !== null ? <ActiveFilter tone={filters.hasError ? 'bg-rose-500/20 text-rose-300' : 'bg-emerald-500/20 text-emerald-300'} onRemove={() => set({ hasError: null })}>{filters.hasError ? 'has' : 'no'} error</ActiveFilter> : null}
-        {filters.hasUrl !== null ? <ActiveFilter tone={filters.hasUrl ? 'bg-cyan-500/20 text-cyan-300' : 'bg-rose-500/20 text-rose-300'} onRemove={() => set({ hasUrl: null })}>{filters.hasUrl ? 'has' : 'no'} URL</ActiveFilter> : null}
-        {filters.hasMessages !== null ? <ActiveFilter tone={filters.hasMessages ? 'bg-cyan-500/20 text-cyan-300' : 'bg-rose-500/20 text-rose-300'} onRemove={() => set({ hasMessages: null })}>{filters.hasMessages ? 'has' : 'no'} messages</ActiveFilter> : null}
+        {filters.hasError !== null ? <ActiveFilter tone={filters.hasError ? 'bg-rose-500/20 text-rose-700 dark:text-rose-300' : 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'} onRemove={() => set({ hasError: null })}>{filters.hasError ? 'has' : 'no'} error</ActiveFilter> : null}
+        {filters.hasUrl !== null ? <ActiveFilter tone={filters.hasUrl ? 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-300' : 'bg-rose-500/20 text-rose-700 dark:text-rose-300'} onRemove={() => set({ hasUrl: null })}>{filters.hasUrl ? 'has' : 'no'} URL</ActiveFilter> : null}
+        {filters.hasMessages !== null ? <ActiveFilter tone={filters.hasMessages ? 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-300' : 'bg-rose-500/20 text-rose-700 dark:text-rose-300'} onRemove={() => set({ hasMessages: null })}>{filters.hasMessages ? 'has' : 'no'} messages</ActiveFilter> : null}
       </div>
     </div>
   )

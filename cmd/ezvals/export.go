@@ -143,7 +143,7 @@ func renderMarkdown(runName, session string, rows []Row, columns []string, stats
 	for i, c := range known {
 		headers[i] = markdownColumns[c]
 	}
-	fmt.Fprintf(&b, "| %s |\n|%s|\n", strings.Join(headers, " | "), strings.Repeat("---|", len(known)))
+	fmt.Fprintf(&b, "| %s |\n|%s\n", strings.Join(headers, " | "), strings.Repeat("---|", len(known)))
 	for _, row := range rows {
 		r := row.Result
 		values := make([]string, len(known))
@@ -255,7 +255,7 @@ func renderComparisonMarkdown(runs []ComparisonRun, session string) string {
 		b.WriteString("*No results*")
 		return b.String()
 	}
-	fmt.Fprintf(&b, "| Eval | Input | %s |\n|%s|\n", strings.Join(names, " | "), strings.Repeat("---|", len(runs)+2))
+	fmt.Fprintf(&b, "| Eval | Input | %s |\n|%s\n", strings.Join(names, " | "), strings.Repeat("---|", len(runs)+2))
 	entryKeys := make([]string, 0, len(entries))
 	for k := range entries {
 		entryKeys = append(entryKeys, k)

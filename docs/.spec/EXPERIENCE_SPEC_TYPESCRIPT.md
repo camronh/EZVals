@@ -48,6 +48,15 @@ Scenario: Loader exclusivity
 Scenario: Default dataset
   Given evals/support.eval.ts defines an eval without a dataset
   Then its dataset is "support"
+
+Scenario: Timeout of code that blocks the event loop
+  Given an eval with timeout 5 runs synchronous code for 10 seconds
+  Then it can't be interrupted, so its result is reported after 10 seconds
+  But it is still the error "TimeoutError: Evaluation timed out after 5.0s"
+
+Scenario: Wrong return type
+  Given an eval returns something other than nothing, the context, a result object or an array of them
+  Then the result is an error "Evaluation function must return ..."
 ```
 
 The function receives an `EvalContext` and may be async. Returning nothing uses the context; returning an array of `{ input, output, scores, ... }` records each as a separate result.

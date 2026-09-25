@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 // A run is stored as an append-only log of events, one JSON object per line:
@@ -196,7 +197,7 @@ func materialize(events []Event) *Run {
 	for _, ev := range manifest {
 		firstRow[ev.ID] = len(run.Results)
 		row := Row{ID: ev.ID, Function: ev.Function, Dataset: ev.Dataset, Labels: ev.Labels, Trial: ev.Trial, TrialOf: ev.TrialOf,
-			SpanCount: len(run.spans[ev.ID]), Regradable: ev.Target}
+			SpanCount: spanCount(run.spans[ev.ID]), Regradable: ev.Target}
 		if s, ok := status[ev.ID]; ok || len(results[ev.ID]) == 0 {
 			if !ok {
 				s = "not_started"
@@ -223,7 +224,8 @@ func materialize(events []Event) *Run {
 		r := &run.Results[i+e.N].Result
 		var before any = r.Annotation
 		if e.Field == "scores" {
-			before = r.Scores
+			before = r.Scores // an edit replaces the slice below, so this keeps the old scores
+			r.Scores = nil
 			json.Unmarshal(e.Value, &r.Scores)
 		} else {
 			r.Annotation = nil
@@ -307,6 +309,17 @@ func passed(r Result) bool {
 	return sawPass && r.Error == nil && r.Status == "completed"
 }
 
+// spanCount counts the spans an eval recorded, not the root span the SDK wraps every eval in.
+func spanCount(spans []Span) int {
+	n := 0
+	for _, s := range spans {
+		if s.Attributes[rootAttribute] != true {
+			n++
+		}
+	}
+	return n
+}
+
 // SpansFor returns the spans recorded for an eval.
 func (run *Run) SpansFor(id string) []Span { return run.spans[id] }
 
@@ -375,6 +388,20 @@ type Store struct {
 var unsafeName = regexp.MustCompile(`[^a-zA-Z0-9_-]`)
 
 func sanitize(name string) string { return unsafeName.ReplaceAllString(name, "") }
+
+// cleanRunName cleans a run name. Run files are named by run id, so any printable text works; blank means none.
+func cleanRunName(name string) string {
+	name = strings.TrimSpace(strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, name))
+	if runes := []rune(name); len(runes) > 100 {
+		name = strings.TrimSpace(string(runes[:100]))
+	}
+	return name
+}
 
 func openStore(dir string) *Store {
 	s := &Store{dir: dir}

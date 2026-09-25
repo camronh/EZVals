@@ -7,7 +7,7 @@ const TONES = {
   neutral: ['border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-800/50', 'text-zinc-700 dark:text-zinc-300', 'text-zinc-500 dark:text-zinc-400'],
 }
 
-/** A score with its value, pass/fail mark and notes. `onEdit` adds an edit button that appears on hover. */
+/** A score with its value, pass/fail mark and notes. `onEdit` adds a subtle edit button that brightens on hover or focus. */
 export function ScoreCard({ score, onEdit }: { score: Score; onEdit?: () => void }) {
   const [card, keyTone, valueTone] = TONES[score.passed === true ? 'passed' : score.passed === false ? 'failed' : 'neutral']
   return (
@@ -17,7 +17,7 @@ export function ScoreCard({ score, onEdit }: { score: Score; onEdit?: () => void
         <div className="flex items-center gap-1.5">
           {onEdit ? (
             <button
-              className="flex h-5 w-5 items-center justify-center rounded text-zinc-400 opacity-0 transition-opacity hover:bg-zinc-200 hover:text-zinc-600 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-zinc-700 dark:hover:text-zinc-300"
+              className="flex h-5 w-5 items-center justify-center rounded text-zinc-500 opacity-60 transition-opacity hover:bg-zinc-200 hover:text-zinc-700 hover:opacity-100 focus-visible:opacity-100 group-hover:opacity-100 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
               title="Edit score"
               onClick={onEdit}
             >

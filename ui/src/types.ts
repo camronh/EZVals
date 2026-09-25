@@ -88,6 +88,8 @@ export interface RunSummary {
   pass_all_k?: number
   results: RunResultRow[]
   score_chips?: ScoreChip[]
+  /** Why the eval path couldn't be discovered (e.g. an import error), for the active run. */
+  discovery_error?: string
 }
 
 export interface ResultDetail {

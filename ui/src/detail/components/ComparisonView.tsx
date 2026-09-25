@@ -29,13 +29,13 @@ export function ComparisonView({ runs, base, layout, onResize }: Props) {
                   <div className="flex min-w-0 items-center gap-2">
                     <span className="h-2 w-2 rounded-full" style={{ background: run.color }} />
                     <span className="truncate text-xs font-semibold text-zinc-700 dark:text-zinc-200">{run.runName}</span>
-                    <span className="text-[10px] text-zinc-400">{r?.status ?? '—'}</span>
+                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400">{r?.status ?? '—'}</span>
                   </div>
                   {run.match ? (
                     <a href={`/runs/${run.runId}/results/${run.match.index}?mode=single`} title="Open detail" className="rounded border border-zinc-300 px-1.5 py-0.5 text-[10px] text-zinc-500 hover:border-blue-300 hover:text-blue-600 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-blue-500 dark:hover:text-blue-300">
                       Open detail
                     </a>
-                  ) : <span className="text-[10px] text-zinc-400">No match</span>}
+                  ) : <span className="text-[10px] text-zinc-500 dark:text-zinc-400">No match</span>}
                 </div>
                 <div className="data-panel-body flex-1 overflow-auto p-3"><DataViewer content={r?.output} placeholder="—" /></div>
                 {r?.error ? <div className="border-t border-rose-200 bg-rose-50 px-3 py-1.5 text-[11px] text-rose-600 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">Error: {r.error}</div> : null}

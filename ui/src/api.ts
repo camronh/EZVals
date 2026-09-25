@@ -42,6 +42,7 @@ export const api = {
 
   activate: (runId: string) => send('POST', `${run(runId)}/activate`),
   rename: (runId: string, name: string) => send('PATCH', run(runId), { run_name: name }),
+  deleteRun: (runId: string) => send('DELETE', run(runId)),
   setPendingRunName: (name: string) => send('PUT', '/api/pending-run-name', { run_name: name }),
   updateResult: (runId: string, index: number, patch: { annotation?: string | null; scores?: Score[] }) =>
     send('PATCH', `${run(runId)}/results/${index}`, { result: patch }),

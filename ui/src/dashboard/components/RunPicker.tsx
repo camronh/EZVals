@@ -12,16 +12,17 @@ type Props = {
   activeRunId: string
   onSelectRun: (runId: string) => void
   onRenameRun: (runId: string, name: string) => void
+  onDeleteRun: (runId: string) => void
 }
 
 /** The session's runs, navigable with arrow keys: Enter opens a run, ⌘C copies its name. Mount it only while open. */
-export function RunPicker({ anchorRef, onClose, sessionRuns, activeRunId, onSelectRun, onRenameRun }: Props) {
+export function RunPicker({ anchorRef, onClose, sessionRuns, activeRunId, onSelectRun, onRenameRun, onDeleteRun }: Props) {
   const [focused, setFocused] = useState(() => Math.max(0, sessionRuns.findIndex((r) => r.run_id === activeRunId)))
   const [editing, setEditing] = useState<{ runId: string; draft: string } | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
   const rows = useRef<(HTMLDivElement | null)[]>([])
 
-  useEffect(() => rows.current[focused]?.scrollIntoView({ block: 'nearest' }), [focused])
+  useEffect(() => { rows.current[focused]?.scrollIntoView({ block: 'nearest' }) }, [focused])
 
   const choose = (run: SessionRun) => {
     onSelectRun(run.run_id)
@@ -31,6 +32,9 @@ export function RunPicker({ anchorRef, onClose, sessionRuns, activeRunId, onSele
     await navigator.clipboard.writeText(run.run_name || run.run_id)
     setCopied(run.run_id)
     setTimeout(() => setCopied(null), 1200)
+  }
+  const remove = (run: SessionRun) => {
+    if (window.confirm(`Delete run "${run.run_name || run.run_id}"? This can't be undone.`)) onDeleteRun(run.run_id)
   }
   const saveRename = () => {
     if (editing?.draft.trim()) onRenameRun(editing.runId, editing.draft.trim())
@@ -98,6 +102,15 @@ export function RunPicker({ anchorRef, onClose, sessionRuns, activeRunId, onSele
                 </button>
                 <button className={`run-picker-action-btn${copied === run.run_id ? ' copied' : ''}`} title="Copy name" onClick={(e) => { e.stopPropagation(); copy(run) }}>
                   {copied === run.run_id ? <Icon name="check" className="h-3 w-3 text-emerald-400" /> : <Icon name="copy" className="h-3 w-3" />}
+                </button>
+                <button
+                  className="run-picker-action-btn run-picker-delete-btn hover:!text-rose-500 disabled:opacity-40"
+                  title={selected ? 'Switch to another run to delete this one' : 'Delete run'}
+                  aria-label="Delete run"
+                  disabled={selected}
+                  onClick={(e) => { e.stopPropagation(); remove(run) }}
+                >
+                  <Icon name="trash" className="h-3 w-3" />
                 </button>
               </div>
             )}

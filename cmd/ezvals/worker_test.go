@@ -3,8 +3,8 @@ package main
 import (
 	"os"
 	"os/exec"
-	"strings"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"

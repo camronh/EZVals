@@ -309,13 +309,6 @@ async function drawComparisonMode(
   allKeys.add('_latency')
   const keys = Array.from(allKeys)
 
-  // Find max latency for normalization
-  let maxLatency = 0
-  Object.values(data.comparisonData).forEach((runData) => {
-    const lat = runData?.average_latency || 0
-    if (lat > maxLatency) maxLatency = lat
-  })
-
   // Layout
   const compBarTop = PAD + 80
   const compBarBottom = 460
@@ -351,7 +344,7 @@ async function drawComparisonMode(
       let pct = 0
       if (key === '_latency') {
         const lat = runData?.average_latency || 0
-        pct = maxLatency > 0 ? (lat / maxLatency) * 100 : 0
+        pct = Math.min(lat / 5, 1) * 100 // 0-5s
       } else {
         const chip = (runData?.score_chips || []).find((c) => c.key === key)
         if (chip) pct = chipStats(chip).pct
@@ -370,7 +363,7 @@ async function drawComparisonMode(
         ctx.textAlign = 'center'
         ctx.textBaseline = 'bottom'
         const label = key === '_latency'
-          ? `${(runData?.average_latency || 0).toFixed(1)}s`
+          ? `${(runData?.average_latency || 0).toFixed(2)}s`
           : `${Math.round(pct)}%`
         ctx.fillText(label, x + singleBarW / 2, y - 4)
       }
@@ -386,8 +379,7 @@ async function drawComparisonMode(
   })
 
   // Run key - outline chips, bottom left
-  const footerLines = buildFooterLines(data, options)
-  const keyY = BASE_H - PAD - 24 - footerLines.length * 16
+  const keyY = BASE_H - PAD - 24
   ctx.font = '500 13px system-ui, -apple-system, sans-serif'
   ctx.textBaseline = 'middle'
   const chipPadX = 12
@@ -396,7 +388,8 @@ async function drawComparisonMode(
 
   let chipX = PAD
   runs.forEach((run) => {
-    const textW = ctx.measureText(run.runName).width
+    const text = `${run.runName} (${data.comparisonData[run.runId]?.results.length ?? 0})`
+    const textW = ctx.measureText(text).width
     const chipW = textW + chipPadX * 2
 
     ctx.strokeStyle = run.color
@@ -407,7 +400,7 @@ async function drawComparisonMode(
     ctx.fillStyle = run.color
     ctx.font = '500 13px system-ui, -apple-system, sans-serif'
     ctx.textAlign = 'left'
-    ctx.fillText(run.runName, chipX + chipPadX, keyY)
+    ctx.fillText(text, chipX + chipPadX, keyY)
 
     chipX += chipW + chipGap
   })
@@ -444,7 +437,7 @@ function drawFooter(
     ctx.fillText('ezvals.com', BASE_W - PAD, footerY)
   }
 
-  const footerLines = buildFooterLines(data, options)
+  const footerLines = data.isComparisonMode ? [] : buildFooterLines(data, options)
 
   if (footerLines.length > 0) {
     ctx.textAlign = 'left'

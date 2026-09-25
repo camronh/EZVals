@@ -71,7 +71,7 @@ export function TraceWaterfall({ spans }: { spans: Span[] }) {
             >
               <span className="flex min-w-0 items-center gap-1.5" style={{ paddingLeft: depth * 14 }}>
                 <span className={`truncate font-mono ${failed ? 'text-rose-600 dark:text-rose-400' : 'text-zinc-700 dark:text-zinc-200'}`}>{span.name}</span>
-                {model ? <span className="shrink-0 rounded bg-violet-500/10 px-1 py-0.5 text-[10px] text-violet-600 dark:text-violet-300">{model}</span> : null}
+                {model && !span.name.includes(model) ? <span className="shrink-0 rounded bg-violet-500/10 px-1 py-0.5 text-[10px] text-violet-600 dark:text-violet-300">{model}</span> : null}
                 {input + output > 0 ? <span className="shrink-0 text-[10px] text-zinc-400">{input}→{output}</span> : null}
               </span>
               <span className="relative h-4">

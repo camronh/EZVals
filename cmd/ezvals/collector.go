@@ -22,7 +22,10 @@ type Collector struct {
 	save func(runID string, events ...Event)
 }
 
-const evalIDAttribute = "ezvals.eval_id"
+const (
+	evalIDAttribute = "ezvals.eval_id"
+	rootAttribute   = "ezvals.root" // set on the span each SDK wraps an eval (or regrade) in
+)
 
 func endpoint(base, runID string) string { return base + "/otlp/" + runID + "/v1/traces" }
 

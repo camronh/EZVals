@@ -5,7 +5,6 @@
     "labels": [
       "file"
     ],
-    "span_count": 1,
     "status": "completed",
     "input": null,
     "output": {
@@ -34,7 +33,6 @@
     "labels": [
       "own"
     ],
-    "span_count": 1,
     "status": "completed",
     "input": null,
     "output": {
@@ -66,7 +64,6 @@
       "base",
       "extra"
     ],
-    "span_count": 1,
     "status": "completed",
     "input": [
       1,
@@ -92,7 +89,6 @@
     "labels": [
       "base"
     ],
-    "span_count": 1,
     "status": "completed",
     "input": [
       2,
@@ -118,7 +114,6 @@
     "function": "add[2]",
     "dataset": "math",
     "labels": [],
-    "span_count": 1,
     "status": "completed",
     "input": [
       0,
@@ -144,7 +139,6 @@
     "labels": [
       "file"
     ],
-    "span_count": 1,
     "status": "completed",
     "input": "a",
     "output": "A",
@@ -167,10 +161,30 @@
       "file",
       "l"
     ],
-    "span_count": 1,
     "status": "completed",
     "input": "b",
     "output": "B",
+    "reference": null,
+    "scores": [
+      {
+        "key": "pass",
+        "passed": true
+      }
+    ],
+    "metadata": {
+      "f": 1
+    },
+    "trace_data": {}
+  },
+  {
+    "function": "loaded[obj]",
+    "dataset": "expansion",
+    "labels": [
+      "file"
+    ],
+    "status": "completed",
+    "input": "c",
+    "output": "C",
     "reference": null,
     "scores": [
       {
@@ -189,7 +203,6 @@
     "labels": [
       "file"
     ],
-    "span_count": 1,
     "status": "error",
     "input": null,
     "output": null,

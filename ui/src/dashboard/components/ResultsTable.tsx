@@ -20,12 +20,34 @@ type Props = {
   onWidths: (widths: Record<string, number>) => void
   onOpen: (index: number) => void
   onSaveAnnotation: (runId: string, index: number, annotation: string | null) => Promise<void>
+  /** Shown when there are no rows. */
+  emptyText?: string
 }
 
 const empty = <span className="text-zinc-600">--</span>
 
+const spinner = (tone: string) => <span className={`h-2.5 w-2.5 animate-spin rounded-full border ${tone}`} />
+
+/** The row's status, per the spec: queued, running, passed/finished, error, cancelled (never-run rows show nothing). */
+export function StatusIcon({ status }: { status: string }) {
+  const icon = {
+    pending: spinner('border-amber-500/40 border-t-amber-500'),
+    running: spinner('border-blue-500/40 border-t-blue-500'),
+    completed: <Icon name="check" className="h-3 w-3 text-emerald-500" />,
+    error: <Icon name="close" className="h-3 w-3 text-rose-500" />,
+    cancelled: (
+      <svg className="h-3 w-3 text-zinc-400 dark:text-zinc-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" /><path d="M5.6 18.4 18.4 5.6" />
+      </svg>
+    ),
+  }[status]
+  if (!icon) return null
+  const label = status === 'pending' ? 'queued' : status
+  return <span className={`status-indicator status-indicator-${status} inline-flex h-3 w-3 shrink-0 items-center justify-center`} role="status" aria-label={label} title={label}>{icon}</span>
+}
+
 function Skeleton({ widths }: { widths: string[] }) {
-  return <div className="space-y-1">{widths.map((w) => <div key={w} className={`h-2.5 ${w} animate-pulse rounded bg-zinc-800`} />)}</div>
+  return <div className="space-y-1">{widths.map((w) => <div key={w} className={`h-2.5 ${w} animate-pulse rounded bg-zinc-200 dark:bg-zinc-800`} />)}</div>
 }
 
 export function AnnotationIndicator({ onEnter, onLeave, onClick }: { onEnter: (el: HTMLElement) => void; onLeave: () => void; onClick: (el: HTMLElement) => void }) {
@@ -83,7 +105,7 @@ function useColumnResize(widths: Record<string, number>, onWidths: (w: Record<st
   return { headers, start, recentlyResized }
 }
 
-export function ResultsTable({ runId, rows, hidden, sort, widths, selected, onSelect, onSort, onWidths, onOpen, onSaveAnnotation }: Props) {
+export function ResultsTable({ runId, rows, hidden, sort, widths, selected, onSelect, onSort, onWidths, onOpen, onSaveAnnotation, emptyText = 'No results yet' }: Props) {
   const preview = useHoverPreview<PreviewTarget>()
   const lastChecked = useRef<number | null>(null)
   const selectAll = useRef<HTMLInputElement | null>(null)
@@ -119,7 +141,7 @@ export function ResultsTable({ runId, rows, hidden, sort, widths, selected, onSe
 
   return (
     <>
-      <table id="results-table" data-run-id={runId} className="w-full table-fixed border-collapse text-sm text-theme-text">
+      <table id="results-table" data-run-id={runId} className="w-full min-w-[760px] table-fixed border-collapse text-sm text-theme-text">
         <thead>
           <tr className="border-b border-theme-border">
             <th style={{ width: 32 }} className="bg-theme-bg px-2 py-2 text-center align-middle">
@@ -158,7 +180,7 @@ export function ResultsTable({ runId, rows, hidden, sort, widths, selected, onSe
         </thead>
         <tbody className="divide-y divide-theme-border-subtle">
           {rows.length === 0 ? (
-            <tr><td colSpan={COLUMNS.length + 1} className="px-4 py-12 text-center text-sm text-theme-text-muted">No results yet</td></tr>
+            <tr><td colSpan={COLUMNS.length + 1} className="px-4 py-12 text-center text-sm text-theme-text-muted">{emptyText}</td></tr>
           ) : null}
           {rows.map((row) => {
             const r: ResultData = row.result
@@ -189,20 +211,14 @@ export function ResultsTable({ runId, rows, hidden, sort, widths, selected, onSe
                 </td>
                 {cell('function', (
                   <div className="flex flex-col gap-0.5">
-                    <div className="flex items-center gap-1.5">
-                      <a href={`/runs/${runId}/results/${row.index}`} className={`font-mono text-[12px] font-medium ${notStarted ? 'text-zinc-500 hover:text-zinc-400' : 'text-accent-link hover:text-accent-link-hover'}`}>
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <a href={`/runs/${runId}/results/${row.index}`} title={row.row.function} className={`truncate font-mono text-[12px] font-medium ${notStarted ? 'text-zinc-500 hover:text-zinc-400' : 'text-accent-link hover:text-accent-link-hover'}`}>
                         {row.row.function}
                       </a>
-                      {row.row.trial ? <span className="trial-chip rounded bg-theme-bg-elevated px-1 font-mono text-[10px] text-theme-text-muted" title={`Trial ${row.row.trial}`}>#{row.row.trial}</span> : null}
+                      {row.row.trial ? <span className="trial-chip shrink-0 rounded bg-theme-bg-elevated px-1 font-mono text-[10px] text-theme-text-muted" title={`Trial ${row.row.trial}`}>#{row.row.trial}</span> : null}
                     </div>
-                    <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-zinc-500">
-                      {running ? (
-                        <span className="status-indicator-running inline-flex h-3 w-3 items-center justify-center text-cyan-400" role="status" aria-label="running">
-                          <span className="h-2.5 w-2.5 animate-spin rounded-full border border-cyan-500/40 border-t-cyan-400" />
-                        </span>
-                      ) : status === 'error' ? (
-                        <span className="status-pill rounded border border-rose-500/40 bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-medium text-rose-300">err</span>
-                      ) : null}
+                    <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] text-zinc-500">
+                      <StatusIcon status={status} />
                       <span className="dataset-chip max-w-[160px] truncate" title={row.dataset ?? undefined}>{row.dataset}</span>
                       {row.labels?.length ? <span className="text-zinc-700">.</span> : null}
                       {row.labels?.map((l) => <span key={l} className="label-chip max-w-[140px] truncate rounded bg-theme-bg-elevated px-1 py-0.5 text-[9px] text-theme-text-muted" title={l}>{l}</span>)}
@@ -232,7 +248,7 @@ export function ResultsTable({ runId, rows, hidden, sort, widths, selected, onSe
                 ))}
                 {cell('error', r.error ? <div className="line-clamp-4 text-[12px] text-accent-error">{r.error}</div> : empty, hover(row, 'error'))}
                 {cell('scores', running ? <Skeleton widths={['w-14', 'w-10']} /> : done && r.scores?.length ? <ScoreBadges scores={r.scores} /> : empty, hover(row, 'scores'))}
-                {cell('latency', r.latency != null ? <span className={`latency-value font-mono text-[11px] ${latencyTone(r.latency)}`}>{r.latency.toFixed(2)}s</span> : running ? <div className="latency-skeleton ml-auto h-3 w-8 animate-pulse rounded bg-zinc-800" /> : empty)}
+                {cell('latency', r.latency != null ? <span className={`latency-value font-mono text-[11px] ${latencyTone(r.latency)}`}>{r.latency.toFixed(2)}s</span> : running ? <div className="latency-skeleton ml-auto h-3 w-8 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800" /> : empty)}
               </tr>
             )
           })}

@@ -25,8 +25,11 @@ type Props = {
   sessionRuns: SessionRun[]
   onRename: (name: string) => void
   onRenameRun: (runId: string, name: string) => void
+  onDeleteRun: (runId: string) => void
   onSelectRun: (runId: string) => void
   onNewRun: () => void
+  /** New run is unavailable while a run is in progress. */
+  newRunDisabled?: boolean
   onCompare: (runId: string) => void
   comparison?: Comparison
 }
@@ -49,7 +52,7 @@ function RunsMenu({ anchor, open, onClose, runs, onPick }: {
   )
 }
 
-function RunInfo({ sessionName, runName, runId, sessionRuns, onRename, onRenameRun, onSelectRun, onNewRun, onCompare }: Props) {
+function RunInfo({ sessionName, runName, runId, sessionRuns, onRename, onRenameRun, onDeleteRun, onSelectRun, onNewRun, onCompare, newRunDisabled }: Props) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [menu, setMenu] = useState<'runs' | 'compare' | null>(null)
@@ -74,23 +77,33 @@ function RunInfo({ sessionName, runName, runId, sessionRuns, onRename, onRenameR
           <div className="stats-info-row group">
             <span className="stats-info-label">run</span>
             <div className="stats-run-row-main">
-              {others.length ? (
-                <button ref={runsAnchor} id="run-dropdown-expanded" className="stats-run-dropdown run-dropdown-btn" data-run-id={runId} onClick={() => setMenu(menu === 'runs' ? null : 'runs')}>
-                  {current ? `${current.run_name} (${formatRunTimestamp(current.timestamp)})` : runName} <span className="dropdown-arrow">v</span>
-                </button>
-              ) : editing ? (
-                <input
-                  className="w-28 rounded border border-theme-border bg-theme-bg-elevated px-1 font-mono text-sm text-theme-text outline-none focus:border-blue-500"
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false) }}
-                  onBlur={() => setEditing(false)}
-                  autoFocus
-                />
+              {editing ? (
+                <span className="flex items-center gap-1">
+                  <input
+                    id="run-name-input"
+                    className="w-40 rounded border border-theme-border bg-theme-bg-elevated px-1 font-mono text-sm text-theme-text outline-none focus:border-blue-500"
+                    value={draft}
+                    aria-label="Run name"
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false) }}
+                    onBlur={() => setEditing(false)}
+                    autoFocus
+                    onFocus={(e) => e.currentTarget.select()}
+                  />
+                  <button className="save-run-name-btn text-emerald-500 hover:text-emerald-400" title="Save name" aria-label="Save name" onMouseDown={(e) => e.preventDefault()} onClick={save}>
+                    <Icon name="check" className="h-3.5 w-3.5" />
+                  </button>
+                </span>
               ) : (
                 <>
-                  <CopyableText text={runName} className="stats-run copyable cursor-pointer hover:text-theme-text-secondary" />
-                  <button className="edit-run-btn-expanded ml-1 text-theme-text-muted transition hover:text-theme-text-secondary" title="Rename run" onClick={() => { setDraft(runName); setEditing(true) }}>
+                  {others.length ? (
+                    <button ref={runsAnchor} id="run-dropdown-expanded" className="stats-run-dropdown run-dropdown-btn" data-run-id={runId} onClick={() => setMenu(menu === 'runs' ? null : 'runs')}>
+                      <span className="truncate" title={current ? `${current.run_name} (${formatRunTimestamp(current.timestamp)})` : runName}>{runName}</span> <span className="dropdown-arrow">v</span>
+                    </button>
+                  ) : (
+                    <CopyableText text={runName} className="stats-run copyable cursor-pointer hover:text-theme-text-secondary" />
+                  )}
+                  <button className="edit-run-btn-expanded ml-1 text-theme-text-muted transition hover:text-theme-text-secondary" title="Rename run" aria-label="Rename run" onClick={() => { setDraft(runName); setEditing(true) }}>
                     <Icon name="pencil" className="h-3 w-3" />
                   </button>
                 </>
@@ -99,7 +112,7 @@ function RunInfo({ sessionName, runName, runId, sessionRuns, onRename, onRenameR
           </div>
           <div className="stats-info-row stats-run-actions-row">
             <div className="stats-run-actions">
-              <button id="new-run-btn-expanded" className="stats-run-action-btn" title="Create new run" aria-label="Create new run" onClick={onNewRun}>
+              <button id="new-run-btn-expanded" className="stats-run-action-btn" title={newRunDisabled ? 'A run is in progress' : 'Create new run'} aria-label="Create new run" onClick={onNewRun} disabled={newRunDisabled}>
                 <Icon name="plus" /><span>New run</span>
               </button>
               <button
@@ -117,7 +130,7 @@ function RunInfo({ sessionName, runName, runId, sessionRuns, onRename, onRenameR
           </div>
         </>
       ) : null}
-      {menu === 'runs' ? <RunPicker anchorRef={runsAnchor} onClose={() => setMenu(null)} sessionRuns={sessionRuns} activeRunId={runId} onSelectRun={onSelectRun} onRenameRun={onRenameRun} /> : null}
+      {menu === 'runs' ? <RunPicker anchorRef={runsAnchor} onClose={() => setMenu(null)} sessionRuns={sessionRuns} activeRunId={runId} onSelectRun={onSelectRun} onRenameRun={onRenameRun} onDeleteRun={onDeleteRun} /> : null}
       <RunsMenu anchor={compareAnchor} open={menu === 'compare'} onClose={() => setMenu(null)} runs={others} onPick={(run) => onCompare(run.run_id)} />
     </div>
   )
@@ -165,7 +178,7 @@ function Metrics({ stats, filteredCount }: { stats: StatsSummary; filteredCount:
           <span className="stats-metric-value">
             {filteredCount != null ? <>{filteredCount}<span className="stats-metric-divisor">/{stats.total}</span></> : stats.total}
           </span>
-          <span className="stats-metric-label">tests</span>
+          <span className="stats-metric-label">{stats.total === 1 ? 'test' : 'tests'}</span>
         </div>
         {stats.isRunning ? (
           <div className="stats-progress">
@@ -176,8 +189,8 @@ function Metrics({ stats, filteredCount }: { stats: StatsSummary; filteredCount:
       </div>
       <div className="stats-metric-row">
         <div id="stats-errors" className="stats-metric stats-metric-sm stats-errors">
-          <span className="stats-metric-value text-accent-error">{stats.totalErrors}</span>
-          <span className="stats-metric-label">errors</span>
+          <span className="stats-metric-value" style={stats.totalErrors ? { color: 'var(--accent-error)' } : undefined}>{stats.totalErrors}</span>
+          <span className="stats-metric-label">{stats.totalErrors === 1 ? 'error' : 'errors'}</span>
         </div>
         {trials > 1 && stats.passAtK != null ? (
           <>
@@ -206,7 +219,6 @@ function chartColumns(chips: ScoreChip[], comparison?: Comparison): ChartColumn[
     })
   }
   const keys = [...new Set(Object.values(comparison.stats).flatMap((s) => s.chips.map((c) => c.key)))]
-  const maxLatency = Math.max(0, ...Object.values(comparison.stats).map((s) => s.avgLatency))
   const columns = keys.map((key) => ({
     key,
     label: key,
@@ -220,8 +232,8 @@ function chartColumns(chips: ScoreChip[], comparison?: Comparison): ChartColumn[
     key: '_latency',
     label: 'Latency',
     bars: comparison.runs.map((run) => {
-      const latency = comparison.stats[run.runId]?.avgLatency ?? 0
-      return { key: run.runId, pct: maxLatency ? (latency / maxLatency) * 100 : 0, color: run.color, text: latency ? `${latency.toFixed(2)}s` : '--' }
+      const latency = comparison.stats[run.runId]?.avgLatency ?? 0 // bars span 0-5s
+      return { key: run.runId, pct: Math.min(latency / 5, 1) * 100, color: run.color, text: latency ? `${latency.toFixed(2)}s` : '--' }
     }),
   })
   return columns
@@ -237,7 +249,7 @@ function ScoreChart({ columns, comparison }: { columns: ChartColumn[]; compariso
             <div key={col.key} className={comparison ? 'stats-bar-group' : 'stats-bar-col'}>
               {col.bars.map((bar) => comparison ? (
                 <div key={bar.key} className="comparison-bar-wrapper">
-                  <span className="comparison-bar-label" style={{ color: bar.color }}>{bar.text}</span>
+                  <span className="comparison-bar-label" style={{ color: bar.color, bottom: `${bar.pct}%` }}>{bar.text}</span>
                   <div className="comparison-bar" style={{ background: bar.color, height: `${bar.pct}%` }} />
                 </div>
               ) : (

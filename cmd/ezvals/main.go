@@ -17,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 )
 
 var version = "dev"
@@ -93,8 +94,12 @@ type Config struct {
 	Configs                 map[string]map[string]any `json:"configs,omitempty"`
 }
 
+func defaultConfig() Config {
+	return Config{Concurrency: 1, ResultsDir: ".", Overwrite: true, Port: 8000}
+}
+
 func loadConfig() Config {
-	c := Config{Concurrency: 1, ResultsDir: ".", Overwrite: true, Port: 8000}
+	c := defaultConfig()
 	if data, err := os.ReadFile("ezvals.json"); err == nil {
 		if err := json.Unmarshal(data, &c); err != nil {
 			fatal("ezvals.json: %v", err)
@@ -307,11 +312,11 @@ func runCmd(args []string) {
 	cfg := loadConfig()
 
 	if *rename != "" {
-		if len(positional) != 1 {
+		if len(positional) != 1 || cleanRunName(positional[0]) == "" {
 			fatal("usage: ezvals run --rename RUN_ID NEW_NAME")
 		}
 		store := openStore(cfg.sessionsDir())
-		name := sanitize(positional[0])
+		name := cleanRunName(positional[0])
 		if err := store.Append(*rename, Event{Type: "renamed", RunName: name}); err != nil {
 			fatal("Run '%s' not found.", *rename)
 		}
@@ -338,22 +343,28 @@ func runCmd(args []string) {
 	if err != nil {
 		fatal("%v", err)
 	}
-	if *runName == "" {
+	// A session is a directory, so its name is sanitized; one with no usable characters falls back to the default.
+	if *runName = cleanRunName(*runName); *runName == "" {
 		*runName = *configName
 	}
 	if *runName == "" {
 		*runName = friendlyName()
 	}
+	if *session = sanitize(*session); *session == "" {
+		*session = "default"
+	}
 
 	path, selectors := splitSelector(positional[0])
 	collector, tracesBase := listenForTraces()
-	info := RunInfo{RunID: newRunID(), SessionName: sanitize(*session), RunName: sanitize(*runName), EvalPath: path, Config: profile, Timeout: *timeout}
+	info := RunInfo{RunID: newRunID(), SessionName: *session, RunName: *runName, EvalPath: path, Config: profile, Timeout: *timeout}
 	info.TracesEndpoint = endpoint(tracesBase, info.RunID)
-	fmt.Fprintf(os.Stderr, "Running %s\n", positional[0])
 	workers, manifest, err := startWorkers(path, info, *verbose)
 	if err != nil {
 		fatal("%v", err)
 	}
+	fmt.Fprintf(os.Stderr, "Running %s\n", positional[0])
+	header := Event{Type: "run", At: time.Now().Unix(), RunID: info.RunID, SessionName: info.SessionName, RunName: info.RunName,
+		Path: path, Dataset: *dataset, Labels: labels, FunctionName: strings.Join(selectors, ","), ConfigName: *configName}
 	evals := filterEvals(manifest, *dataset, labels, selectors)
 	if *limit > 0 && len(evals) > *limit {
 		evals = evals[:*limit]
@@ -361,12 +372,13 @@ func runCmd(args []string) {
 	if len(evals) == 0 {
 		stopWorkers(workers)
 		fmt.Fprintln(os.Stderr, "No evaluations found")
+		if *jsonOut || *noSave {
+			json.NewEncoder(os.Stdout).Encode(report{Run: materialize([]Event{header})})
+		}
 		return
 	}
 	evals = expandTrials(evals, *trials)
 
-	header := Event{Type: "run", RunID: info.RunID, SessionName: info.SessionName, RunName: info.RunName, Path: path,
-		Dataset: *dataset, Labels: labels, FunctionName: strings.Join(selectors, ","), ConfigName: *configName}
 	store := openStore(cfg.sessionsDir())
 	save := *output == "" && !*noSave
 	if save {
@@ -379,6 +391,9 @@ func runCmd(args []string) {
 	emit := func(es ...Event) {
 		mu.Lock()
 		defer mu.Unlock()
+		for i := range es {
+			es[i].At = time.Now().Unix() // the in-memory copy needs timestamps too (e.g. for created_at)
+		}
 		events = append(events, es...)
 		if save {
 			if err := store.Append(info.RunID, es...); err != nil {

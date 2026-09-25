@@ -82,25 +82,28 @@ class Eval:
                 returned = ctx
             if isinstance(returned, EvalContext):
                 returned = returned.build()
-            if not isinstance(returned, (EvalResult, list)):
+            results = returned if isinstance(returned, list) else [returned]
+            if not all(isinstance(r, EvalResult) for r in results):
                 raise ValueError("Evaluation function must return EvalResult, List[EvalResult], EvalContext, "
                                  f"or None (with a context parameter), got {type(returned).__name__}")
-            results = returned if isinstance(returned, list) else [returned]
-            for i in range(len(results)):
-                for evaluator in p.get("evaluators") or []:
-                    scored = await _call(evaluator, results[i])
-                    if isinstance(scored, EvalResult):
-                        results[i] = scored
-                    elif scored is not None:
-                        results[i].scores += [normalize_score(s, "pass") for s in (scored if isinstance(scored, list) else [scored])]
         except asyncio.TimeoutError:
-            results = [_errored(ctx, f"TimeoutError: Evaluation timed out after {timeout}s")]
+            results = [_errored(ctx, f"TimeoutError: Evaluation timed out after {float(timeout)}s")]
         except AssertionError as e:
             if ctx is None:
                 results = [_errored(None, f"AssertionError: {e}\n{traceback.format_exc()}")]
             else:
                 ctx.store(scores={"passed": False, "notes": str(e) or "Assertion failed"})
                 results = [ctx.build()]
+        except Exception as e:
+            results = [_errored(ctx, f"{type(e).__name__}: {e}\n{traceback.format_exc()}")]
+        try:  # evaluators score every finished result, including ones a failed assertion scored
+            for i in range(len(results)):
+                for evaluator in [] if results[i].error else p.get("evaluators") or []:
+                    scored = await _call(evaluator, results[i])
+                    if isinstance(scored, EvalResult):
+                        results[i] = scored
+                    elif scored is not None:
+                        results[i].scores += [normalize_score(s, "pass") for s in (scored if isinstance(scored, list) else [scored])]
         except Exception as e:
             results = [_errored(ctx, f"{type(e).__name__}: {e}\n{traceback.format_exc()}")]
         for result in results:
@@ -139,7 +142,7 @@ def expand(fn: EvalFunction, file_defaults: Optional[dict] = None, file: Optiona
             examples = _run_sync(_call(fn.params["input_loader"]))
         except Exception as e:
             return [make(name, base, f"Input loader failed: {e}\n{traceback.format_exc()}")]
-        cases = [ex if isinstance(ex, dict) else {k: getattr(ex, k) for k in PARAMS if hasattr(ex, k)} for ex in examples]
+        cases = [ex if isinstance(ex, dict) else {k: getattr(ex, k) for k in PARAMS | {"id"} if hasattr(ex, k)} for ex in examples]
     elif "cases" in fn.params:
         cases = fn.params["cases"]
     else:

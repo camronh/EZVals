@@ -167,12 +167,12 @@ Scenario: Detail view contents
     - Reference (if set)
     - Scores (with key, value/passed, notes)
     - Metadata (expandable key-value list with formatted labels and clickable links)
-    - Run Data (expandable JSON)
+    - Trace Data (collapsible JSON of trace_data fields other than messages and trace_url)
     - Annotations (editable)
     - Tools used (unique tool names from trace_data.messages tool calls, if present)
     - Spans (count; opens the span waterfall), if any were recorded
     - Latency
-    - Error message (if any)
+    - Error message (if any; a long traceback is capped in height, scrollable and expandable)
 
 Scenario: Message-format data rendering
   Given the detail view is open
@@ -216,11 +216,22 @@ Scenario: Navigate between results
   When the user presses Escape
   Then the user returns to the main table
 
+Scenario: Escape closes an open drawer first
+  Given the Messages or Spans drawer is open
+  When the user presses Escape
+  Then the drawer closes and the user stays on the detail page
+
 Scenario: Detail pane sizes persist in-session
   Given the user is on a detail page
   And the user resizes one or more detail panes
   When the user navigates to another detail result in the same browser session
   Then the resized pane sizes remain applied
+
+Scenario: Detail view on a narrow screen
+  Given the viewport is narrower than 768px
+  When the user opens a detail page
+  Then Input, Reference and Output stack full-width, followed by the sidebar
+  And resize handles are hidden (saved pane sizes still apply on wider screens)
 ```
 
 ---
@@ -290,7 +301,7 @@ Scenario: Keyboard navigation disabled while editing
 - Dataset
 - Labels
 - Metadata
-- Run Data
+- Trace Data
 - Latency
 - Error
 
@@ -306,6 +317,8 @@ Scenario: Edit score from score card
   Then inline edit controls appear for that score
   And boolean scores only show boolean controls
   And value scores only show value controls
+  And scores with both a value and pass/fail show both controls
+  And a typed value that parses as a number (e.g. `.5`, `1e3`) saves as a number; other text saves as text
   And Save/Cancel buttons appear
 
 Scenario: Save score edits
@@ -440,7 +453,8 @@ Scenario: Rename run via inline editing
   And if a dropdown was shown, it hides and the input appears in its place
   And pressing Enter or clicking the checkmark saves the new name
   And pressing Escape or clicking outside cancels the edit
-  And the filename and JSON metadata update on save
+  And the run's saved name updates on save (the run file, named by run id, stays put)
+  And names keep spaces and punctuation; a blank name is rejected
 
 Scenario: Copy session/run name
   When the user clicks on the session or run name in the stats bar
@@ -602,7 +616,7 @@ A request while a run is in progress returns 409.
 | `/api/sessions` | GET | List all session names (from directories) |
 | `/api/sessions/{name}/runs` | GET | List runs in session |
 | `/api/sessions/{name}` | DELETE | Delete entire session and all runs |
-| `/api/runs/{run_id}` | PATCH | Update run metadata (rename updates filename) |
+| `/api/runs/{run_id}` | PATCH | Rename a run (`{"run_name"}`, trimmed; blank is a 400) |
 | `/api/runs/{run_id}` | DELETE | Delete specific run |
 | `/api/runs/{run_id}/activate` | POST | Switch active run to view/edit a different run |
 | `/api/runs/new` | POST | Create a new run with a fresh run_id/run_name (no overwrite) |
@@ -612,7 +626,7 @@ A request while a run is in progress returns 409.
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/config` | GET | Get ezvals.json config |
-| `/api/config` | PUT | Update config |
+| `/api/config` | PUT | Save the Settings keys (`concurrency`, `timeout`, `trials`, `results_dir`, `completion_notifications`): the body replaces them, and a key sent as null or left out goes back to its default. Other keys in ezvals.json (`configs`, `port`, `overwrite`, `verbose`) are kept |
 | `/api/configs` | GET | Config profile names and the active one |
 | `/api/configs/select` | POST | Choose the config profile for the next run |
 
@@ -646,6 +660,13 @@ Scenario: Run not found
 Scenario: Result index out of range
   When GET /runs/{run_id}/results/999
   Then 404: "Result not found"
+
+Scenario: Discovery finds no evals or fails
+  Given the eval path has no evals, or an eval file fails to import
+  When GET /results (or /api/runs/latest/data)
+  Then 200 with the active run's ids and names and no results
+  And `discovery_error` holds the worker's error and traceback when discovery failed
+  And the UI shows it as a banner above the table, keeping the toolbar so the user can fix the file and Reload
 ```
 
 ---
@@ -664,7 +685,7 @@ Each run is an append-only event log at `.ezvals/sessions/<session>/<run_id>.jso
         └── c08e5a93.jsonl   (run_name "gpt5-1")
 ```
 
-- Session = directory name; `run_id` = 8 random hex characters; the run name lives inside the log, so renaming never moves files
+- Session = directory name (letters, digits, `-` and `_`); `run_id` = 8 random hex characters; the run name lives inside the log, so it can hold any text and renaming never moves files
 - Results stream into the log as each eval finishes, so a crashed or stopped run keeps everything that completed
 - **Overwrite behavior:** When `overwrite=true` (default), starting a run with the same session + run name deletes the older run
 
@@ -720,7 +741,7 @@ The API, `ezvals run --json` and `ezvals export -f json` present a run as:
 }
 ```
 
-`trial`, `trial_of`, `span_count` and `regradable` appear only when they apply; runs with trials also carry `trials`, `pass_at_k` and `pass_all_k`. The single-result endpoint (`/api/runs/{run_id}/results/{index}`) adds the row's `spans`. `created_at` is when the run last started running (unix seconds). `/results` and `/api/runs/{run_id}/data` add `score_chips`, `eval_path`, and for the active run `is_paused` and `selected_total`.
+`trial`, `trial_of`, `span_count` and `regradable` appear only when they apply; runs with trials also carry `trials`, `pass_at_k` and `pass_all_k`. The single-result endpoint (`/api/runs/{run_id}/results/{index}`) adds the row's `spans`. `created_at` is when the run last started running (unix seconds). `/results` and `/api/runs/{run_id}/data` add `score_chips`, `eval_path`, and for the active run `is_paused`, `selected_total`, and `discovery_error` (only when discovering the evals failed). `span_count` counts the spans the eval recorded, not the root span the SDK wraps each eval in.
 
 ---
 

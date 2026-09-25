@@ -154,3 +154,29 @@ def test_run_matches_the_cli(tmp_path: Path, monkeypatch):
     assert not (tmp_path / "ezvals.json").exists()
     with pytest.raises(ValueError, match="Path missing.py does not exist"):
         run("missing.py")
+
+
+def test_every_eval_reports_a_result_even_when_its_output_cannot_be_sent(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "evals.py").write_text('''
+import threading
+from ezvals import eval, EvalContext
+
+@eval
+def circular(ctx: EvalContext):
+    ctx.output = {}
+    ctx.output["self"] = ctx.output
+
+@eval
+def lock(ctx: EvalContext):
+    ctx.output = threading.Lock()
+
+@eval
+def not_results():
+    return [1, 2]
+''')
+    rows = {row["function"]: row["result"] for row in run("evals.py", no_save=True, timeout=10)["results"]}
+    assert rows["circular"]["error"].startswith("ValueError: Circular reference detected")
+    assert rows["lock"]["output"].startswith("<unlocked _thread.lock")
+    assert rows["not_results"]["error"].startswith("ValueError: Evaluation function must return")
+    assert run("evals.py::missing", no_save=True)["results"] == []

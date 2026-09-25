@@ -157,6 +157,7 @@ Scenario: Rename an existing run by ID
   Given run "run123" exists
   When the user runs `ezvals run --rename run123 better-name`
   Then the run's `run_name` becomes "better-name"
+  (Run names are trimmed and may contain spaces and punctuation; session names keep only letters, digits, `-` and `_`)
 
 Scenario: Rename run not found
   When the user runs `ezvals run --rename missing-id better-name`
@@ -351,6 +352,7 @@ Scenario: Export to Markdown
 |------|---------|
 | 0 | Evaluations completed (regardless of pass/fail) |
 | 1 | Invalid arguments, path does not exist, or an eval file failed to import |
+| 2 | Usage error: unknown command or flag (the usage is printed) |
 
 **Note:** Failed evaluations do NOT cause non-zero exit. Check JSON output for pass/fail status.
 
@@ -432,6 +434,7 @@ Scenario: Invalid path type
 Scenario: No evaluations found
   When running on a file with no @eval functions
   Then output: "No evaluations found"
+  And with --json or --no-save, stdout is the run JSON with no results
   And exit code: 0
 
 Scenario: Concurrency set to zero

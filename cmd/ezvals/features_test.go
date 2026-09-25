@@ -2,7 +2,12 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
@@ -106,5 +111,34 @@ func TestQueryOverRuns(t *testing.T) {
 	db.QueryRow(`SELECT json_extract(attributes, '$.tokens'), duration_ms FROM spans`).Scan(&tokens, &ms)
 	if runName != "baseline" || passedRows != 1 || scoreRows != 2 || tokens != 7 || ms != 2 {
 		t.Fatalf("run=%q passed=%d scores=%d tokens=%v ms=%v", runName, passedRows, scoreRows, tokens, ms)
+	}
+}
+
+func TestMarkdownTablesHaveOneDelimiterPerColumn(t *testing.T) {
+	rows := materialize([]Event{manifest("a"), result("a", "x", true)}).Results
+	single := renderMarkdown("r", "", rows, nil, runStats(rows, 1))
+	comparison := renderComparisonMarkdown([]ComparisonRun{{RunID: "1", RunName: "one", Results: rows}, {RunID: "2", RunName: "two", Results: rows}}, "")
+	for _, md := range []string{single, comparison} {
+		lines := strings.Split(md, "\n")
+		for i, line := range lines {
+			if strings.HasPrefix(line, "|---") && strings.Count(line, "|") != strings.Count(lines[i-1], "|") {
+				t.Fatalf("delimiter row %q doesn't match header %q", line, lines[i-1])
+			}
+		}
+	}
+}
+
+func TestRunJSONHasCreatedAtNamesAndIsPrintedWithNoEvals(t *testing.T) {
+	root, binary := buildBinary(t)
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "evals.py"), []byte("from ezvals import eval\n\n@eval\ndef ok(ctx):\n    pass\n"), 0o644)
+	for _, args := range [][]string{{"evals.py", "--no-save"}, {"evals.py", "--json"}, {"evals.py::missing", "--no-save"}, {"evals.py", "--json", "--session", "测试", "--run-name", "!!"}} {
+		cmd := exec.Command(binary, append([]string{"run"}, args...)...)
+		cmd.Dir, cmd.Env = dir, sdkEnv(root)
+		out, err := cmd.Output()
+		var run Run
+		if err != nil || json.Unmarshal(out, &run) != nil || run.CreatedAt == 0 || run.SessionName == "" || run.RunName == "" {
+			t.Fatalf("%v: err=%v\n%s", args, err, out)
+		}
 	}
 }

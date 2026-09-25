@@ -3,7 +3,6 @@
     "function": "passes",
     "dataset": "basics",
     "labels": [],
-    "span_count": 1,
     "status": "completed",
     "input": "hi",
     "output": "hello",
@@ -21,7 +20,6 @@
     "function": "assertion_fails",
     "dataset": "basics",
     "labels": [],
-    "span_count": 1,
     "status": "completed",
     "input": "x",
     "output": "y",
@@ -40,7 +38,6 @@
     "function": "raises",
     "dataset": "basics",
     "labels": [],
-    "span_count": 1,
     "status": "error",
     "input": null,
     "output": "partial",
@@ -54,7 +51,6 @@
     "function": "stores_scores",
     "dataset": "basics",
     "labels": [],
-    "span_count": 1,
     "status": "completed",
     "input": null,
     "output": null,
@@ -81,7 +77,6 @@
     "function": "custom_score_key",
     "dataset": "basics",
     "labels": [],
-    "span_count": 1,
     "status": "completed",
     "input": null,
     "output": 1,
@@ -99,7 +94,6 @@
     "function": "metadata_and_trace",
     "dataset": "basics",
     "labels": [],
-    "span_count": 1,
     "status": "completed",
     "input": null,
     "output": null,
@@ -131,7 +125,6 @@
     "labels": [
       "x"
     ],
-    "span_count": 1,
     "status": "completed",
     "input": null,
     "output": {
@@ -157,7 +150,6 @@
     "function": "returns_results",
     "dataset": "basics",
     "labels": [],
-    "span_count": 1,
     "status": "completed",
     "input": 1,
     "output": 2,
@@ -175,7 +167,6 @@
     "function": "returns_results",
     "dataset": "basics",
     "labels": [],
-    "span_count": 1,
     "status": "completed",
     "input": 3,
     "output": 4,
@@ -193,7 +184,6 @@
     "function": "times_out",
     "dataset": "basics",
     "labels": [],
-    "span_count": 1,
     "status": "error",
     "input": null,
     "output": "started",
@@ -207,7 +197,6 @@
     "function": "uses_target",
     "dataset": "basics",
     "labels": [],
-    "span_count": 1,
     "status": "completed",
     "input": null,
     "output": "from target",
@@ -225,7 +214,6 @@
     "function": "uses_evaluator",
     "dataset": "basics",
     "labels": [],
-    "span_count": 1,
     "status": "completed",
     "input": null,
     "output": "ok",
@@ -240,6 +228,58 @@
         "passed": false
       }
     ],
+    "metadata": {},
+    "trace_data": {}
+  },
+  {
+    "function": "returns_false_score",
+    "dataset": "basics",
+    "labels": [],
+    "status": "completed",
+    "input": 1,
+    "output": 2,
+    "reference": null,
+    "scores": [
+      {
+        "key": "pass",
+        "passed": false
+      }
+    ],
+    "metadata": {},
+    "trace_data": {}
+  },
+  {
+    "function": "evaluator_after_assertion",
+    "dataset": "basics",
+    "labels": [],
+    "status": "completed",
+    "input": null,
+    "output": "x",
+    "reference": null,
+    "scores": [
+      {
+        "key": "pass",
+        "passed": false,
+        "notes": "failed first"
+      },
+      {
+        "key": "judge",
+        "passed": true
+      }
+    ],
+    "metadata": {},
+    "trace_data": {}
+  },
+  {
+    "function": "blocks_past_timeout",
+    "dataset": "basics",
+    "labels": [],
+    "status": "error",
+    "input": null,
+    "output": "started",
+    "reference": null,
+    "scores": [],
+    "error": "TimeoutError: Evaluation timed out after 0.2s",
     "metadata": {},
     "trace_data": {}
   }

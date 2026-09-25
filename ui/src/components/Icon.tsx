@@ -37,6 +37,9 @@ export function IconSprite() {
         <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
         <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
       </symbol>
+      <symbol id="icon-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"></path>
+      </symbol>
       <symbol id="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <line x1="18" y1="6" x2="6" y2="18"></line>
         <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -132,7 +135,7 @@ export function IconSprite() {
 
 export type IconName = 'search' | 'filter' | 'grid' | 'gear' | 'refresh' | 'play' | 'stop' | 'github' | 'doc' | 'close' | 'sun'
   | 'moon' | 'download' | 'chevron-up' | 'chevron-down' | 'chevron-right' | 'copy' | 'check' | 'pencil' | 'plus' | 'compare'
-  | 'pause' | 'message' | 'trace' | 'target' | 'rerun' | 'arrow-left' | 'external' | 'alert' | 'more'
+  | 'pause' | 'message' | 'trace' | 'target' | 'rerun' | 'arrow-left' | 'external' | 'alert' | 'more' | 'trash'
 
 export function Icon({ name, className = 'h-3.5 w-3.5' }: { name: IconName; className?: string }) {
   return (

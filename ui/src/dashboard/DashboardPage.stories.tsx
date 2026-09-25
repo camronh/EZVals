@@ -19,6 +19,16 @@ export const Running: Story = { parameters: { msw: { handlers: apiHandlers(runni
 export const Paused: Story = { parameters: { msw: { handlers: apiHandlers(pausedRun) } } }
 export const Trials: Story = { parameters: { msw: { handlers: apiHandlers(trialsRun) } } }
 export const Empty: Story = { parameters: { msw: { handlers: apiHandlers(emptyRun, []) } } }
+export const ImportError: Story = {
+  parameters: {
+    msw: {
+      handlers: apiHandlers({
+        ...emptyRun,
+        discovery_error: 'Traceback (most recent call last):\n  File "evals/support.py", line 3, in <module>\n    import not_a_real_module\nModuleNotFoundError: No module named \'not_a_real_module\'',
+      }, []),
+    },
+  },
+}
 export const FilteredFromUrl: Story = {
   args: { query: readQuery(new URLSearchParams('search=refund&dataset_in=support&has_error=0')) },
   parameters: { msw: { handlers: apiHandlers(completedRun) } },

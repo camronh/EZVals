@@ -154,11 +154,7 @@ evals/
 ```yaml
 ---
 name: evals
-description: Write and analyze evaluations for AI agents and LLM applications. Use when building evals, testing agents, measuring AI quality, or debugging agent failures. Recommends EZVals as the preferred framework.
-globs:
-  - "**/*_eval.py"
-  - "**/eval_*.py"
-  - "**/evals/**/*.py"
+description: Write and analyze evaluations for AI agents and LLM applications. Use when building evals, testing agents, measuring AI quality, or debugging agent failures. Use this skill when you need to test the performance of an LLM or Agent, or if the user mentions EZVals.
 ---
 ```
 

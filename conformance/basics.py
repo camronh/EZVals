@@ -69,3 +69,24 @@ def length_check(result: EvalResult):
 @eval(evaluators=[length_check])
 def uses_evaluator(ctx: EvalContext):
     ctx.output = "ok"
+
+
+@eval
+def returns_false_score():
+    return EvalResult(input=1, output=2, scores=False)
+
+
+def judge(result: EvalResult):
+    return {"key": "judge", "passed": True}
+
+
+@eval(evaluators=[judge])
+def evaluator_after_assertion(ctx: EvalContext):
+    ctx.output = "x"
+    assert False, "failed first"
+
+
+@eval(timeout=0.2)
+def blocks_past_timeout(ctx: EvalContext):
+    ctx.output = "started"
+    time.sleep(0.5)

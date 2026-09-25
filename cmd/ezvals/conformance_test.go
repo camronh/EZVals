@@ -87,11 +87,19 @@ func TestConformanceRegrade(t *testing.T) {
 			first := ezvals([]string{"TARGET_OUTPUT=a"}, "run", filepath.Join(root, "conformance", file+"::graded"), "--json")
 			regraded := ezvals([]string{"TARGET_OUTPUT=b", "EXPECTED=z"}, "regrade", first.RunID, "--json")
 			before, after := first.Results[0], regraded.Results[0]
-			if !*before.Result.Scores[0].Passed || before.SpanCount != 2 {
-				t.Fatalf("first run: %+v", before)
+			if !*before.Result.Scores[0].Passed || before.SpanCount != 1 {
+				t.Fatalf("first run counts the target's span, not the SDK's root span: %+v", before)
 			}
-			if after.Result.Output != "a" || *after.Result.Scores[0].Passed || after.SpanCount != 3 || *after.Result.Latency != *before.Result.Latency {
-				t.Fatalf("regrade should keep the output, latency and target spans, add a grade span, and fail against EXPECTED=z: %+v", after)
+			if after.Result.Output != "a" || *after.Result.Scores[0].Passed || after.SpanCount != 1 || *after.Result.Latency != *before.Result.Latency {
+				t.Fatalf("regrade should keep the output, latency and target spans, and fail against EXPECTED=z: %+v", after)
+			}
+			stored, _ := openStore(filepath.Join(dir, ".ezvals", "sessions")).Load(first.RunID)
+			var names []string
+			for _, s := range stored.SpansFor(after.ID) {
+				names = append(names, s.Name)
+			}
+			if strings.Join(names, ",") != "chat,eval graded,grade graded" {
+				t.Fatalf("root spans stay stored for the waterfall: %v", names)
 			}
 		})
 	}

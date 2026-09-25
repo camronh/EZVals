@@ -36,3 +36,15 @@ test("errors that are not assertions keep partial output", async () => {
   assert.match(result.error!, /^TypeError: nope\n/);
   assert.deepEqual(result.scores, []);
 });
+
+test("return values that aren't results, and bad evaluator scores, are errors", async () => {
+  const evals = await register("x.eval.ts", () => {
+    evaluate("string", () => "nope");
+    evaluate("numbers", () => [1, 2]);
+    evaluate("bad_score", { evaluators: [() => ({ key: "bad" })] }, (ctx) => { ctx.output = "x"; });
+  });
+  const errors = await Promise.all(evals.map(async (e) => (await runEval(e))[0].error));
+  assert.match(errors[0]!, /^Error: Evaluation function must return .* got string/);
+  assert.match(errors[1]!, /got array/);
+  assert.match(errors[2]!, /^Error: Either 'value' or 'passed' must be provided in score/);
+});

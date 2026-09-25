@@ -51,7 +51,7 @@ class EvalResult:
     trace_data: TraceData = field(default_factory=TraceData)
 
     def __post_init__(self):
-        scores = self.scores if isinstance(self.scores, list) else [self.scores] if self.scores else []
+        scores = self.scores if isinstance(self.scores, list) else [] if self.scores is None else [self.scores]
         self.scores = [normalize_score(s, "pass") for s in scores]
         self.metadata = self.metadata or {}
         self.trace_data = TraceData(self.trace_data or {})

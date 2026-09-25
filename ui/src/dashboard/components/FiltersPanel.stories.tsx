@@ -45,6 +45,6 @@ export const CyclePill: Story = {
     await userEvent.click(pill)
     await expect(within(canvasElement).getByText('support', { selector: '#active-filters *' })).toBeVisible()
     await userEvent.click(pill)
-    await expect(within(canvasElement).getByText('x support')).toBeVisible()
+    await expect(within(canvasElement).getByText('not support')).toBeVisible()
   },
 }

@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { Config } from '../../types'
 import { Icon } from '../../components/Icon'
+import { useDismiss } from '../../hooks/useDismiss'
 
 type Props = {
   config: Config
@@ -16,6 +17,8 @@ const inputClass = 'rounded border border-theme-border bg-theme-bg-secondary px-
 const optionalNumber = (value: string) => (value.trim() === '' ? undefined : Number(value))
 
 export function SettingsModal({ config, configNames, activeConfig, onConfigSelect, onToggleTheme, onSave, onClose }: Props) {
+  const panel = useRef<HTMLDivElement | null>(null)
+  useDismiss(true, [panel], onClose)
   const [form, setForm] = useState({
     concurrency: String(config.concurrency ?? ''),
     timeout: String(config.timeout ?? ''),
@@ -31,8 +34,8 @@ export function SettingsModal({ config, configNames, activeConfig, onConfigSelec
   )
   return (
     <div id="settings-modal" className="fixed inset-0 z-50">
-      <div id="settings-backdrop" className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="absolute left-1/2 top-1/2 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-lg border border-theme-border bg-theme-bg p-4 shadow-xl">
+      <div id="settings-backdrop" className="absolute inset-0 bg-black/60" />
+      <div ref={panel} className="absolute left-1/2 top-1/2 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-lg border border-theme-border bg-theme-bg p-4 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <span className="text-sm font-medium text-theme-text">Settings</span>
           <button id="settings-close" className="text-theme-text-muted hover:text-theme-text-secondary" onClick={onClose}><Icon name="close" className="h-4 w-4" /></button>
@@ -76,7 +79,7 @@ export function SettingsModal({ config, configNames, activeConfig, onConfigSelec
             </div>
           ) : null}
           <label className="flex cursor-pointer items-center justify-between gap-3">
-            <span className="text-theme-text-muted">Notifications</span>
+            <span className="text-theme-text-muted">Completion notifications + sound</span>
             <input id="settings-completion-notifications" type="checkbox" checked={form.completion_notifications} onChange={(e) => setForm({ ...form, completion_notifications: e.target.checked })} />
           </label>
           <div className="flex justify-end gap-2 border-t border-theme-border pt-3">

@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties, MouseEvent, ReactNode } from 'react'
 import { CopyButton } from '../../components/CopyButton'
 import { DataViewer } from '../../components/DataViewer'
@@ -5,9 +6,9 @@ import { Icon } from '../../components/Icon'
 import { getRawText } from '../../lib/format'
 
 const TONES = {
-  input: ['border-blue-100 bg-blue-50/50 dark:border-zinc-800/60 dark:bg-zinc-900/50', 'text-blue-600 dark:text-blue-400', 'bg-white dark:bg-zinc-900/30', 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'],
-  reference: ['border-amber-200/40 bg-amber-50/50 dark:border-amber-500/10 dark:bg-amber-500/5', 'text-amber-600 dark:text-amber-400', 'bg-amber-50/30 dark:bg-amber-500/5', 'text-amber-500 hover:text-amber-700 dark:hover:text-amber-300'],
-  output: ['border-blue-100 bg-emerald-50/50 dark:border-zinc-800/60 dark:bg-zinc-900/50', 'text-emerald-600 dark:text-emerald-400', 'bg-white dark:bg-zinc-900/30', 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'],
+  input: ['border-blue-100 bg-blue-50/50 dark:border-zinc-800/60 dark:bg-zinc-900/50', 'text-blue-600 dark:text-blue-400', 'bg-white dark:bg-zinc-900/30', 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300'],
+  reference: ['border-amber-200/40 bg-amber-50/50 dark:border-amber-500/10 dark:bg-amber-500/5', 'text-amber-600 dark:text-amber-400', 'bg-amber-50/30 dark:bg-amber-500/5', 'text-amber-600 hover:text-amber-800 dark:text-amber-500 dark:hover:text-amber-300'],
+  output: ['border-blue-100 bg-emerald-50/50 dark:border-zinc-800/60 dark:bg-zinc-900/50', 'text-emerald-600 dark:text-emerald-400', 'bg-white dark:bg-zinc-900/30', 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300'],
 }
 
 /** A titled, copyable view of one value (input, reference or output). */
@@ -41,19 +42,39 @@ export function DataPanel({ id, tone, value, loading, className = 'flex-1', styl
   )
 }
 
+/** A drag handle between panes; hidden on narrow screens, where panes stack instead. */
 export function ResizeHandle({ direction, onMouseDown }: { direction: 'row' | 'col'; onMouseDown: (e: MouseEvent) => void }) {
   return direction === 'col'
-    ? <div className="resize-handle-v w-1 flex-shrink-0 cursor-col-resize bg-transparent transition-colors hover:bg-blue-500/30" onMouseDown={onMouseDown} />
-    : <div className="resize-handle-h h-1 flex-shrink-0 cursor-row-resize bg-transparent transition-colors hover:bg-blue-500/30" onMouseDown={onMouseDown} />
+    ? <div className="resize-handle-v max-md:hidden w-1 flex-shrink-0 cursor-col-resize bg-transparent transition-colors hover:bg-blue-500/30" onMouseDown={onMouseDown} />
+    : <div className="resize-handle-h max-md:hidden h-1 flex-shrink-0 cursor-row-resize bg-transparent transition-colors hover:bg-blue-500/30" onMouseDown={onMouseDown} />
 }
 
+const LONG_ERROR_LINES = 8
+
+/**
+ * The result's error, capped in height so a long traceback doesn't push the panels off screen; "Expand" gives it more room.
+ * A Python traceback opens scrolled to its end, where the exception is.
+ */
 export function ErrorBanner({ error }: { error: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const pre = useRef<HTMLPreElement>(null)
+  const long = error.split('\n').length > LONG_ERROR_LINES
+  useLayoutEffect(() => {
+    if (pre.current && error.startsWith('Traceback')) pre.current.scrollTop = pre.current.scrollHeight
+  }, [error])
   return (
     <div className="flex-shrink-0 border-b border-rose-200 bg-rose-50 px-4 py-2 dark:border-rose-500/30 dark:bg-rose-500/10">
       <div className="flex items-start gap-2 text-sm">
         <span className="mt-0.5 shrink-0 text-rose-500"><Icon name="alert" /></span>
-        <pre id="data-error" className="flex-1 whitespace-pre-wrap font-mono text-xs text-rose-600 dark:text-rose-300">{error}</pre>
-        <CopyButton text={() => error} className="shrink-0 text-rose-400 hover:text-rose-600" />
+        <div className="min-w-0 flex-1">
+          <pre ref={pre} id="data-error" className={`overflow-auto whitespace-pre-wrap break-words font-mono text-xs text-rose-700 dark:text-rose-300 ${expanded ? 'max-h-[70vh]' : 'max-h-[30vh]'}`}>{error}</pre>
+          {long ? (
+            <button type="button" className="mt-1 text-[11px] font-medium text-rose-700 hover:underline dark:text-rose-300" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>
+              {expanded ? 'Collapse' : 'Expand'}
+            </button>
+          ) : null}
+        </div>
+        <CopyButton text={() => error} className="shrink-0 text-rose-500 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300" />
       </div>
     </div>
   )
@@ -64,8 +85,8 @@ export function Drawer({ id, title, count, open, onClose, children }: { id: stri
   return (
     <div id={id} className={`fixed bottom-0 right-0 top-0 z-50 border-l border-zinc-200 bg-white shadow-xl transition-transform duration-200 dark:border-zinc-700 dark:bg-zinc-900 ${open ? '' : 'translate-x-full'}`} style={{ width: 700, maxWidth: '100vw' }}>
       <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-2 dark:border-zinc-700">
-        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">{title} <span className="text-zinc-400">({count})</span></span>
-        <button onClick={onClose} className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800" title="Close"><Icon name="close" className="h-4 w-4" /></button>
+        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">{title} <span className="text-zinc-500 dark:text-zinc-400">({count})</span></span>
+        <button onClick={onClose} className="rounded p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" title="Close"><Icon name="close" className="h-4 w-4" /></button>
       </div>
       <div className="h-[calc(100%-41px)] overflow-auto">{open ? children : null}</div>
     </div>

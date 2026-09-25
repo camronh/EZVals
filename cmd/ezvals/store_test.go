@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -167,6 +168,27 @@ func TestFilterEvals(t *testing.T) {
 	for _, c := range cases {
 		if got := ids(filterEvals(evals, c.datasets, c.labels, c.selectors)); !slices.Equal(got, c.want) {
 			t.Errorf("filter(%q, %v, %v) = %v, want %v", c.datasets, c.labels, c.selectors, got, c.want)
+		}
+	}
+}
+
+func TestScoreEditReplacesScoresAndKeepsBefore(t *testing.T) {
+	original := Event{Type: "result", ID: "a", Results: []Result{{Scores: []Score{{Key: "pass", Value: 0.9, Notes: ptr("judge")}}}}}
+	run := materialize([]Event{manifest("a"), original,
+		{Type: "edit", ID: "a", Field: "scores", Value: json.RawMessage(`[{"key":"pass","passed":true}]`)}})
+	r := run.Results[0].Result
+	if len(r.Scores) != 1 || r.Scores[0].Value != nil || r.Scores[0].Notes != nil || !*r.Scores[0].Passed {
+		t.Fatalf("the edit should replace the score, not merge into it: %+v", r.Scores)
+	}
+	if before := r.CorrectionHistory[0].Before.([]Score); before[0].Value != 0.9 || *before[0].Notes != "judge" || before[0].Passed != nil {
+		t.Fatalf("before should be the original scores: %+v", before)
+	}
+}
+
+func TestCleanRunName(t *testing.T) {
+	for in, want := range map[string]string{"  baseline run! ": "baseline run!", "   ": "", "a\tb\nc": "abc", strings.Repeat("x", 150): strings.Repeat("x", 100)} {
+		if got := cleanRunName(in); got != want {
+			t.Errorf("cleanRunName(%q) = %q, want %q", in, got, want)
 		}
 	}
 }

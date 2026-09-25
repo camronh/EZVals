@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"embed"
 	"encoding/json"
 	"errors"
@@ -39,6 +40,7 @@ type Server struct {
 	activeID      string
 	configName    string
 	discovered    []Eval
+	discoveryErr  string // why discovery found nothing: the worker's error, e.g. an eval file that fails to import
 	exec          *Execution
 	selectedTotal *int
 	tracesBase    string // this server's URL; SDKs export spans to its /otlp endpoint
@@ -71,7 +73,7 @@ func serveCmd(args []string) {
 	annotation := fs.String("annotation", "any", "initial annotation filter: any, yes or no")
 	autoRun := fs.Bool("run", false, "run all evals on startup")
 	noOpen := fs.Bool("no-open", false, "do not open a browser")
-	fs.Bool("open", true, "open a browser (default)")
+	open := fs.Bool("open", true, "open a browser (default)")
 	configName := fs.String("config", "", "named config profile from ezvals.json")
 	query := url.Values{}
 	for _, name := range []string{"has-error", "has-url", "has-messages"} {
@@ -93,13 +95,13 @@ func serveCmd(args []string) {
 	if _, err := cfg.profile(*configName); err != nil {
 		fatal("%v", err)
 	}
-	if *session == "" {
+	if *session = sanitize(*session); *session == "" {
 		*session = friendlyName()
 	}
-	if *runName == "" {
+	if *runName = cleanRunName(*runName); *runName == "" {
 		*runName = *configName
 	}
-	s := &Server{store: openStore(cfg.sessionsDir()), session: sanitize(*session), configName: *configName}
+	s := &Server{store: openStore(cfg.sessionsDir()), session: *session, configName: *configName}
 
 	target := positional[0]
 	if info, err := os.Stat(target); err == nil && !info.IsDir() && (strings.HasSuffix(target, ".jsonl") || strings.HasSuffix(target, ".json")) {
@@ -134,7 +136,7 @@ func serveCmd(args []string) {
 				fatal("--compare-runs needs 2 to 4 run names.")
 			}
 			for _, name := range names {
-				run, err := s.store.FindByName(s.session, strings.TrimSpace(name))
+				run, err := s.store.FindByName(s.session, cleanRunName(name))
 				if err != nil || run == nil {
 					fatal("Run name '%s' not found in session '%s'.", name, s.session)
 				}
@@ -186,7 +188,7 @@ func serveCmd(args []string) {
 		fmt.Printf("Found %d evaluation(s). Click Run to start.\n", len(s.discovered))
 	}
 	fmt.Println("Press Ctrl+C to stop")
-	if !*noOpen {
+	if *open && !*noOpen {
 		openBrowser(address)
 	}
 	go http.Serve(listener, s.routes())
@@ -241,12 +243,13 @@ func (s *Server) switchTo(id string) error {
 
 // discover lists the evals at the eval path without running them.
 func (s *Server) discover() {
-	s.discovered = nil
+	s.discovered, s.discoveryErr = nil, ""
 	if s.path == "" {
 		return
 	}
 	workers, evals, err := startWorkers(s.path, RunInfo{}, false)
 	if err != nil {
+		s.discoveryErr = err.Error()
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return
 	}
@@ -263,13 +266,10 @@ func (s *Server) filter(evals []Eval) []Eval {
 	return filterEvals(evals, s.dataset, s.labels, selectors)
 }
 
-// activeRun is the active run from disk, or a not-started view of the discovered evals.
+// activeRun is the active run from disk, or a not-started view of the discovered evals (possibly none).
 func (s *Server) activeRun() (*Run, error) {
 	if run, err := s.store.Load(s.activeID); err == nil {
 		return run, nil
-	}
-	if len(s.discovered) == 0 {
-		return nil, fail(404, "Run not found")
 	}
 	return materialize([]Event{
 		{Type: "run", RunID: s.activeID, SessionName: s.session, RunName: s.runName, Path: s.path},
@@ -307,10 +307,7 @@ func (s *Server) run(rows []int, configName *string) error {
 	if err == nil && configName != nil && *configName != "" && *configName != existing.ConfigName {
 		s.activeID, s.runName, existing = newRunID(), *configName, nil
 	}
-	current, err := s.activeRun()
-	if err != nil && len(rows) > 0 {
-		return fail(400, "No results available to run. Check that your eval files import correctly.")
-	}
+	current, _ := s.activeRun()
 	var ids []string
 	for _, i := range rows {
 		if i < 0 || i >= len(current.Results) {
@@ -480,7 +477,11 @@ func (s *Server) routes() http.Handler {
 		return run, i, nil
 	}
 	withChips := func(run *Run) map[string]any {
-		return map[string]any{"score_chips": scoreChips(run.Results), "eval_path": run.Path}
+		extra := map[string]any{"score_chips": scoreChips(run.Results), "eval_path": run.Path}
+		if run.RunID == s.activeID && s.discoveryErr != "" {
+			extra["discovery_error"] = s.discoveryErr
+		}
+		return extra
 	}
 	merge := func(run *Run, extra map[string]any) map[string]any {
 		out := map[string]any{}
@@ -594,7 +595,7 @@ func (s *Server) routes() http.Handler {
 		if s.path == "" {
 			return nil, fail(400, "New run unavailable: missing eval path")
 		}
-		s.runName = body.RunName
+		s.runName = cleanRunName(body.RunName)
 		if s.runName == "" {
 			s.runName = s.configName
 		}
@@ -692,7 +693,10 @@ func (s *Server) routes() http.Handler {
 		if err := decode(r, &body); err != nil {
 			return nil, err
 		}
-		id, name := r.PathValue("id"), sanitize(body.RunName)
+		id, name := r.PathValue("id"), cleanRunName(body.RunName)
+		if name == "" {
+			return nil, fail(400, "Run name cannot be blank")
+		}
 		if err := s.store.Append(id, Event{Type: "renamed", RunName: name}); err != nil {
 			return nil, fail(404, "Run not found")
 		}
@@ -708,8 +712,8 @@ func (s *Server) routes() http.Handler {
 		if err := decode(r, &body); err != nil {
 			return nil, err
 		}
-		if body.RunName != "" {
-			s.runName = sanitize(body.RunName)
+		if name := cleanRunName(body.RunName); name != "" {
+			s.runName = name
 			// A run created by "New run" but not started yet already has a file: rename it too.
 			s.store.Append(s.activeID, Event{Type: "renamed", RunName: s.runName})
 		}
@@ -725,10 +729,21 @@ func (s *Server) routes() http.Handler {
 
 	handle("GET /api/config", func(r *http.Request) (any, error) { return loadConfig(), nil })
 	handle("PUT /api/config", func(r *http.Request) (any, error) {
-		cfg := loadConfig()
-		if err := decode(r, &cfg); err != nil {
+		// The body replaces the settings the UI edits; a key that is null or missing goes back to its default.
+		// Other keys in ezvals.json (configs, port, overwrite, verbose) are kept.
+		var body struct {
+			Concurrency             int     `json:"concurrency"`
+			Timeout                 float64 `json:"timeout"`
+			Trials                  int     `json:"trials"`
+			ResultsDir              string  `json:"results_dir"`
+			CompletionNotifications bool    `json:"completion_notifications"`
+		}
+		if err := decode(r, &body); err != nil {
 			return nil, err
 		}
+		cfg, defaults := loadConfig(), defaultConfig()
+		cfg.Concurrency, cfg.Timeout, cfg.Trials = cmp.Or(body.Concurrency, defaults.Concurrency), body.Timeout, body.Trials
+		cfg.ResultsDir, cfg.CompletionNotifications = cmp.Or(body.ResultsDir, defaults.ResultsDir), body.CompletionNotifications
 		return map[string]any{"ok": true, "config": cfg}, cfg.save()
 	})
 	handle("GET /api/configs", func(r *http.Request) (any, error) {

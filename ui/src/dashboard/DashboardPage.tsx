@@ -5,7 +5,7 @@ import { Toasts, useToasts } from '../components/Toasts'
 import { useDebouncedValue, useLocalState, useSessionState } from '../hooks/storage'
 import { buildComparison } from '../lib/comparison'
 import { defaultFilters, matchesFilters } from '../lib/filters'
-import { statsFor, summarizeStats } from '../lib/stats'
+import { statsFor, summarizeStats, trialStats } from '../lib/stats'
 import { COLUMNS, COLUMN_KEYS, DEFAULT_HIDDEN_COLUMNS, comparisonSearchText, filterable, sortBy, sortValue, tableRows, toggleSort } from '../lib/table'
 import { writeQuery, type DashboardQuery } from '../lib/urlState'
 import { ComparisonTable, type ComparisonRow } from './components/ComparisonTable'
@@ -132,12 +132,15 @@ export function DashboardPage({ query }: { query: DashboardQuery }) {
   if (error && !data) return <div className="p-4 text-theme-text-muted">Failed to load results. Please refresh the page.</div>
   if (!data) return <div className="flex h-screen items-center justify-center text-theme-text-muted">Loading...</div>
 
-  const stats = summarizeStats(data)
-  const filtered = filtering && !comparison.comparing ? statsFor(rows.map((r) => r.row)) : null
+  const summary = summarizeStats(data)
+  const visibleRows = rows.map((r) => r.row)
+  const filtered = filtering && !comparison.comparing ? statsFor(visibleRows, summary.chips.map((c) => c.key)) : null
+  const trial = trialStats(filtered ? visibleRows : data.results)
+  const stats = { ...summary, totalErrors: filtered?.errors ?? summary.totalErrors, trials: trial?.k, passAtK: trial?.passAtK, passAllK: trial?.passAllK }
   const visibleKeys = new Set(comparisonRows.map((r) => r.key))
   const comparisonStats = Object.fromEntries(comparison.runs.map((run) => [
     run.runId,
-    statsFor(comparisonRows.flatMap((row) => (row.byRun[run.runId] && visibleKeys.has(row.key) ? [row.byRun[run.runId].row] : []))),
+    statsFor(comparisonRows.flatMap((row) => (row.byRun[run.runId] && visibleKeys.has(row.key) ? [row.byRun[run.runId].row] : [])), summary.chips.map((c) => c.key)),
   ]))
   const selectedIndices = [...selected].sort((a, b) => a - b)
   const runState: RunState = comparison.comparing ? 'compare' : data.is_paused && isActive(data) ? 'paused' : isActive(data) ? 'running' : 'idle'
@@ -206,6 +209,9 @@ export function DashboardPage({ query }: { query: DashboardQuery }) {
         onPauseToggle={() => act(data.is_paused ? api.resume : api.pause, 'Run control failed')}
       />
       <main className="flex-1 overflow-auto px-4 py-4">
+        {data.discovery_error ? (
+          <pre id="discovery-error" className="mb-4 max-h-60 overflow-auto whitespace-pre-wrap rounded border border-rose-500/30 bg-rose-500/10 p-3 font-mono text-xs text-rose-700 dark:text-rose-300">{data.discovery_error}</pre>
+        ) : null}
         <StatsPanel
           stats={stats}
           sessionName={data.session_name}
@@ -216,6 +222,8 @@ export function DashboardPage({ query }: { query: DashboardQuery }) {
           sessionRuns={sessionRuns}
           onRename={(name) => act(() => (data.results.some((r) => r.result.status !== 'not_started') ? api.rename(data.run_id, name) : api.setPendingRunName(name)), 'Rename failed')}
           onRenameRun={(runId, name) => act(() => api.rename(runId, name), 'Rename failed')}
+          onDeleteRun={(runId) => act(() => api.deleteRun(runId), 'Delete failed')}
+          newRunDisabled={runState === 'running' || runState === 'paused'}
           onSelectRun={(runId) => runId !== data.run_id && act(() => api.activate(runId), 'Could not open run')}
           onNewRun={() => act(async () => {
             await api.newRun()
@@ -239,6 +247,7 @@ export function DashboardPage({ query }: { query: DashboardQuery }) {
             onWidths={setWidths}
             onOpen={(index) => { window.location.href = `/runs/${data.run_id}/results/${index}` }}
             onSaveAnnotation={saveAnnotation}
+            emptyText={filtering && data.results.length ? 'No results match the current filters' : undefined}
           />
         )}
       </main>

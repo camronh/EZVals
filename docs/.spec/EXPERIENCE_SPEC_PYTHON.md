@@ -38,7 +38,7 @@ run_data = run(
 # run_data["results"], run_data["total_passed"], run_data["run_id"], run_data["saved_path"], ...
 ```
 
-Parameters mirror the `ezvals run` flags: `path` (may include `::selectors`), `dataset`, `labels`, `limit`, `output`, `concurrency`, `timeout`, `session`, `run_name`, `no_save`, `config`. The return value is the run JSON (see [the web UI spec](./EXPERIENCE_SPEC_WEBUI.md#json-schema)) plus `saved_path`.
+Parameters mirror the `ezvals run` flags: `path` (may include `::selectors`), `dataset`, `labels`, `limit`, `output`, `concurrency`, `timeout`, `trials`, `session`, `run_name`, `no_save`, `config`. The return value is the run JSON (see [the web UI spec](./EXPERIENCE_SPEC_WEBUI.md#json-schema)) plus `saved_path`.
 
 ```gherkin
 Scenario: Programmatic run command
@@ -613,6 +613,15 @@ Scenario: Evaluator returns None
 Scenario: Async evaluator
   Given async def my_evaluator(result)
   Then evaluator is awaited properly
+
+Scenario: Evaluators after a failed assertion
+  Given an eval whose assertion fails
+  Then its evaluators still run and add their scores next to the failing one
+  And evaluators do not run on results with an error
+
+Scenario: Evaluator fails
+  Given an evaluator raises, or returns a score with neither value nor passed
+  Then the result is an error with that message
 ```
 
 **Note:** Decorator evaluators **replace** file-level default evaluators (no merging).
