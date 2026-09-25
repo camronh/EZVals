@@ -1,4 +1,4 @@
-.PHONY: build ui skill-docs host test test-e2e docs setup-skills sync-skill-sandbox
+.PHONY: build ui skill-docs host test test-e2e storybook docs setup-skills sync-skill-sandbox
 
 VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' python/pyproject.toml)
 BINARY := python/ezvals/bin/ezvals
@@ -10,7 +10,10 @@ ui:
 	cd ui && npm ci --silent && npm run build
 
 # The skill ships with a copy of the user docs.
-skill-docs:
+skill-storybook:
+	cd ui && npm run storybook
+
+docs:
 	rm -rf cmd/ezvals/skill/ezvals-docs && mkdir -p cmd/ezvals/skill/ezvals-docs
 	cp docs/introduction.mdx docs/examples/*.mdx docs/core-concepts/*.mdx docs/guides/*.mdx docs/api-reference/*.mdx cmd/ezvals/skill/ezvals-docs/
 	cp docs/setup.mdx cmd/ezvals/skill/ezvals-docs/quickstart.mdx
@@ -25,10 +28,14 @@ test: host
 	go test ./...
 	cd python && uv run pytest -q
 	cd typescript && npm test
+	cd ui && npm run lint && npm run typecheck && npm test
 
 test-e2e: host
 	cd python && uv run playwright install chromium
 	uv run --project python pytest e2e
+
+storybook:
+	cd ui && npm run storybook
 
 docs:
 	cd docs && npx mintlify dev

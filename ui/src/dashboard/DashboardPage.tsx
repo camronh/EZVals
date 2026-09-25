@@ -66,7 +66,7 @@ export function DashboardPage({ query }: { query: DashboardQuery }) {
 
   useEffect(() => {
     if (!data) return
-    const params = writeQuery({ runId: data.run_id, compareRunIds: comparison.runs.map((r) => r.runId), search, searchColumns, filters, sort })
+    const params = writeQuery(new URLSearchParams(window.location.search), { runId: data.run_id, compareRunIds: comparison.runs.map((r) => r.runId), search, searchColumns, filters, sort })
     history.replaceState(null, '', params.size ? `?${params}` : window.location.pathname)
   }, [comparison.runs, data, filters, search, searchColumns, sort])
 

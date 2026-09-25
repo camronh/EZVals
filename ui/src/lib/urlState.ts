@@ -56,8 +56,12 @@ export function readQuery(params: URLSearchParams): DashboardQuery {
   }
 }
 
-export function writeQuery(state: { runId?: string; compareRunIds: string[]; search: string; searchColumns: string[]; filters: FilterState; sort: SortRule[] }) {
-  const params = new URLSearchParams()
+const OWNED = ['run_id', 'compare_run_id', 'search', 'search_col', 'sort', ...FILTER_PARAMS]
+
+/** Updates the dashboard's keys in `current`, leaving any other query parameters alone. */
+export function writeQuery(current: URLSearchParams, state: { runId?: string; compareRunIds: string[]; search: string; searchColumns: string[]; filters: FilterState; sort: SortRule[] }) {
+  const params = new URLSearchParams(current)
+  OWNED.forEach((key) => params.delete(key))
   const f = state.filters
   if (state.runId && state.compareRunIds.length < 2) params.set('run_id', state.runId)
   if (state.compareRunIds.length > 1) state.compareRunIds.forEach((id) => params.append('compare_run_id', id))
