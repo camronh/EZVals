@@ -28,6 +28,6 @@ def run(path: str, dataset: Optional[str] = None, labels: Optional[list] = None,
     args += [arg for label in labels or [] for arg in ("--label", label)]
     args += ["--no-save"] if no_save else []
     proc = subprocess.run(args, capture_output=True, text=True, env={**os.environ, "EZVALS_PYTHON": sys.executable})
-    if proc.returncode != 0:
+    if proc.returncode not in (0, 4):  # 4: no evals matched, which still returns the (empty) run
         raise ValueError(proc.stderr.strip())
     return json.loads(proc.stdout)

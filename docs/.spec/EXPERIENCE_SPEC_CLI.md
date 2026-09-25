@@ -98,22 +98,32 @@ Scenario: Run every eval several times
 ### Output Options
 
 ```gherkin
-Scenario: Default minimal output
+Scenario: Default output
   When the user runs `ezvals run evals/`
-  Then stderr shows only:
-    - "Running {path}"
-    - "Results saved to {file}"
+  Then stderr shows a header with the path, session and run name
+  And one line per eval function as soon as all its results are in, grouped under its file
+  And a failures section, then a summary (see Output Formats)
   And stdout is empty
+
+Scenario: Colors
+  Given stderr is a terminal and NO_COLOR is not set
+  Then outcome marks are colored (✓ green, ✗ red, ◐ yellow, ! magenta) and metadata is dim
+  Otherwise the output is plain text
+
+Scenario: Quiet output
+  When the user runs `ezvals run evals/ -q`
+  Then stderr shows only the summary
 
 Scenario: JSON output for agents and scripts
   When the user runs `ezvals run evals/ --json`
   Then the results are saved as usual
   And stdout is the run JSON (ids, names, totals, results) plus "saved_path"
+  And the human output still goes to stderr, so stdout stays machine-readable
 
 Scenario: Verbose output
   When the user runs `ezvals run evals/ --verbose`
   Then print statements from eval functions appear on stderr
-  And each eval error is printed as it happens
+  And the failures section shows each error's full traceback instead of its first line
 
 Scenario: Custom output path
   When the user runs `ezvals run evals/ --output results.json`
@@ -166,11 +176,49 @@ Scenario: Rename run not found
 
 ### Output Formats
 
-**Minimal (default) Example:**
+**Default Example:**
 ```
-Running evals.py
-Results saved to .ezvals/sessions/default/a1b2c3d4.jsonl
+ezvals run evals/  (session default · run vivid-dragon)
+
+evals/basics.py
+  ✓ capital_pass   0.2s
+  ✗ capital_fail   0.3s
+  ◐ capitals       0.5s  1/2 cases
+  ! crashes        0.0s
+  ◐ flaky          1.2s  1/4 trials  pass@4 ✓  pass^4 ✗
+  ○ similarity     0.1s  sim 0.85
+
+── failures ──
+✗ capital_fail  evals/basics.py
+  pass: assert ctx.output == ctx.reference
+  input: "Capital of Spain?"  output: "I don't know"
+✗ capitals[1]  evals/basics.py
+  pass: wrong
+  input: "b"  output: "b"
+! crashes  evals/basics.py
+  RuntimeError: upstream 500
+  input: "x"  output: null
+✗ flaky~2  evals/basics.py
+  pass: failed
+  input: "x"  output: "x"
+...
+
+3 passed  5 failed  1 error  1 scored  (10 results · 6 evals · 1.4s)
+pass 38% · sim 0.85 · pass@4 100% · pass^4 0%
+Saved to .ezvals/sessions/default/a1b2c3d4.jsonl · view: ezvals serve .ezvals/sessions/default/a1b2c3d4.jsonl
 ```
+
+Each result is **passed** (finished, no error, at least one pass/fail score and none failed), **failed** (a pass/fail score failed), **error**, or **scored** (only numeric scores). A function line folds its cases and trials:
+
+| Mark | Meaning |
+|------|---------|
+| ✓ | Every result passed |
+| ✗ | None passed |
+| ◐ | Some passed, some failed or errored |
+| ! | Every result errored |
+| ○ | Only numeric scores |
+
+The line shows the total latency, then `passed/total cases` (or `trials`, or `results` for cases × trials; `N cases` when only numeric), pass@k/pass^k for trials of a single case, and score averages (pass/fail keys as a pass rate) when the eval has numeric or several keys. The failures section lists each failed or errored result (at most 20, then "… and N more") with its error's first line or each failing score as `key: notes` (`key: failed` without notes), then its input and output (truncated). The summary counts results by kind, then averages every score key; pass@k/pass^k appear for trials. The run JSON's `total_passed` and `total_failed` use the same definitions (as do pass@k/pass^k).
 
 ---
 
@@ -353,6 +401,7 @@ Scenario: Export to Markdown
 | 0 | Evaluations completed (regardless of pass/fail) |
 | 1 | Invalid arguments, path does not exist, or an eval file failed to import |
 | 2 | Usage error: unknown command or flag (the usage is printed) |
+| 4 | No evals matched the path, selector and filters (like pytest's "no tests collected") |
 
 **Note:** Failed evaluations do NOT cause non-zero exit. Check JSON output for pass/fail status.
 
@@ -432,10 +481,16 @@ Scenario: Invalid path type
   And exit code: 1
 
 Scenario: No evaluations found
-  When running on a file with no @eval functions
-  Then output: "No evaluations found"
+  When running on a file with no @eval functions, or filters that match none
+  Then output: "No evals found in {path}" (naming the filters when some were given)
   And with --json or --no-save, stdout is the run JSON with no results
-  And exit code: 0
+  And exit code: 4
+
+Scenario: Selector matches nothing
+  When `ezvals run evals.py::tset_refund` and evals.py defines test_refund
+  Then output: "No evals match 'tset_refund' in evals.py. Did you mean test_refund?"
+  (the closest function name or case id, by edit distance or prefix)
+  And exit code: 4
 
 Scenario: Concurrency set to zero
   When `ezvals run evals/ --concurrency 0`
@@ -446,6 +501,15 @@ Scenario: Eval file fails to import
   When an eval file raises on import (syntax error, missing module, ...)
   Then the error and traceback are printed
   And exit code: 1
+
+Scenario: Discovery fails with --json
+  When `ezvals run evals/ --json` (or --no-save) and the path is missing or a file fails to import
+  Then stdout is still JSON: {"error": "<message>", "results": []}
+  And exit code: 1
+
+Scenario: Help
+  When the user runs `ezvals COMMAND -h`
+  Then each flag prints once as `-s, --long VALUE  description`, with no bogus defaults
 ```
 
 ---
@@ -462,7 +526,8 @@ Scenario: Eval file fails to import
 | `-c, --concurrency` | int | 1 | Parallel evaluations |
 | `--timeout` | float | none | Global timeout (seconds) |
 | `--trials` | int | per eval | Run every eval this many times |
-| `-v, --verbose` | flag | false | Show eval stdout |
+| `-v, --verbose` | flag | false | Show eval stdout and full error tracebacks |
+| `-q, --quiet` | flag | false | Print only the summary |
 | `-o, --output` | path | auto | Custom output path |
 | `--no-save` | flag | false | JSON to stdout only |
 | `--json` | flag | false | Also print the run JSON (with `saved_path`) to stdout |

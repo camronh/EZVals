@@ -1,0 +1,102 @@
+---
+title: TypeScript SDK
+description: The ezvals npm package, with every option, field and type
+---
+
+This is the full TypeScript API. It works the same way as the [Python SDK](/reference/python). Only names change to camelCase.
+
+```bash
+npm install --save-dev ezvals
+```
+
+Requires Node 22.18 or later. Node runs TypeScript directly, so there's no build step. Eval files are named `*.eval.ts` (or `.mts`, `.js`, `.mjs`) and run with `npx ezvals run` or `npx ezvals serve`.
+
+```ts
+import { evaluate, EvalContext, type EvalOptions, type EvalCase, type EvalResult, type Score } from "ezvals";
+```
+
+## `evaluate()`
+
+```ts
+evaluate(name: string, fn: EvalFn): void
+evaluate(name: string, options: EvalOptions, fn: EvalFn): void
+```
+
+Registers an eval. `fn` receives an `EvalContext` and may be async. Return nothing (the context becomes the result), a result object, or an array of result objects for several results. Anything else is an error.
+
+Assertions become failing scores when the thrown error is named `AssertionError`, which covers `node:assert` and chai.
+
+### Evaluate options
+
+| Option | Python name | Default | Description |
+|--------|-------------|---------|-------------|
+| `input` | | `undefined` | Starting value of `ctx.input` |
+| `reference` | | `undefined` | Expected output |
+| `dataset` | | file name without `.eval.ts` | Groups results |
+| `labels` | | `[]` | Tags |
+| `metadata` | | `{}` | Starting value of `ctx.metadata` |
+| `defaultScoreKey` | `default_score_key` | `"pass"` | Key for scores given without one |
+| `timeout` | | none | Seconds |
+| `trials` | | 1 | How many times to run it |
+| `target` | | none | `(ctx) => unknown`, run before the body. A returned value becomes `ctx.output` |
+| `evaluators` | | `[]` | `(result: EvalResult) => ScoreInput \| ScoreInput[] \| EvalResult \| null` |
+| `cases` | | none | `EvalCase[]`, one eval per case |
+| `inputLoader` | `input_loader` | none | `() => EvalCase[] \| Promise<EvalCase[]>`, called when evals are discovered |
+
+A misspelled option, such as `datset`, throws an error that suggests the closest valid name.
+
+**File defaults.** `export const ezvalsDefaults = { ... }` sets any option except `cases` and `inputLoader` for every eval in the file. See [File defaults](/writing-evals/file-defaults).
+
+<Note>
+A timeout can't interrupt code that blocks the event loop. Such an eval is still reported as timed out, but only when the blocking code finishes.
+</Note>
+
+## `EvalContext`
+
+| Property | Python name | Description |
+|----------|-------------|-------------|
+| `input`, `output`, `reference` | | The eval's data |
+| `metadata` | | Object saved with the result |
+| `traceData` | `trace_data` | `{ messages?, trace_url?, ... }` saved with the result |
+| `scores` | | Scores stored so far |
+| `latency` | | Seconds. Measured automatically unless you set it |
+| `functionName`, `dataset`, `labels` | `function_name`, ... | This eval's resolved settings |
+| `runId`, `sessionName`, `runName`, `evalPath` | `run_id`, ... | The run this eval is part of |
+| `config` | | The chosen [run config](/reviewing/sessions#run-configs), or `{}` |
+
+### `ctx.store({...})`
+
+```ts
+ctx.store({ input, output, reference, latency, scores, messages, traceUrl, metadata, traceData })
+```
+
+Sets every field passed and returns the context. A score with an existing key replaces it, and `metadata` and `traceData` merge.
+
+## Types
+
+```ts
+interface Score { key: string; value?: number; passed?: boolean; notes?: string }
+
+type ScoreInput = boolean | number | Partial<Score>;   // true/false and numbers use the default key
+
+interface EvalResult {
+  input: unknown;
+  output: unknown;
+  reference?: unknown;
+  scores?: ScoreInput | ScoreInput[];
+  error?: string | null;
+  latency?: number | null;
+  metadata?: Record<string, unknown>;
+  traceData?: TraceData;
+}
+
+interface TraceData { messages?: unknown[]; trace_url?: string; [key: string]: unknown }
+
+type EvalCase = { id?: string } & Omit<EvalOptions, "cases" | "inputLoader">;
+```
+
+The package also exports the `Target`, `Evaluator` and `EvalFn` function types.
+
+<Note>
+The TypeScript package has no equivalent of Python's `run()` or `run_evals()`. Use `npx ezvals run --json` from scripts.
+</Note>

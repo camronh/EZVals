@@ -26,6 +26,11 @@ def shout(ctx: EvalContext):
 @eval(dataset="words")
 def slow(ctx: EvalContext):
     time.sleep(30)
+
+@eval(dataset="math", input=2, reference=5)
+def wrong(ctx: EvalContext):
+    ctx.output = ctx.input + 2
+    assert ctx.output == ctx.reference
 '''
 
 
@@ -61,7 +66,7 @@ def run_selected(page: Page, *rows: int):
 
 
 def test_discovered_evals_run_on_demand(app: Page):
-    for i in range(5):
+    for i in range(6):
         expect(row(app, i)).to_have_attribute("data-status", "not_started")
     run_selected(app, 0, 3)
     expect(row(app, 0)).to_have_attribute("data-status", "completed")
@@ -97,17 +102,29 @@ def test_detail_view_navigation_and_annotation(app: Page):
     expect(app.locator("#results-table")).to_be_visible()
 
 
-def test_dataset_filter_cycles_include_exclude_any(app: Page):
+def test_dataset_filter_only_and_hide(app: Page):
     visible = app.locator('tr[data-row="main"]:visible')
-    expect(visible).to_have_count(5)
+    expect(visible).to_have_count(6)
     app.locator("#filters-toggle").click()
-    pill = app.locator("#dataset-pills").get_by_text("words")
-    pill.click()
+    words = app.locator("#dataset-pills > div").filter(has_text="words")
+    words.get_by_role("button", name="Only").click()
     expect(visible).to_have_count(2)
-    pill.click()
-    expect(visible).to_have_count(3)
-    pill.click()
-    expect(visible).to_have_count(5)
+    words.get_by_role("button", name="Hide").click()
+    expect(visible).to_have_count(4)
+    words.get_by_role("button", name="Hide").click()
+    expect(visible).to_have_count(6)
+
+
+def test_outcome_switch_shows_failures(app: Page):
+    run_selected(app, 0, 5)
+    expect(row(app, 5)).to_have_attribute("data-status", "completed")
+    visible = app.locator('tr[data-row="main"]:visible')
+    app.locator("#outcome-failed").click()
+    expect(visible).to_have_count(1)
+    expect(row(app, 5)).to_be_visible()
+    expect(app).to_have_url(re.compile(r"outcome=failed"))
+    app.locator("#outcome-all").click()
+    expect(visible).to_have_count(6)
 
 
 def test_compare_two_runs(app: Page):
@@ -116,10 +133,14 @@ def test_compare_two_runs(app: Page):
     app.get_by_label("Create new run").click()
     run_selected(app, 0)
     expect(row(app, 0)).to_have_attribute("data-status", "completed")
+    current = app.locator("#run-dropdown-expanded").inner_text()
     app.get_by_label("Compare runs").click()
-    app.get_by_text("first", exact=False).last.click()
+    app.locator(".compare-option", has_text="first").click()
     expect(app.locator("#compare-mode-label")).to_be_visible()
     expect(app.locator("#stats-expanded")).to_contain_text("first")
+    app.locator("#exit-compare-btn").click()
+    expect(app.locator("#compare-mode-label")).to_have_count(0)
+    expect(app.locator("#run-dropdown-expanded")).to_have_text(current)
 
 
 def test_export_json(app: Page):

@@ -1,25 +1,38 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { fn } from 'storybook/test'
+import { expect, fn, userEvent, within } from 'storybook/test'
 import type { RunSummary } from '../../types'
 import { withColors } from '../../lib/comparison'
-import { statsFor, summarizeStats } from '../../lib/stats'
+import { runProgress, statsFor, trialStats } from '../../lib/stats'
 import { completedRun, improvedRun, notStartedRun, runningRun, sessionRuns, trialsRun } from '../../stories/fixtures'
 import { StatsPanel } from './StatsPanel'
 
-const props = (run: RunSummary) => ({ stats: summarizeStats(run), sessionName: run.session_name, runName: run.run_name, runId: run.run_id, chips: run.score_chips ?? [], filteredCount: null })
+const props = (run: RunSummary) => ({
+  stats: statsFor(run.results),
+  total: run.results.length,
+  progress: runProgress(run),
+  trials: trialStats(run.results),
+})
 
 const meta: Meta<typeof StatsPanel> = {
   title: 'Dashboard/StatsPanel',
   component: StatsPanel,
-  args: { sessionRuns, onRename: fn(), onRenameRun: fn(), onDeleteRun: fn(), onSelectRun: fn(), onNewRun: fn(), onCompare: fn() },
+  args: { sessionRuns },
 }
 export default meta
 type Story = StoryObj<typeof StatsPanel>
 
 export const Completed: Story = { args: props(completedRun) }
+export const Improved: Story = {
+  args: { ...props(improvedRun), delta: { points: 17, previous: 'baseline', onCompare: fn() } },
+  play: async ({ canvasElement, args }) => {
+    await userEvent.click(within(canvasElement).getByText(/17 pts/))
+    await expect(args.delta!.onCompare).toHaveBeenCalled()
+  },
+}
+export const Regressed: Story = { args: { ...props(completedRun), delta: { points: -17, previous: 'improved', onCompare: fn() } } }
 export const Running: Story = { args: props(runningRun) }
-export const NotStarted: Story = { args: { ...props(notStartedRun), sessionRuns: [] } }
-export const Filtered: Story = { args: { ...props(completedRun), filteredCount: 2, chips: statsFor(completedRun.results.slice(0, 2)).chips } }
+export const NotRun: Story = { args: props(notStartedRun) }
+export const Filtered: Story = { args: { ...props(completedRun), stats: statsFor(completedRun.results.slice(0, 2)) } }
 export const Trials: Story = { args: props(trialsRun) }
 
 const comparing = (runs: RunSummary[]) => ({

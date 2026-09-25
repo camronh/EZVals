@@ -41,6 +41,21 @@ Scenario: Assertions become scores
   Given an eval throws an error whose name is "AssertionError" (node:assert, chai, ...)
   Then a failing score is recorded with the error message as notes
 
+Scenario: Unknown option
+  Given evaluate(name, { datset: "qa" }, body)
+  Then evaluate throws "Unknown option datset. Did you mean dataset?"
+  (options of cases are checked the same way: "Unknown case keys: ...")
+
+Scenario: Forgotten await
+  Given an eval sets ctx.output = agent(ctx.input) where agent is async
+  Then the result is the error "TypeError: ctx.output was never awaited. Did you forget await?" with output null
+
+Scenario: Invalid scores
+  Given ctx.store({ scores: { accuracy: 0.9 } })
+  Then Error "Invalid score {"accuracy":0.9}: use true/false, a number, or { key, passed/value, notes }"
+  Given ctx.store({ scores: [true, 0.5] })
+  Then Error "Scores [true,0.5] would share the key 'pass': give each a key"
+
 Scenario: Loader exclusivity
   Given evaluate(name, { input: "x", inputLoader: fn }, body)
   Then evaluate throws "inputLoader cannot be used with input, reference or cases"

@@ -12,8 +12,7 @@ ui:
 # The skill ships with a copy of the user docs.
 skill-docs:
 	rm -rf cmd/ezvals/skill/ezvals-docs && mkdir -p cmd/ezvals/skill/ezvals-docs
-	cp docs/introduction.mdx docs/examples/*.mdx docs/core-concepts/*.mdx docs/guides/*.mdx docs/api-reference/*.mdx cmd/ezvals/skill/ezvals-docs/
-	cp docs/setup.mdx cmd/ezvals/skill/ezvals-docs/quickstart.mdx
+	cp docs/introduction.mdx docs/quickstart.mdx docs/how-it-works.mdx docs/writing-evals/*.mdx docs/reviewing/*.mdx docs/recipes/*.mdx docs/reference/*.mdx cmd/ezvals/skill/ezvals-docs/
 
 host: skill-docs
 	go build -ldflags "-X main.version=$(VERSION)" -o $(BINARY) ./cmd/ezvals

@@ -1,7 +1,8 @@
 import { useState } from 'react'
+import { button, primaryButton } from './Dropdown'
 import { Spinner } from './Spinner'
 
-export const inputClass = 'w-full rounded border border-zinc-300 bg-white px-2 py-1.5 text-xs text-zinc-700 placeholder-zinc-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:placeholder-zinc-500 dark:focus:border-blue-500'
+export const inputClass = 'w-full rounded-md border border-theme-border bg-theme-bg px-2.5 py-1.5 text-[13px] text-theme-text placeholder:text-theme-text-muted focus:border-accent-link focus:outline-none disabled:opacity-60'
 
 /** Save/Cancel buttons for inline edit forms; Save shows a spinner while `saving`. */
 export function EditActions({ saving, onSave, onCancel }: { saving: boolean; onSave: () => void; onCancel: () => void }) {
@@ -9,7 +10,7 @@ export function EditActions({ saving, onSave, onCancel }: { saving: boolean; onS
     <div className="flex justify-end gap-2">
       <button
         type="button"
-        className="rounded border border-zinc-300 bg-white px-2 py-1 text-[11px] text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600"
+        className={`${button} !h-7`}
         onClick={onCancel}
         disabled={saving}
       >
@@ -18,7 +19,7 @@ export function EditActions({ saving, onSave, onCancel }: { saving: boolean; onS
       <button
         type="button"
         data-annotation-save="true"
-        className="flex items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-600 hover:bg-emerald-500/20 disabled:opacity-50 dark:text-emerald-400"
+        className={`${primaryButton} !h-7 disabled:opacity-60`}
         onClick={onSave}
         disabled={saving}
       >
@@ -62,7 +63,7 @@ export function AnnotationEditor({ initial, onSave, onCancel, rows = 4 }: {
         autoFocus
         disabled={saving}
       />
-      {error ? <div className="text-[11px] text-rose-500">{error}</div> : null}
+      {error ? <div className="text-[12px] text-accent-error">{error}</div> : null}
       <EditActions saving={saving} onSave={save} onCancel={onCancel} />
     </div>
   )

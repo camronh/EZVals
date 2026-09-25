@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import type { ComparisonRun, RunSummary, ScoreChip } from '../../types'
 import { useDebouncedValue } from '../../hooks/storage'
 import { useDismiss } from '../../hooks/useDismiss'
+import { button, iconButton, primaryButton } from '../../components/Dropdown'
+import { Icon } from '../../components/Icon'
 import {
   DEFAULT_SCORE_COLORS,
   renderPngCanvas,
@@ -187,70 +189,66 @@ export function PngExportModal({
 
   return (
     <div id="png-export-modal" className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/60" />
-      <div ref={panel} className="absolute left-1/2 top-1/2 w-full max-w-5xl -translate-x-1/2 -translate-y-1/2 rounded-lg border border-theme-border bg-theme-bg p-5 shadow-xl">
-        <div className="mb-3 flex items-center justify-between">
-          <span className="text-sm font-medium text-theme-text">Export PNG</span>
-          <div className="flex items-center gap-2">
+      <div className="absolute inset-0 bg-black/50" />
+      <div ref={panel} className="absolute left-1/2 top-1/2 w-full max-w-5xl -translate-x-1/2 -translate-y-1/2 rounded-lg border border-theme-border bg-theme-bg p-5 shadow-[var(--shadow)]">
+        <div className="mb-4 flex items-center justify-between">
+          <span className="text-sm font-semibold text-theme-text">Export PNG</span>
+          <div className="flex items-center gap-1">
             <button
               id="png-export-config-toggle"
-              className="inline-flex h-7 w-7 items-center justify-center rounded border border-theme-border bg-theme-bg-secondary text-theme-text-muted hover:bg-theme-bg-elevated hover:text-theme-text"
+              className={`${iconButton} ${configOpen ? '!bg-theme-bg-elevated !text-theme-text' : ''}`}
               onClick={() => setConfigOpen((prev) => !prev)}
               title="Export options"
               aria-label="Export options"
             >
-              <svg className={`h-3.5 w-3.5 transition-transform ${configOpen ? 'rotate-45' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <use href="#icon-gear" />
-              </svg>
+              <Icon name="gear" className={`h-3.5 w-3.5 transition-transform ${configOpen ? 'rotate-45' : ''}`} />
             </button>
-            <button className="text-theme-text-muted hover:text-theme-text-secondary" onClick={onClose}>
-              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <use href="#icon-close" />
-              </svg>
+            <button className="flex h-8 w-8 items-center justify-center rounded-md text-theme-text-muted hover:bg-theme-bg-elevated hover:text-theme-text" onClick={onClose}>
+              <Icon name="close" className="h-4 w-4" />
             </button>
           </div>
         </div>
 
         {configOpen ? (
-          <div className="mb-4 space-y-3 rounded border border-theme-border bg-theme-bg-secondary/40 p-3">
-            <label className="flex flex-col gap-1 text-xs text-theme-text-muted">
+          <div className="mb-4 space-y-3 rounded-lg border border-theme-border bg-theme-bg-secondary p-3">
+            <label className="flex flex-col gap-1.5 text-[12px] font-medium text-theme-text-muted">
               Title
               <input
                 id="png-export-title-input"
                 type="text"
-                className="rounded border border-theme-border bg-theme-bg px-2 py-1.5 text-xs text-theme-text focus:border-blue-500 focus:outline-none"
+                className="h-8 rounded-md border border-theme-border bg-theme-bg px-2.5 text-[13px] font-normal text-theme-text focus:border-accent-link focus:outline-none"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
               />
             </label>
 
             <div className="grid gap-2 sm:grid-cols-3">
-              <label className="flex items-center justify-between gap-2 rounded border border-theme-border/70 px-2 py-1 text-xs text-theme-text-muted">
+              <label className="flex items-center justify-between gap-2 rounded-md border border-theme-border bg-theme-bg px-2.5 py-1 text-[13px] text-theme-text-secondary">
                 Good
                 <input
                   id="png-export-score-good-color"
                   type="color"
-                  className="h-5 w-8 cursor-pointer rounded border border-theme-border bg-transparent"
+                  className="h-5 w-8 cursor-pointer rounded border-0 bg-transparent"
                   value={scoreColors.good}
                   onChange={(e) => setScoreColors((prev) => ({ ...prev, good: e.target.value }))}
                 />
               </label>
-              <label className="flex items-center justify-between gap-2 rounded border border-theme-border/70 px-2 py-1 text-xs text-theme-text-muted">
+              <label className="flex items-center justify-between gap-2 rounded-md border border-theme-border bg-theme-bg px-2.5 py-1 text-[13px] text-theme-text-secondary">
                 Mid
                 <input
                   id="png-export-score-mid-color"
                   type="color"
-                  className="h-5 w-8 cursor-pointer rounded border border-theme-border bg-transparent"
+                  className="h-5 w-8 cursor-pointer rounded border-0 bg-transparent"
                   value={scoreColors.mid}
                   onChange={(e) => setScoreColors((prev) => ({ ...prev, mid: e.target.value }))}
                 />
               </label>
-              <label className="flex items-center justify-between gap-2 rounded border border-theme-border/70 px-2 py-1 text-xs text-theme-text-muted">
+              <label className="flex items-center justify-between gap-2 rounded-md border border-theme-border bg-theme-bg px-2.5 py-1 text-[13px] text-theme-text-secondary">
                 Low
                 <input
                   id="png-export-score-bad-color"
                   type="color"
-                  className="h-5 w-8 cursor-pointer rounded border border-theme-border bg-transparent"
+                  className="h-5 w-8 cursor-pointer rounded border-0 bg-transparent"
                   value={scoreColors.bad}
                   onChange={(e) => setScoreColors((prev) => ({ ...prev, bad: e.target.value }))}
                 />
@@ -258,7 +256,7 @@ export function PngExportModal({
             </div>
 
             {showRunControls ? null : (
-            <div className="flex flex-wrap items-center gap-3 text-xs text-theme-text-muted">
+            <div className="flex flex-wrap items-center gap-4 text-[13px] text-theme-text-secondary">
               <label className="inline-flex items-center gap-1.5">
                 <input
                   id="png-export-show-tests"
@@ -284,7 +282,7 @@ export function PngExportModal({
 
             {showRunControls ? (
               <div id="png-export-run-overrides" className="space-y-2">
-                <div className="text-[11px] font-medium uppercase tracking-wide text-theme-text-muted">Comparison runs</div>
+                <div className="text-[12px] font-medium text-theme-text-muted">Comparison runs</div>
                 {runOverrides.map((run, idx) => (
                   <div key={run.runId} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-2">
                     <div className="flex flex-col gap-1">
@@ -292,7 +290,7 @@ export function PngExportModal({
                         type="button"
                         data-png-run-move-up={run.runId}
                         disabled={idx === 0}
-                        className="h-4 w-4 rounded border border-theme-border text-[10px] text-theme-text-muted disabled:opacity-40"
+                        className="flex h-4 w-5 items-center justify-center rounded text-[11px] text-theme-text-muted hover:bg-theme-bg-elevated hover:text-theme-text disabled:opacity-30"
                         onClick={() => moveRunOverride(run.runId, -1)}
                         aria-label="Move run up"
                       >
@@ -302,7 +300,7 @@ export function PngExportModal({
                         type="button"
                         data-png-run-move-down={run.runId}
                         disabled={idx === runOverrides.length - 1}
-                        className="h-4 w-4 rounded border border-theme-border text-[10px] text-theme-text-muted disabled:opacity-40"
+                        className="flex h-4 w-5 items-center justify-center rounded text-[11px] text-theme-text-muted hover:bg-theme-bg-elevated hover:text-theme-text disabled:opacity-30"
                         onClick={() => moveRunOverride(run.runId, 1)}
                         aria-label="Move run down"
                       >
@@ -312,7 +310,7 @@ export function PngExportModal({
                     <input
                       type="text"
                       data-png-run-name={run.runId}
-                      className="rounded border border-theme-border bg-theme-bg px-2 py-1.5 text-xs text-theme-text focus:border-blue-500 focus:outline-none"
+                      className="h-8 rounded-md border border-theme-border bg-theme-bg px-2.5 text-[13px] text-theme-text focus:border-accent-link focus:outline-none"
                       value={run.runName}
                       onChange={(e) => {
                         const nextName = e.target.value
@@ -324,7 +322,7 @@ export function PngExportModal({
                     <input
                       type="color"
                       data-png-run-color={run.runId}
-                      className="h-8 w-10 cursor-pointer rounded border border-theme-border bg-transparent"
+                      className="h-8 w-10 cursor-pointer rounded-md border border-theme-border bg-transparent"
                       value={run.color}
                       onChange={(e) => {
                         const nextColor = e.target.value
@@ -340,39 +338,39 @@ export function PngExportModal({
           </div>
         ) : null}
 
-        <div className="relative flex min-h-[220px] items-center justify-center rounded border border-theme-border bg-theme-bg-secondary/20 p-3">
+        <div className="relative flex min-h-[220px] items-center justify-center rounded-lg border border-theme-border bg-theme-bg-secondary p-4">
           {previewError ? (
-            <span className="text-sm text-red-400">{previewError}</span>
+            <span className="text-[13px] text-accent-error">{previewError}</span>
           ) : previewUrl ? (
             <img
               src={previewUrl}
               alt="Export preview"
-              className="max-h-[420px] max-w-full rounded-md border border-theme-border"
+              className="max-h-[420px] max-w-full rounded-md shadow-sm"
               style={{ height: 'auto' }}
             />
           ) : (
-            <span className="text-sm text-theme-text-muted">Generating preview...</span>
+            <span className="text-[13px] text-theme-text-muted">Generating preview...</span>
           )}
           {isRendering && previewUrl ? (
-            <span className="absolute right-2 top-2 rounded bg-theme-bg/80 px-2 py-0.5 text-[10px] text-theme-text-muted">Updating preview...</span>
+            <span className="absolute right-2 top-2 rounded-md bg-theme-bg px-2 py-0.5 text-[11px] text-theme-text-muted">Updating preview...</span>
           ) : null}
         </div>
 
-        <div className="mt-3 flex items-center justify-between">
-          <span className="h-4 text-xs text-theme-text-muted">
+        <div className="mt-4 flex items-center justify-between">
+          <span className="text-[12px] text-theme-text-muted">
             {copyFeedback}
           </span>
           <div className="flex gap-2">
             <button
               id="png-export-copy-btn"
-              className="rounded border border-theme-border bg-theme-bg-secondary px-3 py-1.5 text-xs text-theme-text-muted hover:bg-theme-bg-elevated"
+              className={button}
               onClick={handleCopy}
             >
               Copy
             </button>
             <button
               id="png-export-save-btn"
-              className="rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500"
+              className={primaryButton}
               onClick={handleSave}
             >
               Save

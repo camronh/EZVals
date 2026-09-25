@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { Icon } from './Icon'
 
 export type Toast = { id: number; message: string; tone: 'error' | 'success' }
 
@@ -21,9 +22,10 @@ export function Toasts({ toasts }: { toasts: Toast[] }) {
       {toasts.map((t) => (
         <div
           key={t.id}
-          className={`rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-lg ${t.tone === 'error' ? 'bg-red-600/90' : 'bg-emerald-600/90'}`}
+          className="flex max-w-sm items-start gap-2.5 rounded-lg border border-theme-border bg-theme-bg px-3.5 py-2.5 text-[13px] text-theme-text shadow-[var(--shadow)]"
           style={{ animation: 'toast-in 0.2s ease-out' }}
         >
+          <span className={`mt-0.5 shrink-0 ${t.tone === 'error' ? 'text-accent-error' : 'text-accent-success'}`}><Icon name={t.tone === 'error' ? 'alert' : 'check'} /></span>
           {t.message}
         </div>
       ))}

@@ -225,6 +225,14 @@ Scenario: Dict score with custom key
 Scenario: Multiple scores
   Given ctx.store(scores=[{"passed": True, "key": "accuracy"}, {"value": 0.9, "key": "quality"}])
   Then two scores appended
+
+Scenario: Several scores without keys
+  Given ctx.store(scores=[True, 0.5]) (or the same list in EvalResult or from an evaluator)
+  Then ValueError "Scores [True, 0.5] would share the key 'pass': give each a 'key'"
+
+Scenario: Something that isn't a score
+  Given ctx.store(scores={"accuracy": 0.9}) or scores="good"
+  Then ValueError "Invalid score {'accuracy': 0.9}: use True/False, a number, or {'key': ..., 'passed'/'value': ..., 'notes': ...}"
 ```
 
 ### Building Results
@@ -349,6 +357,11 @@ Scenario: Multiple assertions
   When first assertion fails
   Then execution stops at that assertion
   And failing score captures that message
+
+Scenario: Bare assertion
+  Given assert ctx.output == ctx.reference (no message)
+  And assertion fails
+  Then the failing score's notes are the assert's source line: "assert ctx.output == ctx.reference"
 ```
 
 **Key behavior:** Failed assertions become **scores** (passed=False), not errors.
@@ -698,8 +711,14 @@ A dict with `key` (default `"pass"`), `value` (float) and/or `passed` (bool) —
 Scenario: Exception during evaluation
   Given eval function raises ValueError("broke")
   Then result.error = "ValueError: broke" followed by the traceback
+  And the traceback shows only the user's frames (not ezvals', asyncio's or threading's)
   And result.input/output preserved (if set before error)
   And a score is not added
+
+Scenario: Forgotten await
+  Given ctx.output is a coroutine when the eval finishes (e.g. `ctx.output = agent(x)` in a sync eval, or a sync target returning a coroutine)
+  Then result.error = "TypeError: ctx.output was never awaited. Did you forget await?"
+  And result.output is None (TypeScript: a Promise or other thenable)
 ```
 
 ### Timeout
@@ -716,7 +735,8 @@ Scenario: Evaluation exceeds timeout
 
 | Error | Cause |
 |-------|-------|
-| `ValueError: Either 'value' or 'passed' must be provided` | Score missing both |
+| `ValueError: Invalid score ...: use True/False, a number, or {...}` | Score missing both `value` and `passed`, or not a bool, number or dict |
+| `ValueError: Scores [...] would share the key 'pass': give each a 'key'` | A list with several scores without a key |
 | `ValueError: Must specify score key or set default_score_key` | store(scores=...) without key and default_score_key=None |
 | `ValueError: target requires the evaluation function to accept a context parameter` | target (or cases, input_loader) without ctx param |
 | `ValueError: Evaluation function must return EvalResult...` | Wrong return type |

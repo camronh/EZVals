@@ -1,7 +1,9 @@
 import type { FilterState, Score, TriState, ValueRule } from '../types'
+import type { Outcome } from './stats'
 
 export function defaultFilters(): FilterState {
   return {
+    outcome: 'all',
     valueRules: [],
     passedRules: [],
     annotation: 'any',
@@ -13,17 +15,12 @@ export function defaultFilters(): FilterState {
   }
 }
 
-/** Three-state filters cycle include → exclude → any. */
-export function cycleTriState(value: TriState): TriState {
-  return value === null ? true : value === true ? false : null
-}
-
-export function cyclePill(selection: { include: string[]; exclude: string[] }, value: string) {
-  const include = selection.include.filter((v) => v !== value)
-  const exclude = selection.exclude.filter((v) => v !== value)
-  if (selection.include.includes(value)) exclude.push(value)
-  else if (!selection.exclude.includes(value)) include.push(value)
-  return { include, exclude }
+/** "Only" or "Hide" a dataset/label; picking the active mode again clears it. */
+export function toggleSelection(selection: { include: string[]; exclude: string[] }, value: string, mode: 'include' | 'exclude') {
+  const active = selection[mode].includes(value)
+  const next = { include: selection.include.filter((v) => v !== value), exclude: selection.exclude.filter((v) => v !== value) }
+  if (!active) next[mode].push(value)
+  return next
 }
 
 export function countActiveFilters(f: FilterState) {
@@ -43,6 +40,7 @@ const compare: Record<ValueRule['op'], (a: number, b: number) => boolean> = {
 }
 
 export type FilterableRow = {
+  outcome: Outcome
   annotation?: string | null
   dataset?: string | null
   labels?: string[] | null
@@ -61,6 +59,8 @@ export function matchesFilters(f: FilterState, row: FilterableRow) {
   const labels = row.labels ?? []
   const scores = row.scores ?? []
   const hasAnnotation = !!row.annotation?.trim()
+  if (f.outcome === 'errors' && row.outcome !== 'error') return false
+  if (f.outcome === 'failed' && row.outcome !== 'failed' && row.outcome !== 'error') return false
   if ((f.annotation === 'yes' && !hasAnnotation) || (f.annotation === 'no' && hasAnnotation)) return false
   if (f.selectedDatasets.include.length && !f.selectedDatasets.include.includes(dataset)) return false
   if (f.selectedDatasets.exclude.includes(dataset)) return false

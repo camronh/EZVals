@@ -66,3 +66,8 @@ evaluate("blocks_past_timeout", { timeout: 0.2 }, (ctx) => {
   const end = Date.now() + 500;
   while (Date.now() < end); // blocks the event loop, so it can't be interrupted
 });
+
+evaluate("forgets_await", async (ctx) => {
+  const agent = async () => "hi";
+  ctx.output = agent();
+});

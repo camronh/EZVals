@@ -53,7 +53,7 @@ export function RunPicker({ anchorRef, onClose, sessionRuns, activeRunId, onSele
   }
 
   return (
-    <FloatingMenu anchorRef={anchorRef} open onClose={onClose} className="run-picker" onKeyDown={onKeyDown} tabIndex={-1} role="listbox" aria-label="Select a run">
+    <FloatingMenu anchorRef={anchorRef} open onClose={onClose} onKeyDown={onKeyDown} tabIndex={-1} role="listbox" aria-label="Select a run">
       {sessionRuns.map((run, i) => {
         const selected = run.run_id === activeRunId
         const isEditing = editing?.runId === run.run_id
@@ -68,7 +68,6 @@ export function RunPicker({ anchorRef, onClose, sessionRuns, activeRunId, onSele
             onClick={() => !isEditing && choose(run)}
             onMouseEnter={() => setFocused(i)}
           >
-            <span className={`run-picker-dot${selected ? ' active' : ''}`} />
             <div className="run-picker-name-area">
               {isEditing ? (
                 <div className="run-picker-edit-row">
@@ -101,10 +100,10 @@ export function RunPicker({ anchorRef, onClose, sessionRuns, activeRunId, onSele
                   <Icon name="pencil" className="h-3 w-3" />
                 </button>
                 <button className={`run-picker-action-btn${copied === run.run_id ? ' copied' : ''}`} title="Copy name" onClick={(e) => { e.stopPropagation(); copy(run) }}>
-                  {copied === run.run_id ? <Icon name="check" className="h-3 w-3 text-emerald-400" /> : <Icon name="copy" className="h-3 w-3" />}
+                  {copied === run.run_id ? <Icon name="check" className="h-3 w-3" /> : <Icon name="copy" className="h-3 w-3" />}
                 </button>
                 <button
-                  className="run-picker-action-btn run-picker-delete-btn hover:!text-rose-500 disabled:opacity-40"
+                  className="run-picker-action-btn run-picker-delete-btn hover:!text-accent-error disabled:opacity-40"
                   title={selected ? 'Switch to another run to delete this one' : 'Delete run'}
                   aria-label="Delete run"
                   disabled={selected}

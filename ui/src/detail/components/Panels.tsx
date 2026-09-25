@@ -5,29 +5,24 @@ import { DataViewer } from '../../components/DataViewer'
 import { Icon } from '../../components/Icon'
 import { getRawText } from '../../lib/format'
 
-const TONES = {
-  input: ['border-blue-100 bg-blue-50/50 dark:border-zinc-800/60 dark:bg-zinc-900/50', 'text-blue-600 dark:text-blue-400', 'bg-white dark:bg-zinc-900/30', 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300'],
-  reference: ['border-amber-200/40 bg-amber-50/50 dark:border-amber-500/10 dark:bg-amber-500/5', 'text-amber-600 dark:text-amber-400', 'bg-amber-50/30 dark:bg-amber-500/5', 'text-amber-600 hover:text-amber-800 dark:text-amber-500 dark:hover:text-amber-300'],
-  output: ['border-blue-100 bg-emerald-50/50 dark:border-zinc-800/60 dark:bg-zinc-900/50', 'text-emerald-600 dark:text-emerald-400', 'bg-white dark:bg-zinc-900/30', 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300'],
-}
+const ghostIcon = 'flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-theme-text-muted hover:bg-theme-bg-elevated hover:text-theme-text'
 
 /** A titled, copyable view of one value (input, reference or output). */
 export function DataPanel({ id, tone, value, loading, className = 'flex-1', style }: {
   id?: string
-  tone: keyof typeof TONES
+  tone: 'input' | 'reference' | 'output'
   value: unknown
   loading?: boolean
   className?: string
   style?: CSSProperties
 }) {
-  const [header, title, body, copy] = TONES[tone]
   return (
     <div id={id} className={`flex min-w-0 min-h-0 flex-col ${className}`} style={style}>
-      <div className={`data-panel-header flex items-center justify-between border-b px-3 py-1.5 ${header}`}>
-        <span className={`text-[10px] font-semibold uppercase tracking-wider ${title}`}>{tone}</span>
-        <CopyButton text={() => (loading ? '' : getRawText(value))} className={copy} />
+      <div className="data-panel-header flex h-9 items-center justify-between px-4 pt-1">
+        <span className="text-[12px] font-medium capitalize text-theme-text-muted">{tone}</span>
+        <CopyButton text={() => (loading ? '' : getRawText(value))} className={ghostIcon} />
       </div>
-      <div className={`data-panel-body flex-1 overflow-auto p-3 ${body}`}>
+      <div className="data-panel-body flex-1 overflow-auto px-4 pb-4 pt-1 text-[13px] text-theme-text">
         {loading ? (
           <div id="output-loading-indicator" className="output-loading-state" role="status" aria-live="polite" aria-label="Output is loading">
             <div className="output-loading-line output-loading-line-1" />
@@ -45,8 +40,8 @@ export function DataPanel({ id, tone, value, loading, className = 'flex-1', styl
 /** A drag handle between panes; hidden on narrow screens, where panes stack instead. */
 export function ResizeHandle({ direction, onMouseDown }: { direction: 'row' | 'col'; onMouseDown: (e: MouseEvent) => void }) {
   return direction === 'col'
-    ? <div className="resize-handle-v max-md:hidden w-1 flex-shrink-0 cursor-col-resize bg-transparent transition-colors hover:bg-blue-500/30" onMouseDown={onMouseDown} />
-    : <div className="resize-handle-h max-md:hidden h-1 flex-shrink-0 cursor-row-resize bg-transparent transition-colors hover:bg-blue-500/30" onMouseDown={onMouseDown} />
+    ? <div className="resize-handle-v -mx-1 after:bg-theme-border max-md:hidden" onMouseDown={onMouseDown} />
+    : <div className="resize-handle-h -my-1 after:bg-theme-border max-md:hidden" onMouseDown={onMouseDown} />
 }
 
 const LONG_ERROR_LINES = 8
@@ -63,18 +58,18 @@ export function ErrorBanner({ error }: { error: string }) {
     if (pre.current && error.startsWith('Traceback')) pre.current.scrollTop = pre.current.scrollHeight
   }, [error])
   return (
-    <div className="flex-shrink-0 border-b border-rose-200 bg-rose-50 px-4 py-2 dark:border-rose-500/30 dark:bg-rose-500/10">
-      <div className="flex items-start gap-2 text-sm">
-        <span className="mt-0.5 shrink-0 text-rose-500"><Icon name="alert" /></span>
+    <div className="flex-shrink-0 border-b border-theme-border bg-accent-error-bg px-4 py-2.5">
+      <div className="flex items-start gap-2.5 text-accent-error">
+        <span className="mt-px shrink-0"><Icon name="alert" /></span>
         <div className="min-w-0 flex-1">
-          <pre ref={pre} id="data-error" className={`overflow-auto whitespace-pre-wrap break-words font-mono text-xs text-rose-700 dark:text-rose-300 ${expanded ? 'max-h-[70vh]' : 'max-h-[30vh]'}`}>{error}</pre>
+          <pre ref={pre} id="data-error" className={`overflow-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-5 ${expanded ? 'max-h-[70vh]' : 'max-h-[30vh]'}`}>{error}</pre>
           {long ? (
-            <button type="button" className="mt-1 text-[11px] font-medium text-rose-700 hover:underline dark:text-rose-300" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>
+            <button type="button" className="mt-1 text-[12px] font-medium hover:underline" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>
               {expanded ? 'Collapse' : 'Expand'}
             </button>
           ) : null}
         </div>
-        <CopyButton text={() => error} className="shrink-0 text-rose-500 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300" />
+        <CopyButton text={() => error} className="-my-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md opacity-70 hover:opacity-100" />
       </div>
     </div>
   )
@@ -83,12 +78,12 @@ export function ErrorBanner({ error }: { error: string }) {
 /** A panel that slides in from the right (messages, trace). */
 export function Drawer({ id, title, count, open, onClose, children }: { id: string; title: string; count: number; open: boolean; onClose: () => void; children: ReactNode }) {
   return (
-    <div id={id} className={`fixed bottom-0 right-0 top-0 z-50 border-l border-zinc-200 bg-white shadow-xl transition-transform duration-200 dark:border-zinc-700 dark:bg-zinc-900 ${open ? '' : 'translate-x-full'}`} style={{ width: 700, maxWidth: '100vw' }}>
-      <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-2 dark:border-zinc-700">
-        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">{title} <span className="text-zinc-500 dark:text-zinc-400">({count})</span></span>
-        <button onClick={onClose} className="rounded p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" title="Close"><Icon name="close" className="h-4 w-4" /></button>
+    <div id={id} className={`fixed bottom-0 right-0 top-0 z-50 flex flex-col border-l border-theme-border bg-theme-bg shadow-[var(--shadow)] transition-transform duration-200 ${open ? '' : 'translate-x-full'}`} style={{ width: 700, maxWidth: '100vw' }}>
+      <div className="flex h-14 shrink-0 items-center justify-between border-b border-theme-border px-4">
+        <span className="text-sm font-semibold text-theme-text">{title}<span className="ml-2 font-mono text-[12px] font-normal tabular-nums text-theme-text-muted">{count}</span></span>
+        <button onClick={onClose} className={`${ghostIcon} !h-8 !w-8`} title="Close"><Icon name="close" /></button>
       </div>
-      <div className="h-[calc(100%-41px)] overflow-auto">{open ? children : null}</div>
+      <div className="min-h-0 flex-1 overflow-auto">{open ? children : null}</div>
     </div>
   )
 }

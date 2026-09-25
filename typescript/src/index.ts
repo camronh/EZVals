@@ -121,8 +121,7 @@ export class EvalContext {
     if (fields.messages) this.traceData.messages = fields.messages;
     if (fields.traceUrl) this.traceData.trace_url = fields.traceUrl;
     if (fields.metadata) Object.assign(this.metadata, fields.metadata);
-    for (const input of toArray(fields.scores)) {
-      const score = normalizeScore(input, this.defaultScoreKey);
+    for (const score of normalizeScores(fields.scores, this.defaultScoreKey)) {
       const i = this.scores.findIndex((s) => s.key === score.key);
       if (i >= 0) this.scores[i] = score;
       else this.scores.push(score);
@@ -148,10 +147,31 @@ function toArray<T>(value: T | T[] | undefined): T[] {
   return value === undefined ? [] : Array.isArray(value) ? value : [value];
 }
 
-function normalizeScore(score: ScoreInput, defaultKey: string): Score {
-  const s = typeof score === "boolean" ? { passed: score } : typeof score === "number" ? { value: score } : { ...score };
-  if (s.value == null && s.passed == null) throw new Error("Either 'value' or 'passed' must be provided in score");
-  return { key: defaultKey, ...s } as Score;
+/** A score, a list of scores, or nothing, as a list of keyed scores. */
+function normalizeScores(scores: ScoreInput | ScoreInput[] | undefined, defaultKey: string): Score[] {
+  const list = toArray(scores);
+  const normalized = list.map((score) => {
+    const s = typeof score === "boolean" ? { passed: score } : typeof score === "number" ? { value: score } : score;
+    if (typeof s !== "object" || s === null || (s.value == null && s.passed == null)) {
+      throw new Error(`Invalid score ${JSON.stringify(score)}: use true/false, a number, or { key, passed/value, notes }`);
+    }
+    return { key: defaultKey, ...s } as Score;
+  });
+  if (list.filter((s) => typeof s !== "object" || !("key" in s)).length > 1) {
+    throw new Error(`Scores ${JSON.stringify(list)} would share the key '${defaultKey}': give each a key`);
+  }
+  return normalized;
+}
+
+/** Levenshtein distance, for suggesting the option a typo meant. */
+function distance(a: string, b: string): number {
+  let row = [...Array(b.length + 1).keys()];
+  for (let i = 1; i <= a.length; i++) {
+    const next = [i];
+    for (let j = 1; j <= b.length; j++) next[j] = Math.min(row[j] + 1, next[j - 1] + 1, row[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    row = next;
+  }
+  return row[b.length];
 }
 
 interface Definition {
@@ -183,6 +203,11 @@ export function evaluate(name: string, fn: EvalFn): void;
 export function evaluate(name: string, options: EvalOptions, fn: EvalFn): void;
 export function evaluate(name: string, optionsOrFn: EvalOptions | EvalFn, fn?: EvalFn): void {
   const [options, body] = typeof optionsOrFn === "function" ? [{}, optionsOrFn] : [optionsOrFn, fn!];
+  const known = [...PARAMS, "cases", "inputLoader"];
+  for (const key of Object.keys(options).filter((k) => !known.includes(k))) {
+    const closest = known.reduce((best, k) => (distance(key, k) < distance(key, best) ? k : best));
+    throw new Error(`Unknown option ${key}.${distance(key, closest) <= Math.max(2, key.length / 3) ? ` Did you mean ${closest}?` : ""}`);
+  }
   if (options.inputLoader && ("input" in options || "reference" in options || options.cases)) {
     throw new Error("inputLoader cannot be used with input, reference or cases");
   }
@@ -310,6 +335,12 @@ export async function runEval(e: Eval, info: RunInfo = {}, grade?: WireResult): 
     }
     results = [ctx.build()];
   }
+  if (typeof (ctx.output as PromiseLike<unknown> | null)?.then === "function") {
+    Promise.resolve(ctx.output).catch(() => {});
+    ctx.output = null;
+    ctx.error = "TypeError: ctx.output was never awaited. Did you forget await?";
+    results = [ctx.build()];
+  }
   const elapsed = (performance.now() - start) / 1000;
   try {
     // Evaluators score every finished result, including ones a failed assertion scored.
@@ -317,7 +348,7 @@ export async function runEval(e: Eval, info: RunInfo = {}, grade?: WireResult): 
       for (const evaluator of results[i].error ? [] : (p.evaluators ?? [])) {
         const scored = await evaluator(results[i]);
         if (scored && typeof scored === "object" && "output" in scored) results[i] = scored as EvalResult;
-        else if (scored != null) results[i].scores = [...toArray(results[i].scores), ...toArray(scored as ScoreInput)];
+        else if (scored != null) results[i].scores = [...toArray(results[i].scores), ...normalizeScores(scored as ScoreInput, "pass")];
       }
     }
     return results.map((r) => ({ ...toWire(r, p.defaultScoreKey), latency: r.latency ?? elapsed / results.length }));
@@ -328,7 +359,7 @@ export async function runEval(e: Eval, info: RunInfo = {}, grade?: WireResult): 
 }
 
 function toWire(r: EvalResult, defaultScoreKey: string): WireResult {
-  const scores = toArray(r.scores).map((s) => normalizeScore(s, "pass"));
+  const scores = normalizeScores(r.scores, "pass");
   return {
     input: r.input,
     output: r.output,

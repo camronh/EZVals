@@ -51,6 +51,16 @@ func TestMaterializeStatuses(t *testing.T) {
 	}
 }
 
+func TestTotalsCountOutcomes(t *testing.T) {
+	mixed := Event{Type: "result", ID: "mixed", Results: []Result{{Scores: []Score{{Key: "a", Passed: ptr(true)}, {Key: "b", Passed: ptr(false)}}}}}
+	scored := Event{Type: "result", ID: "scored", Results: []Result{{Scores: []Score{{Key: "sim", Value: 0.5}}}}}
+	crashed := Event{Type: "result", ID: "crashed", Results: []Result{{Error: ptr("boom")}}}
+	run := materialize([]Event{manifest("pass", "mixed", "scored", "crashed"), result("pass", "x", true), mixed, scored, crashed})
+	if run.TotalPassed != 1 || run.TotalFailed != 1 || run.TotalErrors != 1 {
+		t.Fatalf("a result with any failing score is failed, not passed: %+v", run)
+	}
+}
+
 func TestRerunHidesOldOutputButKeepsAnnotations(t *testing.T) {
 	note, _ := json.Marshal("keep me")
 	failed, _ := json.Marshal([]Score{{Key: "pass", Passed: ptr(false)}})

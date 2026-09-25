@@ -1,0 +1,129 @@
+---
+title: Python SDK
+description: The ezvals Python package, with every option, field and function
+---
+
+This is the full Python API, for when you or your coding agent need to look something up. The guides under Writing evals explain when to use each part.
+
+```bash
+pip install ezvals        # or: uv add --dev ezvals
+```
+
+```python
+from ezvals import eval, EvalContext, EvalResult, EvalCase, TraceData, run, run_evals
+```
+
+## `@eval`
+
+Marks a function as an eval. It works bare (`@eval`) or with options (`@eval(...)`). The function can be sync or async. Give it a parameter annotated `EvalContext` to receive the context. An eval with `target`, `cases` or `input_loader` requires that parameter.
+
+Files are discovered by `ezvals run` and `ezvals serve`. See [CLI](/reference/cli#ezvals-run) for which files are included.
+
+### Eval options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `input` | `None` | Starting value of `ctx.input` |
+| `reference` | `None` | Expected output, as `ctx.reference` |
+| `dataset` | file name | Groups results. Filter with `--dataset` |
+| `labels` | `[]` | Tags. Filter with `--label` |
+| `metadata` | `{}` | Starting value of `ctx.metadata` |
+| `default_score_key` | `"pass"` | Key for scores given without one, including assertion failures |
+| `timeout` | none | Seconds before the eval is stopped with a timeout error |
+| `trials` | 1 | How many times to run it ([Trials](/writing-evals/trials)) |
+| `target` | none | Function `(ctx)` run before the body. A returned value becomes `ctx.output` ([Targets](/writing-evals/targets-and-regrading)) |
+| `evaluators` | `[]` | Functions `(result)` that return extra scores ([Evaluators](/writing-evals/scoring#evaluators)) |
+| `cases` | none | List of `EvalCase`, one eval per case ([Cases](/writing-evals/cases)) |
+| `input_loader` | none | Function, sync or async, that returns cases when evals are discovered. Can't be combined with `input`, `reference` or `cases` |
+
+**Return value.** Return nothing (the context becomes the result), an `EvalResult`, or a list of `EvalResult` for several results. Anything else is an error.
+
+**File defaults.** A module-level `ezvals_defaults` dict sets any option except `cases` and `input_loader` for every eval in the file. See [File defaults](/writing-evals/file-defaults).
+
+## `EvalContext`
+
+| Attribute | Description |
+|-----------|-------------|
+| `input`, `output`, `reference` | The eval's data. Set `output` in the eval or target |
+| `metadata` | Dict saved with the result |
+| `trace_data` | `TraceData` saved with the result |
+| `scores` | Scores stored so far |
+| `latency` | Seconds. Measured automatically unless you set it |
+| `function_name`, `dataset`, `labels` | This eval's resolved settings |
+| `run_id`, `session_name`, `run_name`, `eval_path` | The run this eval is part of. `None` outside a run |
+| `config` | The chosen [run config](/reviewing/sessions#run-configs), or `{}` |
+
+### `ctx.store(...)`
+
+```python
+ctx.store(input=None, output=None, reference=None, latency=None, scores=None,
+          messages=None, trace_url=None, metadata=None, trace_data=None)
+```
+
+Sets every argument that isn't `None`, and returns the context.
+
+- `scores`: one score or a list. A score with an existing key replaces it.
+- `metadata` and `trace_data` merge into what's already there.
+- `messages` and `trace_url` set `trace_data.messages` and `trace_data.trace_url`.
+
+## Score
+
+A dict with a `key` and at least one of `passed` or `value`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `key` | str | Name. Defaults to `default_score_key` |
+| `passed` | bool | Pass/fail |
+| `value` | number | Numeric score |
+| `notes` | str | Explanation, shown in the UI |
+
+`True`/`False` and bare numbers are shorthand for `{"passed": ...}` and `{"value": ...}` with the default key. See [When a result passes](/writing-evals/scoring#when-a-result-passes).
+
+## `EvalResult`
+
+What an eval produces and what evaluators receive. A dataclass with these fields:
+
+| Field | Type |
+|-------|------|
+| `input`, `output`, `reference` | any |
+| `scores` | list of scores |
+| `error` | str or `None` |
+| `latency` | float or `None` |
+| `metadata` | dict |
+| `trace_data` | `TraceData` |
+
+An evaluator can also return a new `EvalResult`, which replaces the result.
+
+## `TraceData`
+
+A dict that also supports attribute access. Two keys are shown specially in the web UI:
+
+- `messages`: a conversation transcript, rendered as chat. Most common message formats are recognized.
+- `trace_url`: a link to the trace in another tool.
+
+Other keys are shown as JSON.
+
+## `EvalCase`
+
+A `TypedDict` for type-checking `cases` and `input_loader` output. The keys are `id`, `input`, `reference`, `dataset`, `labels`, `metadata`, `default_score_key`, `timeout`, `target`, `evaluators` and `trials`. An unknown key is an error.
+
+## `run()`
+
+Runs evals the way `ezvals run --json` does, saves the run, and returns the run as a dict, including `saved_path`.
+
+```python
+run(path, dataset=None, labels=None, limit=None, output=None, concurrency=None,
+    timeout=None, trials=None, session=None, run_name=None, no_save=False, config=None)
+```
+
+Raises `ValueError` with the CLI's error message if the run can't start.
+
+## `run_evals()`
+
+Runs eval functions or paths in the current process and returns a list of `EvalResult`. Nothing is saved. Useful in notebooks and tests.
+
+```python
+run_evals(evals, concurrency=1, timeout=None, dataset=None, labels=None, limit=None)
+```
+
+`evals` is a list that can mix `@eval` functions and file or directory paths.

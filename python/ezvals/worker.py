@@ -10,9 +10,8 @@ import dataclasses
 import json
 import os
 import sys
-import traceback
 
-from ezvals.evals import discover
+from ezvals.evals import describe, discover
 
 current_eval = contextvars.ContextVar("ezvals_eval", default=None)
 
@@ -32,10 +31,8 @@ def main():
     run_info = json.loads(os.environ.get("EZVALS_RUN") or "{}")
     try:
         evals = {e.id: e for e in discover(sys.argv[1:])}
-    except Exception as error:  # show the user's frames, not ezvals' or importlib's
-        frames = [f for f in traceback.extract_tb(error.__traceback__) if not f.filename.startswith((os.path.dirname(__file__), "<frozen"))]
-        where = "Traceback (most recent call last):\n" + "".join(traceback.format_list(frames)) if frames else ""
-        send({"type": "error", "error": where + "".join(traceback.format_exception_only(error))})
+    except Exception as error:
+        send({"type": "error", "error": describe(error)})
         sys.exit(1)
     send({"type": "evals", "evals": [{
         "id": e.id, "function": e.name, "dataset": e.params["dataset"], "labels": e.params["labels"],
@@ -57,7 +54,7 @@ def main():
                 results = await e.run(run_info, request.get("grade"))
             send({"type": "result", "id": request["id"], "results": [vars(r) for r in results]})
         except Exception as error:  # the host waits for every result, so one that can't be reported becomes an error
-            send({"type": "result", "id": request["id"], "results": [{"error": f"{type(error).__name__}: {error}\n{traceback.format_exc()}"}]})
+            send({"type": "result", "id": request["id"], "results": [{"error": f"{type(error).__name__}: {error}\n{describe(error)}"}]})
 
     async def serve():
         loop = asyncio.get_running_loop()

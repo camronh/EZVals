@@ -282,5 +282,18 @@
     "error": "TimeoutError: Evaluation timed out after 0.2s",
     "metadata": {},
     "trace_data": {}
+  },
+  {
+    "function": "forgets_await",
+    "dataset": "basics",
+    "labels": [],
+    "status": "error",
+    "input": null,
+    "output": null,
+    "reference": null,
+    "scores": [],
+    "error": "TypeError: ctx.output was never awaited. Did you forget await?",
+    "metadata": {},
+    "trace_data": {}
   }
 ]

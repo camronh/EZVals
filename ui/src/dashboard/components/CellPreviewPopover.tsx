@@ -67,7 +67,7 @@ export function CellPreviewPopover({ target, onKeep, onClose, onSaveAnnotation }
       <div className="cell-preview-label flex items-center justify-between gap-2">
         <span>{LABELS[col]}</span>
         {col === 'annotation' && !editing ? (
-          <button className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200" title="Edit annotation" onClick={() => setEditingTarget(target)}>
+          <button className="-my-1 -mr-1.5 flex h-5 w-5 items-center justify-center rounded text-theme-text-muted hover:bg-theme-bg-elevated hover:text-theme-text" title="Edit annotation" onClick={() => setEditingTarget(target)}>
             <Icon name="pencil" className="h-3 w-3" />
           </button>
         ) : null}
@@ -76,7 +76,7 @@ export function CellPreviewPopover({ target, onKeep, onClose, onSaveAnnotation }
         {col === 'scores' ? (
           <div className="space-y-1.5">{(result.scores ?? []).map((s, i) => <ScoreCard key={`${s.key}-${i}`} score={s} />)}</div>
         ) : col === 'error' ? (
-          <pre className="whitespace-pre-wrap break-words font-mono text-xs text-rose-600 dark:text-rose-300">{result.error}</pre>
+          <pre className="whitespace-pre-wrap break-words font-mono text-[12px] text-accent-error">{result.error}</pre>
         ) : col === 'annotation' ? (
           editing ? (
             <AnnotationEditor
@@ -89,10 +89,10 @@ export function CellPreviewPopover({ target, onKeep, onClose, onSaveAnnotation }
               }}
             />
           ) : (
-            <pre className="whitespace-pre-wrap break-words font-mono text-xs text-zinc-700 dark:text-zinc-300">{annotation}</pre>
+            <div className="whitespace-pre-wrap break-words text-[13px] text-theme-text-secondary">{annotation}</div>
           )
         ) : (
-          <DataViewer content={result[col]} placeholder="--" />
+          <DataViewer content={result[col]} placeholder="—" />
         )}
       </div>
     </div>,

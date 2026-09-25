@@ -1,19 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Config, FilterState, SortRule } from '../types'
+import type { Config, FilterState, OutcomeFilter, SortRule } from '../types'
 import { api } from '../api'
 import { Toasts, useToasts } from '../components/Toasts'
 import { useDebouncedValue, useLocalState, useSessionState } from '../hooks/storage'
 import { buildComparison } from '../lib/comparison'
-import { defaultFilters, matchesFilters } from '../lib/filters'
-import { statsFor, summarizeStats, trialStats } from '../lib/stats'
+import { defaultFilters, matchesFilters, type FilterableRow } from '../lib/filters'
+import { passRate, runProgress, statsFor, trialStats } from '../lib/stats'
 import { COLUMNS, COLUMN_KEYS, DEFAULT_HIDDEN_COLUMNS, comparisonSearchText, filterable, sortBy, sortValue, tableRows, toggleSort } from '../lib/table'
 import { writeQuery, type DashboardQuery } from '../lib/urlState'
 import { ComparisonTable, type ComparisonRow } from './components/ComparisonTable'
 import { PngExportModal } from './components/PngExportModal'
 import { ResultsTable } from './components/ResultsTable'
+import { FilterBar, type ExportFormat } from './components/FilterBar'
+import { Header, type RunState } from './components/Header'
 import { SettingsModal } from './components/SettingsModal'
 import { StatsPanel } from './components/StatsPanel'
-import { Toolbar, type ExportFormat, type RunState } from './components/Toolbar'
 import { isActive, useActiveRun, useComparison } from './useRunData'
 
 function download(blob: Blob, filename: string) {
@@ -22,6 +23,12 @@ function download(blob: Blob, filename: string) {
   a.download = filename
   a.click()
   URL.revokeObjectURL(a.href)
+}
+
+const OUTCOME_ONLY = (['all', 'failed', 'errors'] as const).map((outcome) => ({ ...defaultFilters(), outcome }))
+
+function countOutcomes(groups: FilterableRow[][]) {
+  return Object.fromEntries(OUTCOME_ONLY.map((f) => [f.outcome, groups.filter((g) => g.some((row) => matchesFilters(f, row))).length])) as Record<OutcomeFilter, number>
 }
 
 function notifyCompletion(runName: string, count: number) {
@@ -80,25 +87,31 @@ export function DashboardPage({ query }: { query: DashboardQuery }) {
     wasActive.current = active
   }, [data])
 
-  const rows = useMemo(() => {
-    const all = tableRows(data?.results ?? [], new Set(searchColumns))
-    const visible = all.filter((r) => (!debouncedSearch || r.searchText.includes(debouncedSearch)) && matchesFilters(filters, r))
-    return sortBy(visible, sort, (r, col) => sortValue(r.result, r.row, col))
+  // Rows matching everything but the outcome switch, so each outcome can show its count.
+  const { rows, outcomeCounts } = useMemo(() => {
+    const matching = tableRows(data?.results ?? [], new Set(searchColumns))
+      .filter((r) => (!debouncedSearch || r.searchText.includes(debouncedSearch)) && matchesFilters({ ...filters, outcome: 'all' }, r))
+    return {
+      rows: sortBy(matching.filter((r) => matchesFilters(filters, r)), sort, (r, col) => sortValue(r.result, r.row, col)),
+      outcomeCounts: countOutcomes(matching.map((r) => [r])),
+    }
   }, [data, debouncedSearch, filters, searchColumns, sort])
 
-  const comparisonRows = useMemo<ComparisonRow[]>(() => {
-    if (!comparison.comparing) return []
+  const comparisonView = useMemo(() => {
+    if (!comparison.comparing) return null
     const columns = new Set(searchColumns)
-    const visible = buildComparison(comparison.runs, comparison.data)
-      .map((entry, index) => ({ ...entry, index }))
+    const matching = buildComparison(comparison.runs, comparison.data)
+      .map((entry, index) => ({ ...entry, index, filterable: Object.values(entry.byRun).map(({ row }) => filterable(row)) }))
       .filter((entry) => (!debouncedSearch || comparisonSearchText(entry, comparison.runs, columns).includes(debouncedSearch))
-        && Object.values(entry.byRun).some(({ row }) => matchesFilters(filters, filterable(row))))
-    return sortBy(visible, sort, (entry, col) => {
+        && entry.filterable.some((row) => matchesFilters({ ...filters, outcome: 'all' }, row)))
+    const rows: ComparisonRow[] = sortBy(matching.filter((entry) => entry.filterable.some((row) => matchesFilters(filters, row))), sort, (entry, col) => {
       const runId = col.startsWith('output-') ? col.slice(7) : comparison.runs.find((r) => entry.byRun[r.runId])?.runId
       const match = runId ? entry.byRun[runId] : undefined
       return sortValue(match?.row.result, entry, col.startsWith('output-') ? 'output' : col)
     })
+    return { rows, outcomeCounts: countOutcomes(matching.map((entry) => entry.filterable)) }
   }, [comparison, debouncedSearch, filters, searchColumns, sort])
+  const comparisonRows = comparisonView?.rows ?? []
 
   const facets = useMemo(() => {
     const results = comparison.comparing ? Object.values(comparison.data).flatMap((r) => r.results) : data?.results ?? []
@@ -132,16 +145,19 @@ export function DashboardPage({ query }: { query: DashboardQuery }) {
   if (error && !data) return <div className="p-4 text-theme-text-muted">Failed to load results. Please refresh the page.</div>
   if (!data) return <div className="flex h-screen items-center justify-center text-theme-text-muted">Loading...</div>
 
-  const summary = summarizeStats(data)
-  const visibleRows = rows.map((r) => r.row)
-  const filtered = filtering && !comparison.comparing ? statsFor(visibleRows, summary.chips.map((c) => c.key)) : null
-  const trial = trialStats(filtered ? visibleRows : data.results)
-  const stats = { ...summary, totalErrors: filtered?.errors ?? summary.totalErrors, trials: trial?.k, passAtK: trial?.passAtK, passAllK: trial?.passAllK }
-  const visibleKeys = new Set(comparisonRows.map((r) => r.key))
+  const keyOrder = (data.score_chips ?? []).map((c) => c.key)
+  const statsRows = filtering ? rows.map((r) => r.row) : data.results
+  const stats = statsFor(statsRows, keyOrder)
+  const progress = runProgress(data)
   const comparisonStats = Object.fromEntries(comparison.runs.map((run) => [
     run.runId,
-    statsFor(comparisonRows.flatMap((row) => (row.byRun[run.runId] && visibleKeys.has(row.key) ? [row.byRun[run.runId].row] : [])), summary.chips.map((c) => c.key)),
+    statsFor(comparisonRows.flatMap((row) => (row.byRun[run.runId] ? [row.byRun[run.runId].row] : [])), keyOrder),
   ]))
+  const previous = sessionRuns[sessionRuns.findIndex((r) => r.run_id === data.run_id) + 1]
+  const previousRate = previous && passRate(previous.total_passed ?? 0, previous.total_failed ?? 0, previous.total_errors ?? 0)
+  const delta = !progress.running && !filtering && stats.rate != null && previousRate != null && sessionRuns.some((r) => r.run_id === data.run_id)
+    ? { points: Math.round(stats.rate * 100) - Math.round(previousRate * 100), previous: previous.run_name, onCompare: () => comparison.start([data.run_id, previous.run_id]) }
+    : null
   const selectedIndices = [...selected].sort((a, b) => a - b)
   const runState: RunState = comparison.comparing ? 'compare' : data.is_paused && isActive(data) ? 'paused' : isActive(data) ? 'running' : 'idle'
 
@@ -151,11 +167,10 @@ export function DashboardPage({ query }: { query: DashboardQuery }) {
       window.location.href = api.exportUrl(data.run_id, format)
       return
     }
-    const chips = filtered?.chips ?? stats.chips
     const payload = {
       visible_indices: rows.map((r) => r.index),
       visible_columns: COLUMNS.map((c) => c.key).filter((k) => !hidden.includes(k)),
-      stats: { total: stats.total, filtered: comparison.comparing ? comparisonRows.length : rows.length, avgLatency: filtered?.avgLatency ?? stats.avgLatency, chips },
+      stats: { total: data.results.length, filtered: comparison.comparing ? comparisonRows.length : rows.length, avgLatency: stats.avgLatency, chips: stats.chips },
       run_name: data.run_name,
       session_name: data.session_name,
       comparison_mode: comparison.comparing,
@@ -176,21 +191,26 @@ export function DashboardPage({ query }: { query: DashboardQuery }) {
 
   return (
     <div className="flex h-screen flex-col bg-theme-bg font-sans text-theme-text">
-      <Toolbar
-        search={search}
-        onSearch={setSearch}
-        filters={filters}
-        onFilters={setFilters}
-        scoreKeys={facets.scoreKeys}
-        datasets={facets.datasets}
-        labels={facets.labels}
-        hiddenColumns={hidden}
-        searchColumns={searchColumns}
-        onHiddenColumns={setHidden}
-        onSearchColumns={setSearchColumns}
-        onResetSort={() => setSort([])}
-        onResetWidths={() => setWidths({})}
-        onExport={exportAs}
+      <Header
+        sessionName={data.session_name}
+        runName={data.run_name}
+        runId={data.run_id}
+        sessionRuns={sessionRuns}
+        onRename={(name) => act(() => (data.results.some((r) => r.result.status !== 'not_started') ? api.rename(data.run_id, name) : api.setPendingRunName(name)), 'Rename failed')}
+        onRenameRun={(runId, name) => act(() => api.rename(runId, name), 'Rename failed')}
+        onDeleteRun={(runId) => act(() => api.deleteRun(runId), 'Delete failed')}
+        onSelectRun={(runId) => runId !== data.run_id && act(() => api.activate(runId), 'Could not open run')}
+        onNewRun={() => act(async () => {
+          await api.newRun()
+          setSelected(new Set())
+        }, 'New run failed')}
+        onCompare={(runId) => comparison.start([data.run_id, runId])}
+        comparingCount={comparison.comparing ? comparison.runs.length : undefined}
+        onExitCompare={() => {
+          const first = comparison.runs[0].runId
+          comparison.start([])
+          if (first !== data.run_id) act(() => api.activate(first), 'Could not open run')
+        }}
         onOpenSettings={() => api.config().then((config) => setModal({ kind: 'settings', config }), (err) => notify(err.message))}
         onRegrade={() => act(async () => {
           const { regraded, skipped_without_target: skipped } = await api.regrade(selectedIndices.length ? selectedIndices : undefined)
@@ -208,30 +228,42 @@ export function DashboardPage({ query }: { query: DashboardQuery }) {
         onStop={() => act(api.stop, 'Stop failed')}
         onPauseToggle={() => act(data.is_paused ? api.resume : api.pause, 'Run control failed')}
       />
-      <main className="flex-1 overflow-auto px-4 py-4">
+      <main className="flex-1 overflow-auto px-4 pb-4 pt-4">
         {data.discovery_error ? (
-          <pre id="discovery-error" className="mb-4 max-h-60 overflow-auto whitespace-pre-wrap rounded border border-rose-500/30 bg-rose-500/10 p-3 font-mono text-xs text-rose-700 dark:text-rose-300">{data.discovery_error}</pre>
+          <pre id="discovery-error" className="mb-4 max-h-60 overflow-auto whitespace-pre-wrap rounded-lg border border-red-500/30 bg-accent-error-bg p-3 font-mono text-xs text-accent-error">{data.discovery_error}</pre>
         ) : null}
-        <StatsPanel
-          stats={stats}
-          sessionName={data.session_name}
-          runName={data.run_name}
-          runId={data.run_id}
-          chips={filtered?.chips ?? stats.chips}
-          filteredCount={filtered ? rows.length : null}
-          sessionRuns={sessionRuns}
-          onRename={(name) => act(() => (data.results.some((r) => r.result.status !== 'not_started') ? api.rename(data.run_id, name) : api.setPendingRunName(name)), 'Rename failed')}
-          onRenameRun={(runId, name) => act(() => api.rename(runId, name), 'Rename failed')}
-          onDeleteRun={(runId) => act(() => api.deleteRun(runId), 'Delete failed')}
-          newRunDisabled={runState === 'running' || runState === 'paused'}
-          onSelectRun={(runId) => runId !== data.run_id && act(() => api.activate(runId), 'Could not open run')}
-          onNewRun={() => act(async () => {
-            await api.newRun()
-            setSelected(new Set())
-          }, 'New run failed')}
-          onCompare={(runId) => comparison.start([data.run_id, runId])}
-          comparison={comparison.comparing ? { runs: comparison.runs, stats: comparisonStats, onMove: comparison.move, onRemove: comparison.remove, onAdd: comparison.add } : undefined}
-        />
+        {data.results.length ? (
+          <StatsPanel
+            stats={stats}
+            total={data.results.length}
+            progress={progress}
+            trials={trialStats(statsRows)}
+            delta={delta}
+            sessionRuns={sessionRuns}
+            comparison={comparison.comparing ? { runs: comparison.runs, stats: comparisonStats, onMove: comparison.move, onRemove: comparison.remove, onAdd: comparison.add } : undefined}
+          />
+        ) : null}
+        {data.results.length ? (
+          <FilterBar
+            outcomeCounts={comparisonView?.outcomeCounts ?? outcomeCounts}
+            search={search}
+            onSearch={setSearch}
+            filters={filters}
+            onFilters={setFilters}
+            scoreKeys={facets.scoreKeys}
+            datasets={facets.datasets}
+            labels={facets.labels}
+            hiddenColumns={hidden}
+            searchColumns={searchColumns}
+            onHiddenColumns={setHidden}
+            onSearchColumns={setSearchColumns}
+            onResetSort={() => setSort([])}
+            onResetWidths={() => setWidths({})}
+            onExport={exportAs}
+            selectedCount={selected.size}
+            onClearSelection={() => setSelected(new Set())}
+          />
+        ) : null}
         {comparison.comparing ? (
           <ComparisonTable runs={comparison.runs} rows={comparisonRows} onSort={(col, type, multi) => setSort(toggleSort(sort, col, type, multi))} onSaveAnnotation={saveAnnotation} />
         ) : (
@@ -248,6 +280,7 @@ export function DashboardPage({ query }: { query: DashboardQuery }) {
             onOpen={(index) => { window.location.href = `/runs/${data.run_id}/results/${index}` }}
             onSaveAnnotation={saveAnnotation}
             emptyText={filtering && data.results.length ? 'No results match the current filters' : undefined}
+            evalPath={data.discovery_error ? undefined : data.eval_path ?? data.path ?? undefined}
           />
         )}
       </main>
@@ -260,10 +293,6 @@ export function DashboardPage({ query }: { query: DashboardQuery }) {
             await api.selectConfig(name)
             setConfigs({ ...configs, active: name })
           }, 'Could not select config')}
-          onToggleTheme={() => {
-            const dark = document.documentElement.classList.toggle('dark')
-            localStorage.setItem('ezvals:theme', dark ? 'dark' : 'light')
-          }}
           onSave={(config) => act(async () => {
             await api.saveConfig(config)
             setModal(null)
@@ -274,10 +303,10 @@ export function DashboardPage({ query }: { query: DashboardQuery }) {
       <PngExportModal
         open={modal?.kind === 'png'}
         onClose={() => setModal(null)}
-        displayChips={filtered?.chips ?? stats.chips}
-        displayLatency={filtered?.avgLatency ?? stats.avgLatency}
-        displayFilteredCount={filtered ? rows.length : null}
-        totalTests={stats.total}
+        displayChips={stats.chips}
+        displayLatency={stats.avgLatency}
+        displayFilteredCount={filtering ? rows.length : null}
+        totalTests={data.results.length}
         isComparisonMode={comparison.comparing}
         normalizedComparisonRuns={comparison.runs}
         comparisonData={comparison.data}

@@ -16,7 +16,7 @@ const meta: Meta<typeof FiltersPanel> = {
   // Stateful, so the panel can be clicked through.
   render: function Render(args) {
     const [filters, setFilters] = useState<FilterState>(args.filters)
-    return <div className="w-80 rounded border border-theme-border bg-theme-bg-secondary text-xs"><FiltersPanel {...args} filters={filters} onChange={setFilters} /></div>
+    return <div className="w-80 rounded-lg border border-theme-border bg-theme-bg text-[13px]"><FiltersPanel {...args} filters={filters} onChange={setFilters} /></div>
   },
 }
 export default meta
@@ -38,13 +38,16 @@ export const Active: Story = {
 }
 export const NoScores: Story = { args: { filters: defaultFilters(), scoreKeys: {}, datasets: [], labels: [] } }
 
-export const CyclePill: Story = {
+export const OnlyAndHide: Story = {
   args: { filters: defaultFilters() },
   play: async ({ canvasElement }) => {
-    const pill = within(canvasElement).getByTitle('support')
-    await userEvent.click(pill)
-    await expect(within(canvasElement).getByText('support', { selector: '#active-filters *' })).toBeVisible()
-    await userEvent.click(pill)
-    await expect(within(canvasElement).getByText('not support')).toBeVisible()
+    const rows = within(canvasElement.querySelector('#dataset-pills') as HTMLElement)
+    const [onlySmalltalk, onlySupport] = rows.getAllByRole('button', { name: 'Only' })
+    await userEvent.click(onlySupport)
+    await expect(onlySupport).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(rows.getAllByRole('button', { name: 'Hide' })[1])
+    await expect(onlySupport).toHaveAttribute('aria-pressed', 'false')
+    await expect(onlySmalltalk).toHaveAttribute('aria-pressed', 'false')
+    await expect(rows.getByText('support')).toHaveClass('line-through')
   },
 }

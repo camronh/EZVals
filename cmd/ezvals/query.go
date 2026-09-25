@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -44,7 +43,7 @@ Examples:
 `
 
 func queryCmd(args []string) {
-	fs := flag.NewFlagSet("query", flag.ExitOnError)
+	fs := newFlagSet("query")
 	jsonOut := fs.Bool("json", false, "print rows as a JSON array")
 	schema := fs.Bool("schema", false, "print the tables and example queries")
 	positional := parseFlags(fs, args)

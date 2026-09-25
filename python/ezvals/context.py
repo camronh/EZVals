@@ -29,14 +29,24 @@ def normalize_score(score: Any, default_key: Optional[str]) -> dict:
         score = {"passed": score}
     elif isinstance(score, (int, float)):
         score = {"value": score}
+    elif not isinstance(score, dict) or score.get("value") is None and score.get("passed") is None:
+        raise ValueError(f"Invalid score {score!r}: use True/False, a number, "
+                         "or {'key': ..., 'passed'/'value': ..., 'notes': ...}")
     score = dict(score)
-    if score.get("value") is None and score.get("passed") is None:
-        raise ValueError("Either 'value' or 'passed' must be provided in score")
     if "key" not in score:
         if default_key is None:
             raise ValueError("Must specify score key or set default_score_key")
         score["key"] = default_key
     return score
+
+
+def normalize_scores(scores: Any, default_key: Optional[str]) -> list:
+    """A score, a list of scores, or None, as a list of score dicts."""
+    scores = scores if isinstance(scores, list) else [] if scores is None else [scores]
+    normalized = [normalize_score(s, default_key) for s in scores]
+    if sum(not (isinstance(s, dict) and "key" in s) for s in scores) > 1:
+        raise ValueError(f"Scores {scores!r} would share the key {default_key!r}: give each a 'key'")
+    return normalized
 
 
 @dataclass
@@ -51,8 +61,7 @@ class EvalResult:
     trace_data: TraceData = field(default_factory=TraceData)
 
     def __post_init__(self):
-        scores = self.scores if isinstance(self.scores, list) else [] if self.scores is None else [self.scores]
-        self.scores = [normalize_score(s, "pass") for s in scores]
+        self.scores = normalize_scores(self.scores, "pass")
         self.metadata = self.metadata or {}
         self.trace_data = TraceData(self.trace_data or {})
 
@@ -96,8 +105,7 @@ class EvalContext:
             self.trace_data.trace_url = trace_url
         if metadata is not None:
             self.metadata.update(metadata)
-        for score in scores if isinstance(scores, list) else [] if scores is None else [scores]:
-            score = normalize_score(score, self.default_score_key)
+        for score in normalize_scores(scores, self.default_score_key):
             keys = [s["key"] for s in self.scores]
             if score["key"] in keys:
                 self.scores[keys.index(score["key"])] = score

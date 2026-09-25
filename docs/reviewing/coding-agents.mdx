@@ -1,0 +1,77 @@
+---
+title: Using with coding agents
+description: Install the evals skill so your coding agent can plan, write, run and analyze evals
+---
+
+EZVals is built for a workflow where you decide what "good" looks like and a coding agent (Claude Code, Codex, Cursor and others) writes the evals, runs them and reads the results. The evals skill teaches your agent how to do that well.
+
+## Install the skill
+
+<CodeGroup>
+
+```bash Python
+ezvals skills add --claude
+```
+
+```bash TypeScript
+npx ezvals skills add --claude
+```
+
+```bash Latest from the marketplace
+npx skills add camronh/evals-skill
+```
+
+</CodeGroup>
+
+`ezvals skills add` installs the skill version that matches your installed EZVals, so its docs match your code. Choose at least one agent:
+
+| Flag | Installs to |
+|------|-------------|
+| `--claude` | `.claude/skills/evals/` |
+| `--codex` | `.codex/skills/evals/` |
+| `--cursor` | `.cursor/skills/evals/` |
+| `--windsurf` | `.windsurf/skills/evals/` |
+| `--kiro` | `.kiro/skills/evals/` |
+| `--roo` | `.roo/skills/evals/` |
+| `--agents` | `.agents/skills/evals/`, a shared copy the other agents link to |
+
+- Combine flags to install for several agents: `ezvals skills add --claude --codex`. The files are copied once and the other folders link to that copy.
+- The copy goes in `.agents/` if you pass `--agents`, otherwise in the first agent folder in the order above. A local `.agents/` folder is added to `.git/info/exclude`.
+- `--global` (`-g`) installs to your home directory, for every project.
+
+After upgrading EZVals, run the same `skills add` command again to update the skill.
+
+## What the skill covers
+
+The skill teaches your agent to:
+
+- plan evals: what to test, how many cases, and where the data comes from
+- wrap your agent as a [target](/writing-evals/targets-and-regrading)
+- choose graders: code checks, LLM judges or human review
+- run evals, read the results, [query](/reviewing/querying) across runs and suggest fixes
+
+It includes guides for RAG agents, coding agents, agent skills and internal components, plus a copy of these docs matched to your installed version.
+
+## Prompts to try
+
+Type `/evals`, or just ask about evals and the agent picks up the skill.
+
+- "Write evals for the refund flow in my support agent."
+- "Run the evals and tell me why the failures failed."
+- "Run each eval 5 times and tell me which ones are unreliable."
+- "Tighten the LLM judge and regrade the last run."
+- "Compare the last two runs. What regressed?"
+- "Which run used the most tokens, and on which evals?"
+
+<Tip>
+Your agent reads results through `ezvals run --json`, `ezvals query` and the run files. You review in the [web UI](/reviewing/web-ui). Annotations and score corrections you make there are saved to the run, so you can ask the agent to read them and adjust the graders.
+</Tip>
+
+## Check or remove the skill
+
+```bash
+ezvals skills doctor    # where it's installed, its version, and whether each link is intact
+ezvals skills remove    # remove it from every agent folder
+```
+
+Both accept `--global`. `doctor` marks each agent folder as linked, linked elsewhere, a copy, or not installed.

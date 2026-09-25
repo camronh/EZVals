@@ -91,8 +91,13 @@ def test_unknown_case_keys_fail_loudly():
 
 
 def test_score_validation():
-    with pytest.raises(ValueError, match="Either 'value' or 'passed' must be provided"):
+    with pytest.raises(ValueError, match=r"Invalid score \{'key': 'x'\}: use True/False, a number, or"):
         EvalResult(input=1, output=2, scores={"key": "x"})
+    with pytest.raises(ValueError, match="Invalid score 'good'"):
+        EvalContext().store(scores="good")
+    with pytest.raises(ValueError, match=r"Scores \[True, 0.5\] would share the key 'pass': give each a 'key'"):
+        EvalContext().store(scores=[True, 0.5])
+    assert len(EvalResult(input=1, output=2, scores=[True, {"key": "len", "value": 0.5}]).scores) == 2
     with pytest.raises(ValueError, match="Must specify score key or set default_score_key"):
         EvalContext(default_score_key=None).store(scores=True)
     assert EvalResult(input=1, output=2, scores={"passed": True}).scores == [{"passed": True, "key": "pass"}]
@@ -180,3 +185,48 @@ def not_results():
     assert rows["lock"]["output"].startswith("<unlocked _thread.lock")
     assert rows["not_results"]["error"].startswith("ValueError: Evaluation function must return")
     assert run("evals.py::missing", no_save=True)["results"] == []
+
+
+def test_bare_assert_notes_are_its_source_line(tmp_path: Path):
+    # a separate file: pytest rewrites the asserts in test modules
+    (tmp_path / "evals.py").write_text("""
+from ezvals import eval, EvalContext
+
+@eval(input="x", reference="y")
+def compares(ctx: EvalContext):
+    ctx.output = ctx.input
+    assert ctx.output == ctx.reference
+""")
+    [result] = run_evals([str(tmp_path / "evals.py")])
+    assert result.scores == [{"passed": False, "notes": "assert ctx.output == ctx.reference", "key": "pass"}]
+
+
+def test_forgotten_await_is_an_error():
+    async def agent(x):
+        return x
+
+    @eval(input="hi")
+    def forgets(ctx: EvalContext):
+        ctx.output = agent(ctx.input)
+
+    result = forgets()
+    assert (result.output, result.error) == (None, "TypeError: ctx.output was never awaited. Did you forget await?")
+
+
+def test_error_tracebacks_show_only_user_frames():
+    def helper():
+        raise RuntimeError("upstream 500")
+
+    @eval
+    def crashes(ctx: EvalContext):
+        helper()
+
+    @eval
+    async def crashes_async(ctx: EvalContext):
+        helper()
+
+    for result in (crashes(), crashes_async()):
+        lines = result.error.splitlines()
+        assert lines[0] == lines[-1] == "RuntimeError: upstream 500"
+        assert "test_sdk.py" in result.error and "helper()" in result.error
+        assert "ezvals" not in result.error.replace("test_sdk.py", "") and "asyncio" not in result.error and "threading" not in result.error

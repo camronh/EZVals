@@ -1,0 +1,95 @@
+---
+title: Web UI
+description: Run evals, review failures, correct scores and compare runs in the browser
+---
+
+Scores tell you how many evals failed. To learn why, you need to read the outputs. The web UI is where you run evals, read results, record what you think of them and compare runs.
+
+```bash
+ezvals serve evals/
+```
+
+This opens `http://127.0.0.1:8000` with your evals listed but not yet run. Add `--run` to start running them straight away, or pass a saved run file to reopen it. See [`ezvals serve`](/reference/cli#ezvals-serve) for all flags.
+
+<Frame>
+  <img className="block dark:hidden" src="/assets/ui-screenshot-light.png" alt="EZVals results table" />
+  <img className="hidden dark:block" src="/assets/ui-screenshot-dark.png" alt="EZVals results table" />
+</Frame>
+
+## Run evals
+
+- **Run** runs every eval, or only the rows you've selected. Results stream in as each eval finishes.
+- While a run is going, you can **pause** it (running evals finish, queued ones wait) or **stop** it (everything unfinished is cancelled).
+- Running again replaces those rows' results in the current run and keeps your annotations. To keep the old results, start a **new run** instead. It gets a fresh name in the same [session](/reviewing/sessions).
+- Every run uses your latest code, so edit an eval and run it again without restarting the server. To pick up new eval files or `ezvals.json` changes, use **Reload evals**.
+- **Regrade** scores the stored outputs again without calling your agent. See [Regrading](/writing-evals/targets-and-regrading#regrading).
+- **Settings** sets concurrency, timeout, trials, where runs are stored, completion notifications and the theme. Saving writes them to `ezvals.json`.
+
+Each row's icon shows its outcome: not run, queued, running, passed, failed, error, scored (numeric scores only) or cancelled.
+
+## Review failures
+
+The summary above the table shows the pass rate, counts, average latency and one bar per score key, plus pass@k and pass^k for [trials](/writing-evals/trials). When the session has an earlier run, it also shows how much the pass rate changed since then.
+
+To narrow the table:
+
+- Switch between all rows, failures only, and errors only.
+- Search. You choose which columns search looks in.
+- Filter by dataset, label, score, or whether a row has an annotation, error, trace URL or messages.
+- Sort by score.
+
+The summary always describes the rows you can see, so filtering answers questions like "what's the pass rate on the `edge-case` label?". Filters are kept when you open a result and come back.
+
+## Open a result
+
+Click an eval to open its detail page. It shows:
+
+- the input, output and reference, with chat transcripts rendered as conversations (you can switch to raw JSON)
+- scores with their notes
+- the error and traceback, if there is one
+- metadata, trace data, the tools the agent used and latency
+- a link to the external trace, if you stored a `trace_url`
+- the [span waterfall](/writing-evals/tracing), if tracing recorded spans
+
+<Frame>
+  <img className="block dark:hidden" src="/assets/detail-light.png" alt="A result's detail page" />
+  <img className="hidden dark:block" src="/assets/detail-dark.png" alt="A result's detail page" />
+</Frame>
+
+Use <kbd>↑</kbd> and <kbd>↓</kbd> to move between results and <kbd>Esc</kbd> to go back to the table.
+
+## Annotate and correct scores
+
+When you disagree with a grader or want to leave a note for later, edit the result directly:
+
+- **Annotations** are free-text notes, such as "hallucinated the refund policy". They're kept when the eval runs again.
+- **Score edits** change a score's pass/fail or value when you judge the grader was wrong. They're replaced the next time the eval runs or is regraded.
+
+Every edit is recorded in the result's `correction_history` with the before and after values, so you (or a coding agent) can see where your judgment and the grader's differ, and use that to tighten the grader.
+
+## Compare runs
+
+Compare shows up to four runs from the same session side by side. Start it from the header, from the pass-rate change in the summary, or with `ezvals serve --compare-runs baseline,improved`.
+
+<Frame>
+  <img className="block dark:hidden" src="/assets/comparison-light.png" alt="Comparing two runs" />
+  <img className="hidden dark:block" src="/assets/comparison-dark.png" alt="Comparing two runs" />
+</Frame>
+
+- The summary becomes a table with one row per run and the best value in each column highlighted.
+- The results table gets one column per run, with each run's output, scores and latency. Rows are matched by eval name and dataset, and a dash marks an eval that isn't in a run.
+- Opening a result shows every run's output for that eval next to each other.
+- You can add, remove and reorder runs. Running is disabled while comparing.
+
+The URL includes the compared runs, so you can bookmark or share the view with someone using the same results folder.
+
+## Export
+
+| Format | Contents |
+|--------|----------|
+| JSON | The whole run |
+| CSV | Every result, including annotations |
+| Markdown | A report with score bars and a table of the rows and columns you can see |
+| PNG | A chart of the scores (or of every compared run) to paste into a doc or chat |
+
+JSON, CSV and Markdown are also available from the command line with [`ezvals export`](/reference/cli#ezvals-export). PNG is only in the UI.

@@ -131,7 +131,7 @@ ezvals (one Go binary: CLI, web UI, storage)
 ### CLI Exit Codes
 
 1. Exit 0 = evaluations completed (regardless of pass/fail)
-2. Exit non-zero = execution error only
+2. Exit non-zero = execution error, or 4 when no evals matched
 3. Check JSON output for actual pass/fail status
 
 ---
@@ -161,8 +161,13 @@ These are mistakes new users commonly make.
 |----------------|---------------|
 | Target without context param | `ValueError: target requires the evaluation function to accept a context parameter` |
 | Unknown case key | `ValueError: Unknown case keys: prompt` |
+| Unknown `evaluate()` option (TypeScript) | `Error: Unknown option datset. Did you mean dataset?` |
 | `store(scores=...)` without key and no default | `ValueError: Must specify score key or set default_score_key` |
-| Score missing value and passed | `ValueError: Either 'value' or 'passed' must be provided in score` |
+| Score missing value and passed, or not a score at all | `ValueError: Invalid score {'accuracy': 0.9}: use True/False, a number, or {'key': ..., 'passed'/'value': ..., 'notes': ...}` |
+| Several scores without a key in one list (`scores=[True, 0.5]`) | `ValueError: Scores [True, 0.5] would share the key 'pass': give each a 'key'` |
+| `ctx.output = agent(...)` without `await` | Error result `TypeError: ctx.output was never awaited. Did you forget await?` |
+| Bare `assert` fails | Failed score whose notes are the assert's source line |
+| Selector matches nothing | `No evals match 'tset_refund' in evals.py. Did you mean test_refund?` (exit 4) |
 | Wrong return type | `ValueError: Evaluation function must return EvalResult, List[EvalResult], EvalContext, or None` |
 | Path doesn't exist | `Error: Path nonexistent.py does not exist` (exit 1) |
 | Invalid path type | `Error: Path some_file.txt is neither an eval file nor a directory` (exit 1) |

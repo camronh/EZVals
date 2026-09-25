@@ -24,7 +24,7 @@ export function CopyableText({ text, className = '' }: CopyableTextProps) {
     <span onClick={handleCopy} className={`relative ${className}`}>
       {text}
       {copied ? (
-        <span className="absolute -top-6 left-1/2 -translate-x-1/2 rounded bg-zinc-700 px-2 py-0.5 text-[10px] text-white whitespace-nowrap">Copied!</span>
+        <span className="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-theme-text px-2 py-0.5 text-[11px] font-medium text-theme-bg shadow-[var(--shadow)]">Copied!</span>
       ) : null}
     </span>
   )

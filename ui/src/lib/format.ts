@@ -22,10 +22,6 @@ export function formatDuration(ms: number) {
   return `${(ms / 1000).toFixed(2)}s`
 }
 
-export function latencyTone(latency: number) {
-  return latency <= 1 ? 'text-accent-success' : latency <= 5 ? 'text-theme-text-muted' : 'text-accent-error'
-}
-
 export function formatScoreValue(value: unknown, digits: number) {
   return typeof value === 'number' ? value.toFixed(digits) : String(value)
 }

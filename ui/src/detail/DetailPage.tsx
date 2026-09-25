@@ -82,8 +82,8 @@ export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
     setDetail((d) => d && { ...d, result: { ...d.result, result: { ...d.result.result, ...patch } } })
   }
 
-  if (error) return <div className="p-4 text-zinc-500 dark:text-zinc-400">Failed to load result.</div>
-  if (!detail) return <div className="flex h-screen items-center justify-center text-zinc-500 dark:text-zinc-400">Loading...</div>
+  if (error) return <div className="p-4 text-[13px] text-theme-text-muted">Failed to load result.</div>
+  if (!detail) return <div className="flex h-screen items-center justify-center text-[13px] text-theme-text-muted">Loading...</div>
 
   const row = detail.result
   const r = row.result
@@ -91,7 +91,7 @@ export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
   const messages = Array.isArray(r.trace_data?.messages) ? r.trace_data.messages : []
 
   return (
-    <div className="flex h-screen flex-col bg-blue-50/40 font-sans text-zinc-800 dark:bg-neutral-950 dark:text-zinc-100">
+    <div className="flex h-screen flex-col bg-theme-bg font-sans text-theme-text">
       <DetailHeader
         name={row.function}
         trial={row.trial}
@@ -127,7 +127,7 @@ export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
         {comparing ? null : (
           <>
             <ResizeHandle direction="col" onMouseDown={start('sidebarWidth')} />
-            <div id="sidebar-column" style={{ '--sidebar-width': `${layout.sidebarWidth}px` } as CSSProperties} className="flex min-h-0 flex-col max-md:flex-none max-md:border-t max-md:border-blue-200/60 max-md:dark:border-zinc-800 md:w-[var(--sidebar-width)] md:min-w-[200px]">
+            <div id="sidebar-column" style={{ '--sidebar-width': `${layout.sidebarWidth}px` } as CSSProperties} className="flex min-h-0 flex-col max-md:flex-none max-md:border-t max-md:border-theme-border md:w-[var(--sidebar-width)] md:min-w-[200px]">
               <Sidebar
                 row={row}
                 runId={detail.run_id}
@@ -142,7 +142,7 @@ export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
         )}
       </div>
       <Drawer id="messages-pane" title="Messages" count={messages.length} open={drawer === 'messages'} onClose={() => setDrawer(null)}>
-        <div className="p-2"><DataViewer content={messages} placeholder="—" /></div>
+        <div className="p-4"><DataViewer content={messages} placeholder="—" /></div>
       </Drawer>
       <Drawer id="trace-pane" title="Spans" count={row.spans?.length ?? 0} open={drawer === 'trace'} onClose={() => setDrawer(null)}>
         <TraceWaterfall spans={row.spans ?? []} />

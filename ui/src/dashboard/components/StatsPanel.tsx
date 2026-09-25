@@ -1,11 +1,8 @@
 import { useRef, useState } from 'react'
 import type { ComparisonRun, ScoreChip, SessionRun } from '../../types'
-import { CopyableText } from '../../components/CopyableText'
-import { FloatingMenu } from '../../components/FloatingMenu'
 import { Icon } from '../../components/Icon'
-import { formatRunTimestamp } from '../../lib/format'
-import { barTone, chipStats, type StatsSummary, type SubsetStats } from '../../lib/stats'
-import { RunPicker } from './RunPicker'
+import { barTone, chipStats, type SubsetStats } from '../../lib/stats'
+import { RunsMenu } from './Header'
 
 export type Comparison = {
   runs: ComparisonRun[]
@@ -16,280 +13,172 @@ export type Comparison = {
 }
 
 type Props = {
-  stats: StatsSummary
-  sessionName?: string | null
-  runName?: string | null
-  runId: string
-  chips: ScoreChip[]
-  filteredCount: number | null
+  stats: SubsetStats
+  /** All evals in the run; the eval count reads "5 of 20" when `stats` covers fewer rows. */
+  total: number
+  progress: { running: boolean; completed: number; total: number }
+  trials?: { k: number; passAtK: number; passAllK: number } | null
+  /** Pass-rate change in points since the previous run, and how to compare with it. */
+  delta?: { points: number; previous: string; onCompare: () => void } | null
   sessionRuns: SessionRun[]
-  onRename: (name: string) => void
-  onRenameRun: (runId: string, name: string) => void
-  onDeleteRun: (runId: string) => void
-  onSelectRun: (runId: string) => void
-  onNewRun: () => void
-  /** New run is unavailable while a run is in progress. */
-  newRunDisabled?: boolean
-  onCompare: (runId: string) => void
   comparison?: Comparison
 }
 
-function RunsMenu({ anchor, open, onClose, runs, onPick }: {
-  anchor: React.RefObject<HTMLElement | null>
-  open: boolean
-  onClose: () => void
-  runs: SessionRun[]
-  onPick: (run: SessionRun) => void
-}) {
-  return (
-    <FloatingMenu anchorRef={anchor} open={open} onClose={onClose}>
-      {runs.length === 0 ? <div className="p-2 text-[10px] text-theme-text-muted">No other runs available</div> : runs.map((run) => (
-        <button key={run.run_id} className="compare-option w-full px-3 py-2 text-left text-xs text-theme-text-secondary" onClick={() => { onPick(run); onClose() }}>
-          {run.run_name || run.run_id} <span className="text-theme-text-muted">({formatRunTimestamp(run.timestamp)})</span>
-        </button>
-      ))}
-    </FloatingMenu>
-  )
+const pct = (v: number) => `${Math.round(v * 100)}%`
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+const chipText = (chip: ScoreChip) => (chip.type === 'ratio' ? `${chipStats(chip).pct}%` : chipStats(chip).value)
+
+function Bar({ value, tone }: { value: number; tone: string }) {
+  return <div className={`summary-bar ${tone}`}><div style={{ width: `${Math.max(value, 0)}%` }} /></div>
 }
 
-function RunInfo({ sessionName, runName, runId, sessionRuns, onRename, onRenameRun, onDeleteRun, onSelectRun, onNewRun, onCompare, newRunDisabled }: Props) {
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState('')
-  const [menu, setMenu] = useState<'runs' | 'compare' | null>(null)
-  const runsAnchor = useRef<HTMLButtonElement | null>(null)
-  const compareAnchor = useRef<HTMLButtonElement | null>(null)
-  const current = sessionRuns.find((r) => r.run_id === runId)
-  const others = sessionRuns.filter((r) => r.run_id !== runId)
-  const save = () => {
-    if (draft.trim() && draft.trim() !== runName) onRename(draft.trim())
-    setEditing(false)
-  }
+function ScoreBars({ chips }: { chips: ScoreChip[] }) {
+  if (!chips.length) return null
   return (
-    <div className="stats-left-header">
-      {sessionName ? (
-        <div className="stats-info-row">
-          <span className="stats-info-label">session</span>
-          <CopyableText text={sessionName} className="stats-session copyable cursor-pointer hover:text-theme-text-secondary" />
-        </div>
-      ) : null}
-      {runName ? (
-        <>
-          <div className="stats-info-row group">
-            <span className="stats-info-label">run</span>
-            <div className="stats-run-row-main">
-              {editing ? (
-                <span className="flex items-center gap-1">
-                  <input
-                    id="run-name-input"
-                    className="w-40 rounded border border-theme-border bg-theme-bg-elevated px-1 font-mono text-sm text-theme-text outline-none focus:border-blue-500"
-                    value={draft}
-                    aria-label="Run name"
-                    onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false) }}
-                    onBlur={() => setEditing(false)}
-                    autoFocus
-                    onFocus={(e) => e.currentTarget.select()}
-                  />
-                  <button className="save-run-name-btn text-emerald-500 hover:text-emerald-400" title="Save name" aria-label="Save name" onMouseDown={(e) => e.preventDefault()} onClick={save}>
-                    <Icon name="check" className="h-3.5 w-3.5" />
-                  </button>
-                </span>
-              ) : (
-                <>
-                  {others.length ? (
-                    <button ref={runsAnchor} id="run-dropdown-expanded" className="stats-run-dropdown run-dropdown-btn" data-run-id={runId} onClick={() => setMenu(menu === 'runs' ? null : 'runs')}>
-                      <span className="truncate" title={current ? `${current.run_name} (${formatRunTimestamp(current.timestamp)})` : runName}>{runName}</span> <span className="dropdown-arrow">v</span>
-                    </button>
-                  ) : (
-                    <CopyableText text={runName} className="stats-run copyable cursor-pointer hover:text-theme-text-secondary" />
-                  )}
-                  <button className="edit-run-btn-expanded ml-1 text-theme-text-muted transition hover:text-theme-text-secondary" title="Rename run" aria-label="Rename run" onClick={() => { setDraft(runName); setEditing(true) }}>
-                    <Icon name="pencil" className="h-3 w-3" />
-                  </button>
-                </>
-              )}
-            </div>
+    <div id="score-bars" className="grid min-w-0 flex-1 grid-cols-[repeat(auto-fill,minmax(240px,1fr))] content-center gap-x-8 gap-y-2.5">
+      {chips.map((chip) => {
+        const { pct: value, value: detail } = chipStats(chip)
+        return (
+          <div key={chip.key} className="score-bar grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-1">
+            <span className="truncate text-[13px] text-theme-text-secondary" title={chip.key}>{chip.key}</span>
+            <span className="font-mono text-[12px] tabular-nums text-theme-text">
+              {chip.type === 'ratio' ? <>{value}%<span className="ml-1.5 text-theme-text-muted">{detail}</span></> : <>{detail}<span className="ml-1.5 text-theme-text-muted">avg</span></>}
+            </span>
+            <div className="col-span-2"><Bar value={value} tone={barTone(value)} /></div>
           </div>
-          <div className="stats-info-row stats-run-actions-row">
-            <div className="stats-run-actions">
-              <button id="new-run-btn-expanded" className="stats-run-action-btn" title={newRunDisabled ? 'A run is in progress' : 'Create new run'} aria-label="Create new run" onClick={onNewRun} disabled={newRunDisabled}>
-                <Icon name="plus" /><span>New run</span>
-              </button>
-              <button
-                ref={compareAnchor}
-                id="add-compare-btn"
-                className="stats-run-action-btn"
-                title={others.length ? 'Compare runs' : 'Need at least 2 runs to compare'}
-                aria-label="Compare runs"
-                onClick={() => setMenu(menu === 'compare' ? null : 'compare')}
-                disabled={!others.length}
-              >
-                <Icon name="compare" /><span>Compare</span>
-              </button>
-            </div>
-          </div>
-        </>
-      ) : null}
-      {menu === 'runs' ? <RunPicker anchorRef={runsAnchor} onClose={() => setMenu(null)} sessionRuns={sessionRuns} activeRunId={runId} onSelectRun={onSelectRun} onRenameRun={onRenameRun} onDeleteRun={onDeleteRun} /> : null}
-      <RunsMenu anchor={compareAnchor} open={menu === 'compare'} onClose={() => setMenu(null)} runs={others} onPick={(run) => onCompare(run.run_id)} />
+        )
+      })}
     </div>
   )
 }
 
-function ComparisonInfo({ sessionName, sessionRuns, comparison }: { sessionName?: string | null; sessionRuns: SessionRun[]; comparison: Comparison }) {
+function Headline({ stats, total, progress, trials, delta }: Props) {
+  const evals = stats.count < total ? `${stats.count} of ${plural(total, 'eval')}` : plural(total, 'eval')
+  if (!stats.finished && !progress.running && stats.notRun === stats.count) {
+    return (
+      <div>
+        <div className="text-2xl font-semibold tracking-tight text-theme-text">{evals}</div>
+        <div className="mt-1 text-[13px] text-theme-text-muted">Not run yet</div>
+      </div>
+    )
+  }
+  const facts = [
+    stats.passed ? <span key="p" className="text-accent-success">{stats.passed} passed</span> : null,
+    stats.failed ? <span key="f" className="text-accent-error">{stats.failed} failed</span> : null,
+    <span key="e" id="stats-errors" className={stats.errors ? 'text-accent-error' : undefined}>{plural(stats.errors, 'error')}</span>,
+    <span key="n">{evals}</span>,
+    stats.avgLatency ? <span key="l" className="font-mono">{stats.avgLatency.toFixed(2)}s avg</span> : null,
+    trials && trials.k > 1 ? <span key="k" id="stats-pass-at-k" title={`Evals where at least one of ${trials.k} trials passed`}>pass@{trials.k} {pct(trials.passAtK)}</span> : null,
+    trials && trials.k > 1 ? <span key="a" id="stats-pass-all-k" title={`Evals where all ${trials.k} trials passed`}>pass^{trials.k} {pct(trials.passAllK)}</span> : null,
+  ].filter(Boolean)
+  return (
+    <div className="min-w-[220px]">
+      <div className="flex items-baseline gap-2.5">
+        {stats.rate != null ? (
+          <span id="pass-rate" className="text-3xl font-semibold tabular-nums tracking-tight text-theme-text">{pct(stats.rate)}</span>
+        ) : (
+          <span className="text-3xl font-semibold tabular-nums tracking-tight text-theme-text">{stats.finished}</span>
+        )}
+        <span className="text-[13px] text-theme-text-muted">{stats.rate != null ? 'pass rate' : 'scored'}</span>
+        {delta ? (
+          <button
+            id="pass-rate-delta"
+            className={`rounded-md px-1.5 py-0.5 text-[12px] font-medium tabular-nums hover:bg-theme-bg-elevated ${delta.points > 0 ? 'text-accent-success' : delta.points < 0 ? 'text-accent-error' : 'text-theme-text-muted'}`}
+            title={`vs ${delta.previous}. Click to compare`}
+            onClick={delta.onCompare}
+          >
+            {delta.points > 0 ? '▲' : delta.points < 0 ? '▼' : '±'} {Math.abs(delta.points)} pts
+          </button>
+        ) : null}
+      </div>
+      <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[13px] text-theme-text-secondary">{facts}</div>
+      {progress.running ? (
+        <div id="run-progress" className="mt-3 flex items-center gap-2.5">
+          <div className="summary-bar tone-progress w-40"><div style={{ width: `${progress.total ? (progress.completed / progress.total) * 100 : 0}%` }} /></div>
+          <span className="font-mono text-[12px] tabular-nums text-theme-text-muted">{progress.completed}/{progress.total}</span>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function ComparisonSummary({ comparison, sessionRuns }: { comparison: Comparison; sessionRuns: SessionRun[] }) {
   const [adding, setAdding] = useState(false)
   const anchor = useRef<HTMLButtonElement | null>(null)
   const available = sessionRuns.filter((r) => !comparison.runs.some((c) => c.runId === r.run_id))
+  const keys = [...new Set(comparison.runs.flatMap((run) => comparison.stats[run.runId].chips.map((c) => c.key)))]
+  // Each column: a sortable number per run (higher is better unless `lower`) and its text.
+  const columns = [
+    { key: 'Pass rate', lower: false, cell: (s: SubsetStats) => (s.rate == null ? null : { n: s.rate, text: pct(s.rate) }) },
+    ...keys.map((key) => ({ key, lower: false, cell: (s: SubsetStats) => { const c = s.chips.find((chip) => chip.key === key); return c ? { n: chipStats(c).pct, text: chipText(c) } : null } })),
+    { key: 'Latency', lower: true, cell: (s: SubsetStats) => (s.avgLatency ? { n: s.avgLatency, text: `${s.avgLatency.toFixed(2)}s` } : null) },
+  ]
+  const best = columns.map((col) => {
+    const values = comparison.runs.map((run) => col.cell(comparison.stats[run.runId])?.n).filter((n): n is number => n != null)
+    return values.length > 1 ? (col.lower ? Math.min(...values) : Math.max(...values)) : null
+  })
+  const th = 'px-3 py-2 text-right text-[12px] font-medium text-theme-text-muted'
   return (
-    <div className="stats-left-header">
-      {sessionName ? (
-        <div className="stats-info-row">
-          <span className="stats-info-label">session</span>
-          <CopyableText text={sessionName} className="stats-session copyable cursor-pointer hover:text-theme-text-secondary" />
-        </div>
+    <div className="overflow-x-auto">
+      <table id="comparison-summary" className="w-full text-[13px]">
+        <thead>
+          <tr className="border-b border-theme-border">
+            <th className={`${th} !text-left`}>Run</th>
+            {columns.map((col) => <th key={col.key} className={`${th} max-w-[140px] truncate`} title={col.key}>{col.key}</th>)}
+            <th className="w-24" />
+          </tr>
+        </thead>
+        <tbody>
+          {comparison.runs.map((run, i) => (
+            <tr key={run.runId} className="comparison-run border-b border-theme-border-subtle last:border-0">
+              <td className="px-3 py-2">
+                <span className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: run.color }} />
+                  <span className="max-w-[240px] truncate font-medium text-theme-text">{run.runName}</span>
+                  <span className="font-mono text-[12px] text-theme-text-muted">{comparison.stats[run.runId].count}</span>
+                </span>
+              </td>
+              {columns.map((col, c) => {
+                const cell = col.cell(comparison.stats[run.runId])
+                return (
+                  <td key={col.key} className={`px-3 py-2 text-right font-mono tabular-nums ${cell && cell.n === best[c] ? 'font-semibold text-theme-text' : 'text-theme-text-secondary'}`}>
+                    {cell?.text ?? '—'}
+                  </td>
+                )
+              })}
+              <td className="px-2 py-1 text-right">
+                <span className="inline-flex items-center text-theme-text-muted">
+                  <button className="move-comparison flex h-6 w-6 items-center justify-center rounded hover:bg-theme-bg-elevated hover:text-theme-text disabled:invisible" data-run-id={run.runId} data-direction="up" disabled={i === 0} onClick={() => comparison.onMove(run.runId, -1)} title="Move up" aria-label="Move up"><Icon name="chevron-up" className="h-3.5 w-3.5" /></button>
+                  <button className="move-comparison flex h-6 w-6 items-center justify-center rounded hover:bg-theme-bg-elevated hover:text-theme-text disabled:invisible" data-run-id={run.runId} data-direction="down" disabled={i === comparison.runs.length - 1} onClick={() => comparison.onMove(run.runId, 1)} title="Move down" aria-label="Move down"><Icon name="chevron-down" className="h-3.5 w-3.5" /></button>
+                  <button className="remove-comparison flex h-6 w-6 items-center justify-center rounded hover:bg-theme-bg-elevated hover:text-theme-text disabled:invisible" disabled={i === 0} onClick={() => comparison.onRemove(run.runId)} title="Remove from comparison" aria-label="Remove from comparison"><Icon name="close" className="h-3 w-3" /></button>
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {comparison.runs.length < 4 && available.length ? (
+        <button ref={anchor} id="add-more-compare" className="mt-1 inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] text-accent-link hover:bg-theme-bg-elevated" onClick={() => setAdding(!adding)}>
+          <Icon name="plus" className="h-3 w-3" />Add run
+        </button>
       ) : null}
-      <div className="stats-info-row"><span className="stats-info-label">comparing</span></div>
-      <div className="comparison-chips flex flex-wrap items-center gap-2">
-        {comparison.runs.map((run, i) => (
-          <span key={run.runId} className="comparison-chip flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium" style={{ background: `${run.color}20`, border: `1px solid ${run.color}`, color: run.color }}>
-            <span className="h-2 w-2 rounded-full" style={{ background: run.color }} />
-            <span className="comparison-chip-name max-w-[120px] truncate">{run.runName}</span>
-            <span className="text-theme-text-muted">({comparison.stats[run.runId]?.count ?? 0})</span>
-            {i > 0 ? <button className="move-comparison ml-1 text-[12px] leading-none hover:text-white" data-run-id={run.runId} data-direction="up" onClick={() => comparison.onMove(run.runId, -1)} title="Move up">&uarr;</button> : null}
-            {i < comparison.runs.length - 1 ? <button className="move-comparison text-[12px] leading-none hover:text-white" data-run-id={run.runId} data-direction="down" onClick={() => comparison.onMove(run.runId, 1)} title="Move down">&darr;</button> : null}
-            {i > 0 ? <button className="remove-comparison ml-1 text-[14px] leading-none hover:text-white" onClick={() => comparison.onRemove(run.runId)} title="Remove from comparison">&times;</button> : null}
-          </span>
-        ))}
-        {comparison.runs.length < 4 && available.length ? (
-          <button ref={anchor} id="add-more-compare" className="rounded-full bg-theme-bg-elevated px-2 py-1 text-[10px] text-theme-text-muted hover:bg-theme-btn-bg-hover hover:text-theme-text-secondary" title="Add another run to compare" onClick={() => setAdding(!adding)}>+</button>
-        ) : null}
-      </div>
       <RunsMenu anchor={anchor} open={adding} onClose={() => setAdding(false)} runs={available} onPick={(run) => comparison.onAdd(run.run_id)} />
     </div>
   )
 }
 
-function Metrics({ stats, filteredCount }: { stats: StatsSummary; filteredCount: number | null }) {
-  const trials = stats.trials ?? 0
-  return (
-    <>
-      <div className="stats-metric-row-main">
-        <div className="stats-metric">
-          <span className="stats-metric-value">
-            {filteredCount != null ? <>{filteredCount}<span className="stats-metric-divisor">/{stats.total}</span></> : stats.total}
-          </span>
-          <span className="stats-metric-label">{stats.total === 1 ? 'test' : 'tests'}</span>
-        </div>
-        {stats.isRunning ? (
-          <div className="stats-progress">
-            <div className="stats-progress-bar"><div className="stats-progress-fill" style={{ width: `${stats.pctDone}%` }} /></div>
-            <span className="stats-progress-text text-emerald-400">{stats.pctDone}% ({stats.progressCompleted}/{stats.progressTotal})</span>
-          </div>
-        ) : null}
-      </div>
-      <div className="stats-metric-row">
-        <div id="stats-errors" className="stats-metric stats-metric-sm stats-errors">
-          <span className="stats-metric-value" style={stats.totalErrors ? { color: 'var(--accent-error)' } : undefined}>{stats.totalErrors}</span>
-          <span className="stats-metric-label">{stats.totalErrors === 1 ? 'error' : 'errors'}</span>
-        </div>
-        {trials > 1 && stats.passAtK != null ? (
-          <>
-            <div id="stats-pass-at-k" className="stats-metric stats-metric-sm" title={`Evals where at least one of ${trials} trials passed`}>
-              <span className="stats-metric-value">{Math.round(stats.passAtK * 100)}%</span>
-              <span className="stats-metric-label">pass@{trials}</span>
-            </div>
-            <div id="stats-pass-all-k" className="stats-metric stats-metric-sm" title={`Evals where all ${trials} trials passed`}>
-              <span className="stats-metric-value">{Math.round((stats.passAllK ?? 0) * 100)}%</span>
-              <span className="stats-metric-label">pass^{trials}</span>
-            </div>
-          </>
-        ) : null}
-      </div>
-    </>
-  )
-}
-
-type ChartColumn = { key: string; label: string; bars: { key: string; pct: number; color?: string; text?: string }[]; value?: { pct: number; detail: string } }
-
-function chartColumns(chips: ScoreChip[], comparison?: Comparison): ChartColumn[] {
-  if (!comparison) {
-    return chips.map((chip) => {
-      const { pct, value } = chipStats(chip)
-      return { key: chip.key, label: chip.key, bars: [{ key: chip.key, pct }], value: { pct, detail: value } }
-    })
-  }
-  const keys = [...new Set(Object.values(comparison.stats).flatMap((s) => s.chips.map((c) => c.key)))]
-  const columns = keys.map((key) => ({
-    key,
-    label: key,
-    bars: comparison.runs.map((run) => {
-      const chip = comparison.stats[run.runId]?.chips.find((c) => c.key === key)
-      const pct = chip ? chipStats(chip).pct : 0
-      return { key: run.runId, pct, color: run.color, text: chip ? `${pct}%` : '--' }
-    }),
-  }))
-  columns.push({
-    key: '_latency',
-    label: 'Latency',
-    bars: comparison.runs.map((run) => {
-      const latency = comparison.stats[run.runId]?.avgLatency ?? 0 // bars span 0-5s
-      return { key: run.runId, pct: Math.min(latency / 5, 1) * 100, color: run.color, text: latency ? `${latency.toFixed(2)}s` : '--' }
-    }),
-  })
-  return columns
-}
-
-function ScoreChart({ columns, comparison }: { columns: ChartColumn[]; comparison: boolean }) {
-  return (
-    <div className="stats-right">
-      <div className="stats-chart-area">
-        {[0, 25, 50, 75].map((top) => <div key={top} className="stats-gridline" style={{ top: `${top}%` }} />)}
-        <div className="stats-chart-bars">
-          {columns.map((col) => (
-            <div key={col.key} className={comparison ? 'stats-bar-group' : 'stats-bar-col'}>
-              {col.bars.map((bar) => comparison ? (
-                <div key={bar.key} className="comparison-bar-wrapper">
-                  <span className="comparison-bar-label" style={{ color: bar.color, bottom: `${bar.pct}%` }}>{bar.text}</span>
-                  <div className="comparison-bar" style={{ background: bar.color, height: `${bar.pct}%` }} />
-                </div>
-              ) : (
-                <div key={bar.key} className={`stats-chart-fill ${barTone(bar.pct)}`} style={{ height: `${bar.pct}%` }} />
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="stats-xaxis">
-        <div className="stats-chart-labels">{columns.map((col) => <span key={col.key} className="stats-chart-label">{col.label}</span>)}</div>
-        <div className="stats-chart-values">
-          {columns.map((col) => (
-            <span key={col.key} className={`stats-chart-value${comparison ? ' comparison-value' : ''}`}>
-              {col.value ? <><span className="stats-pct">{col.value.pct}%</span><span className="stats-ratio">{col.value.detail}</span></> : null}
-            </span>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/** Run details and the score chart above the results table. */
+/** How the run did at a glance: pass rate, counts and one bar per score key; in comparison mode, a table of runs. */
 export function StatsPanel(props: Props) {
-  const { comparison } = props
-  // Re-keying the chart replays its entrance animation when the run or comparison changes.
-  const view = `${props.runId}:${comparison?.runs.map((r) => r.runId).join(',') ?? ''}`
   return (
-    <div id="stats-expanded" className={`stats-expanded${comparison ? ' comparison-mode' : ''}`}>
-      <div className="stats-layout">
-        <div className="stats-left">
-          <div className="stats-left-content">
-            {comparison ? <ComparisonInfo sessionName={props.sessionName} sessionRuns={props.sessionRuns} comparison={comparison} /> : <RunInfo {...props} />}
-            {comparison ? null : <Metrics stats={props.stats} filteredCount={props.filteredCount} />}
-          </div>
-          <div className="stats-yaxis">{['100%', '75%', '50%', '25%', '0%'].map((l) => <span key={l} className="stats-axis-label">{l}</span>)}</div>
+    <section id="stats-expanded" className="rounded-lg border border-theme-border bg-theme-bg-secondary p-4">
+      {props.comparison ? (
+        <ComparisonSummary comparison={props.comparison} sessionRuns={props.sessionRuns} />
+      ) : (
+        <div className="flex flex-wrap items-center gap-x-10 gap-y-4">
+          <Headline {...props} />
+          <ScoreBars chips={props.stats.chips} />
         </div>
-        <ScoreChart key={view} columns={chartColumns(props.chips, comparison)} comparison={!!comparison} />
-      </div>
-    </div>
+      )}
+    </section>
   )
 }

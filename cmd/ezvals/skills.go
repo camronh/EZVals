@@ -2,7 +2,6 @@ package main
 
 import (
 	"embed"
-	"flag"
 	"fmt"
 	"io/fs"
 	"os"
@@ -30,7 +29,7 @@ func skillsCmd(args []string) {
 	if len(args) == 0 {
 		fatal("usage: ezvals skills add|remove|doctor [--global] [agent flags]")
 	}
-	fs := flag.NewFlagSet("skills "+args[0], flag.ExitOnError)
+	fs := newFlagSet("skills " + args[0])
 	global := fs.Bool("global", false, "use the home directory instead of the current directory")
 	fs.BoolVar(global, "g", false, "shorthand for --global")
 	useAgentsDir := fs.Bool("agents", false, "install the canonical copy in .agents/")

@@ -5,6 +5,7 @@ import 'highlight.js/styles/github-dark-dimmed.css'
 import { marked } from 'marked'
 import { useMemo, useState } from 'react'
 import { getRawText } from '../lib/format'
+import { Segmented } from './Dropdown'
 
 hljs.registerLanguage('json', json)
 
@@ -60,7 +61,7 @@ function buildViewer(content: unknown, placeholder = '—') {
   if (content == null || content === '') {
     return {
       raw: '',
-      html: `<div class="data-surface text-xs text-zinc-400">${escapeHtml(placeholder)}</div>`,
+      html: `<div class="data-surface text-[13px] text-theme-text-muted">${escapeHtml(placeholder)}</div>`,
     }
   }
 
@@ -292,25 +293,10 @@ export function DataViewer({ content, placeholder, className = '' }: DataViewerP
     return (
       <div className={wrapperClass} data-raw={rawText}>
         <div className="mb-2 flex items-center justify-end">
-          <div className="inline-flex rounded border border-zinc-200 bg-zinc-100 p-0.5 dark:border-zinc-700 dark:bg-zinc-800/70">
-            <button
-              type="button"
-              className={`rounded px-2 py-0.5 text-[10px] font-medium ${mode === 'pretty' ? 'bg-white text-zinc-700 shadow dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'}`}
-              onClick={() => setMode('pretty')}
-            >
-              Pretty
-            </button>
-            <button
-              type="button"
-              className={`rounded px-2 py-0.5 text-[10px] font-medium ${mode === 'raw' ? 'bg-white text-zinc-700 shadow dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'}`}
-              onClick={() => setMode('raw')}
-            >
-              Raw
-            </button>
-          </div>
+          <Segmented size="sm" value={mode} onChange={setMode} options={[{ value: 'pretty', label: 'Pretty' }, { value: 'raw', label: 'Raw' }]} />
         </div>
         {mode === 'pretty' ? (
-          <div className="space-y-1">
+          <div className="space-y-2">
             {messageItems.map((item) => (
               <div key={item.key} className={`msg-box msg-${item.role}`}>
                 <div className="msg-box-header">{item.title}</div>

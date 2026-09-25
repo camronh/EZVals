@@ -19,27 +19,27 @@ export function ComparisonView({ runs, base, layout, onResize }: Props) {
   const hasReference = base.result.reference != null
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div id="comparison-outputs" className="min-h-0 flex-1 overflow-auto p-4">
+      <div id="comparison-outputs" className="min-h-0 flex-1 overflow-auto bg-theme-bg-secondary p-4">
         <div className="grid min-h-full grid-cols-1 gap-3 lg:grid-cols-2">
           {runs.map((run) => {
             const r = run.match?.row.result
             return (
-              <div key={run.runId} className="comparison-output-card flex min-h-[220px] flex-col overflow-hidden rounded border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/60">
-                <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
+              <div key={run.runId} className="comparison-output-card flex min-h-[220px] flex-col overflow-hidden rounded-lg border border-theme-border bg-theme-bg">
+                <div className="flex h-10 items-center justify-between gap-3 border-b border-theme-border px-3">
                   <div className="flex min-w-0 items-center gap-2">
-                    <span className="h-2 w-2 rounded-full" style={{ background: run.color }} />
-                    <span className="truncate text-xs font-semibold text-zinc-700 dark:text-zinc-200">{run.runName}</span>
-                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400">{r?.status ?? '—'}</span>
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: run.color }} />
+                    <span className="truncate text-[13px] font-medium text-theme-text">{run.runName}</span>
+                    <span className="text-[12px] text-theme-text-muted">{r?.status ?? '—'}</span>
                   </div>
                   {run.match ? (
-                    <a href={`/runs/${run.runId}/results/${run.match.index}?mode=single`} title="Open detail" className="rounded border border-zinc-300 px-1.5 py-0.5 text-[10px] text-zinc-500 hover:border-blue-300 hover:text-blue-600 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-blue-500 dark:hover:text-blue-300">
+                    <a href={`/runs/${run.runId}/results/${run.match.index}?mode=single`} title="Open detail" className="shrink-0 text-[12px] text-accent-link hover:text-accent-link-hover">
                       Open detail
                     </a>
-                  ) : <span className="text-[10px] text-zinc-500 dark:text-zinc-400">No match</span>}
+                  ) : <span className="shrink-0 text-[12px] text-theme-text-muted">No match</span>}
                 </div>
-                <div className="data-panel-body flex-1 overflow-auto p-3"><DataViewer content={r?.output} placeholder="—" /></div>
-                {r?.error ? <div className="border-t border-rose-200 bg-rose-50 px-3 py-1.5 text-[11px] text-rose-600 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">Error: {r.error}</div> : null}
-                <div className="border-t border-zinc-200 px-3 py-2 dark:border-zinc-800">
+                <div className="data-panel-body flex-1 overflow-auto p-3 text-[13px] text-theme-text"><DataViewer content={r?.output} placeholder="—" /></div>
+                {r?.error ? <div className="border-t border-theme-border bg-accent-error-bg px-3 py-1.5 font-mono text-[12px] text-accent-error">Error: {r.error}</div> : null}
+                <div className="border-t border-theme-border px-3 py-2">
                   <ScoreBadges scores={r?.scores ?? []} latency={r?.latency} annotation={r?.annotation} />
                 </div>
               </div>
@@ -48,11 +48,11 @@ export function ComparisonView({ runs, base, layout, onResize }: Props) {
         </div>
       </div>
       <ResizeHandle direction="row" onMouseDown={onResize('comparisonContextHeight')} />
-      <div id="comparison-context" className="flex flex-shrink-0 flex-col border-t border-blue-100 bg-white dark:border-zinc-800 dark:bg-zinc-900" style={{ height: layout.comparisonContextHeight, minHeight: 120 }}>
+      <div id="comparison-context" className="flex flex-shrink-0 flex-col bg-theme-bg" style={{ height: layout.comparisonContextHeight, minHeight: 120 }}>
         {base.dataset || base.labels?.length ? (
-          <div className="flex items-center gap-2 border-b border-blue-100 px-3 py-1.5 dark:border-zinc-800">
-            <span className="text-[10px] text-zinc-500">{base.dataset}</span>
-            {base.labels?.map((l) => <span key={l} className="rounded bg-zinc-200 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">{l}</span>)}
+          <div className="flex items-center gap-2 border-b border-theme-border px-4 py-2">
+            <span className="text-[12px] text-theme-text-muted">{base.dataset}</span>
+            {base.labels?.map((l) => <span key={l} className="rounded-md bg-theme-bg-elevated px-1.5 py-0.5 text-[11px] text-theme-text-secondary">{l}</span>)}
           </div>
         ) : null}
         <div className="flex min-h-0 flex-1">

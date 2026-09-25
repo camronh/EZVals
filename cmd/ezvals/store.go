@@ -140,6 +140,7 @@ type Run struct {
 	TotalFunctions   int      `json:"total_functions"`
 	TotalErrors      int      `json:"total_errors"`
 	TotalPassed      int      `json:"total_passed"`
+	TotalFailed      int      `json:"total_failed"`
 	TotalWithScores  int      `json:"total_with_scores"`
 	AverageLatency   float64  `json:"average_latency"`
 	Trials           int      `json:"trials,omitempty"`
@@ -252,11 +253,11 @@ func (run *Run) computeTotals() {
 		if len(r.Scores) > 0 {
 			run.TotalWithScores++
 		}
-		for _, s := range r.Scores {
-			if s.Passed != nil && *s.Passed {
-				run.TotalPassed++
-				break
-			}
+		switch outcome(r) {
+		case "passed":
+			run.TotalPassed++
+		case "failed":
+			run.TotalFailed++
 		}
 		if r.Latency != nil {
 			run.AverageLatency += *r.Latency
@@ -296,17 +297,27 @@ func (run *Run) computeTotals() {
 }
 
 // passed is true for a finished result whose pass/fail scores all passed.
-func passed(r Result) bool {
-	sawPass := false
+func passed(r Result) bool { return outcome(r) == "passed" }
+
+// outcome is "passed", "failed" (a pass/fail score failed), "error", "scored" (only numeric scores, or none),
+// or the status of an unfinished result.
+func outcome(r Result) string {
+	if r.Error != nil {
+		return "error"
+	}
+	if r.Status != "completed" {
+		return r.Status
+	}
+	kind := "scored"
 	for _, s := range r.Scores {
 		if s.Passed != nil {
 			if !*s.Passed {
-				return false
+				return "failed"
 			}
-			sawPass = true
+			kind = "passed"
 		}
 	}
-	return sawPass && r.Error == nil && r.Status == "completed"
+	return kind
 }
 
 // spanCount counts the spans an eval recorded, not the root span the SDK wraps every eval in.

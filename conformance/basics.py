@@ -90,3 +90,10 @@ def evaluator_after_assertion(ctx: EvalContext):
 def blocks_past_timeout(ctx: EvalContext):
     ctx.output = "started"
     time.sleep(0.5)
+
+
+@eval
+async def forgets_await(ctx: EvalContext):
+    async def agent():
+        return "hi"
+    ctx.output = agent()

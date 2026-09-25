@@ -71,13 +71,15 @@ Once installed, just ask Claude Code to help with evaluation tasks:
 | Reference | Description |
 |-----------|-------------|
 | [quickstart.mdx](ezvals-docs/quickstart.mdx) | Getting started with EZVals (Python and TypeScript) |
-| [decorators.mdx](ezvals-docs/decorators.mdx) | The `@eval` decorator and `evaluate()` options |
-| [eval-context.mdx](ezvals-docs/eval-context.mdx) | EvalContext API |
+| [evals.mdx](ezvals-docs/evals.mdx) | Writing evals: `@eval` / `evaluate()` and EvalContext |
 | [scoring.mdx](ezvals-docs/scoring.mdx) | Scoring with assertions and `ctx.store()` |
-| [patterns.mdx](ezvals-docs/patterns.mdx) | Common eval patterns |
+| [cases.mdx](ezvals-docs/cases.mdx) | Running one eval over many inputs |
+| [trials.mdx](ezvals-docs/trials.mdx) | Repeated trials, pass@k and pass^k |
+| [tracing.mdx](ezvals-docs/tracing.mdx) | OpenTelemetry span capture |
 | [sessions.mdx](ezvals-docs/sessions.mdx) | Sessions, runs, and run files |
+| [querying.mdx](ezvals-docs/querying.mdx) | SQL over results |
 | [cli.mdx](ezvals-docs/cli.mdx) | Command line interface |
-| [web-ui.mdx](ezvals-docs/web-ui.mdx) | Interactive results exploration |
+| [web-ui.mdx](ezvals-docs/web-ui.mdx) | Running, reviewing and comparing in the browser |
 
 ## Resources
 

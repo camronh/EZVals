@@ -1,0 +1,65 @@
+---
+title: File defaults
+description: Share settings across every eval in a file
+---
+
+When every eval in a file uses the same labels, target or evaluators, set them once at the top of the file instead of on each eval.
+
+<CodeGroup>
+
+```python Python
+# evals/support.py
+from ezvals import eval, EvalContext
+
+ezvals_defaults = {
+    "labels": ["production"],
+    "target": run_support_agent,
+    "metadata": {"team": "support"},
+    "timeout": 30,
+}
+
+@eval(input="I want a refund")
+async def test_refund(ctx: EvalContext):
+    assert "refund" in ctx.output.lower()
+
+@eval(input="Your product is broken", labels=["edge"])
+async def test_complaint(ctx: EvalContext):
+    assert "sorry" in ctx.output.lower()
+```
+
+```ts TypeScript
+// evals/support.eval.ts
+import assert from "node:assert";
+import { evaluate } from "ezvals";
+
+export const ezvalsDefaults = {
+  labels: ["production"],
+  target: runSupportAgent,
+  metadata: { team: "support" },
+  timeout: 30,
+};
+
+evaluate("test_refund", { input: "I want a refund" }, (ctx) => {
+  assert(String(ctx.output).toLowerCase().includes("refund"));
+});
+
+evaluate("test_complaint", { input: "Your product is broken", labels: ["edge"] }, (ctx) => {
+  assert(String(ctx.output).toLowerCase().includes("sorry"));
+});
+```
+
+</CodeGroup>
+
+The defaults can include any eval option except `cases` and `input_loader`: `input`, `reference`, `dataset`, `labels`, `metadata`, `default_score_key` (`defaultScoreKey`), `timeout`, `trials`, `target` and `evaluators`. An unknown key is an error when the file loads.
+
+## Precedence
+
+From lowest to highest: the file name (for `dataset`), then file defaults, then the eval's own options, then each [case](/writing-evals/cases).
+
+- An eval's own value **replaces** the default. For example, `test_complaint` above has only the label `edge`, not `production`.
+- `metadata` is the exception: it **merges**, and the eval wins on a key clash.
+- `evaluators` set on an eval replace the default evaluators. To keep both, list both: `evaluators=[default_check, specific_check]`.
+
+<Tip>
+One file per area (`support.py`, `billing.py`, `search.eval.ts`) gives you a dataset per area for free, because `dataset` defaults to the file name.
+</Tip>

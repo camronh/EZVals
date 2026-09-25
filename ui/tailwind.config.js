@@ -5,10 +5,10 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'Segoe UI', 'sans-serif'],
-        mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+        sans: ['ui-sans-serif', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Inter', 'sans-serif'],
+        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
-      // Theme colors are CSS variables (src/styles/dashboard.css) so light and dark share class names.
+      // Theme colors are CSS variables (src/styles/app.css) so light and dark share class names.
       colors: {
         theme: {
           bg: 'var(--bg)',
@@ -30,6 +30,7 @@ module.exports = {
           'success-bg': 'var(--accent-success-bg)',
           error: 'var(--accent-error)',
           'error-bg': 'var(--accent-error-bg)',
+          warn: 'var(--accent-warn)',
         },
       },
     },

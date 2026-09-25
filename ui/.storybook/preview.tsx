@@ -2,9 +2,7 @@ import { withThemeByClassName } from '@storybook/addon-themes'
 import type { Preview } from '@storybook/react-vite'
 import { mswLoader } from 'msw-storybook-addon/csf3'
 import { IconSprite } from '../src/components/Icon'
-import '../src/index.css'
-import '../src/styles/dashboard.css'
-import '../src/styles/detail.css'
+import '../src/styles/app.css'
 
 const preview: Preview = {
   decorators: [

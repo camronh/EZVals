@@ -1,33 +1,34 @@
-import type { RunResultRow, RunSummary, ScoreChip } from '../types'
+import type { ResultData, RunResultRow, RunSummary, ScoreChip } from '../types'
 
 export const COMPARISON_COLORS = ['#3b82f6', '#f97316', '#22c55e', '#a855f7']
 
-/** Summary numbers for the stats panel, including progress of the current (possibly selective) run. */
-export function summarizeStats(data: RunSummary) {
+/** Progress of the current (possibly selective) run. */
+export function runProgress(data: RunSummary) {
   const count = (status: string) => data.results.filter((r) => (r.result.status ?? 'completed') === status).length
-  const pending = count('pending')
-  const running = count('running')
-  const inProgress = pending + running
-  const total = data.total_evaluations ?? data.results.length
+  const inProgress = count('pending') + count('running')
   const selective = data.selected_total != null && data.selected_total > 0
-  const progressTotal = selective ? data.selected_total! : total
-  const progressCompleted = selective ? progressTotal - inProgress : total - inProgress - count('not_started')
-  return {
-    total,
-    totalErrors: data.total_errors ?? 0,
-    chips: data.score_chips ?? [],
-    avgLatency: data.average_latency ?? 0,
-    progressTotal,
-    progressCompleted,
-    pctDone: progressTotal > 0 ? Math.round((progressCompleted / progressTotal) * 100) : 0,
-    isRunning: inProgress > 0,
-    trials: data.trials,
-    passAtK: data.pass_at_k,
-    passAllK: data.pass_all_k,
-  }
+  const total = selective ? data.selected_total! : data.results.length
+  return { running: inProgress > 0, total, completed: selective ? total - inProgress : total - inProgress - count('not_started') }
 }
 
-export type StatsSummary = ReturnType<typeof summarizeStats>
+export type Outcome = 'not_run' | 'queued' | 'running' | 'passed' | 'failed' | 'error' | 'scored' | 'cancelled'
+
+/** What a row's result means: passed needs at least one pass/fail score and none failed; numeric-only rows are just "scored". */
+export function outcomeOf(r: ResultData): Outcome {
+  const status = r.status ?? 'completed'
+  if (status === 'not_started') return 'not_run'
+  if (status === 'pending') return 'queued'
+  if (status === 'running' || status === 'cancelled') return status
+  if (status === 'error' || r.error) return 'error'
+  const scores = r.scores ?? []
+  if (scores.some((s) => s.passed === false)) return 'failed'
+  return scores.some((s) => s.passed != null) ? 'passed' : 'scored'
+}
+
+/** Passed over finished rows (passed, failed and errored), or null when nothing has a pass/fail result. */
+export function passRate(passed: number, failed: number, errors: number) {
+  return passed + failed > 0 ? passed / (passed + failed + errors) : null
+}
 
 /** A chip's bar height (percent) and label: pass ratio, or the average for numeric scores. */
 export function chipStats(chip: ScoreChip) {
@@ -41,11 +42,8 @@ export function chipStats(chip: ScoreChip) {
 }
 
 export function barTone(pct: number) {
-  return pct >= 80 ? 'vbar-green' : pct >= 50 ? 'vbar-amber' : 'vbar-red'
+  return pct >= 80 ? 'tone-good' : pct >= 50 ? 'tone-mid' : 'tone-bad'
 }
-
-const passedResult = (r: RunResultRow['result']) =>
-  (r.status ?? 'completed') === 'completed' && !r.error && (r.scores ?? []).some((s) => s.passed != null) && (r.scores ?? []).every((s) => s.passed !== false)
 
 /** pass@k and pass^k over the finished trial rows among `rows` (null when there are none), matching the server's definition. */
 export function trialStats(rows: RunResultRow[]) {
@@ -55,21 +53,22 @@ export function trialStats(rows: RunResultRow[]) {
     const status = row.result.status ?? 'completed'
     if (!row.trial || !row.trial_of || (status !== 'completed' && status !== 'error')) continue
     k = Math.max(k, row.trial)
-    groups.set(row.trial_of, [...(groups.get(row.trial_of) ?? []), passedResult(row.result)])
+    groups.set(row.trial_of, [...(groups.get(row.trial_of) ?? []), outcomeOf(row.result) === 'passed'])
   }
   if (!groups.size) return null
   const all = [...groups.values()]
   return { k, passAtK: all.filter((g) => g.includes(true)).length / all.length, passAllK: all.filter((g) => !g.includes(false)).length / all.length }
 }
 
-/** Score chips, errors and average latency for any subset of rows (e.g. the filtered view). Chips follow `order` (keys) when given. */
+/** Outcome counts, score chips and average latency for any subset of rows (e.g. the filtered view). Chips follow `order` (keys) when given. */
 export function statsFor(rows: RunResultRow[], order: string[] = []) {
-  let errors = 0
+  const outcomes: Partial<Record<Outcome, number>> = {}
   let latencySum = 0
   let latencyCount = 0
   const byKey = new Map<string, { passed: number; bools: number; sum: number; values: number }>()
   for (const { result } of rows) {
-    if (result.error) errors += 1
+    const outcome = outcomeOf(result)
+    outcomes[outcome] = (outcomes[outcome] ?? 0) + 1
     if (typeof result.latency === 'number') {
       latencySum += result.latency
       latencyCount += 1
@@ -94,7 +93,18 @@ export function statsFor(rows: RunResultRow[], order: string[] = []) {
   })
   const rank = (key: string) => (order.includes(key) ? order.indexOf(key) : order.length)
   chips.sort((a, b) => rank(a.key) - rank(b.key))
-  return { count: rows.length, errors, avgLatency: latencyCount ? latencySum / latencyCount : 0, chips }
+  const [passed, failed, errors] = [outcomes.passed ?? 0, outcomes.failed ?? 0, outcomes.error ?? 0]
+  return {
+    count: rows.length,
+    passed,
+    failed,
+    errors,
+    finished: passed + failed + errors + (outcomes.scored ?? 0),
+    notRun: outcomes.not_run ?? 0,
+    rate: passRate(passed, failed, errors),
+    avgLatency: latencyCount ? latencySum / latencyCount : 0,
+    chips,
+  }
 }
 
 export type SubsetStats = ReturnType<typeof statsFor>

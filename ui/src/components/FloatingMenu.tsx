@@ -1,5 +1,5 @@
 import type { CSSProperties, HTMLAttributes, ReactNode, RefObject } from 'react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 type FloatingMenuProps = HTMLAttributes<HTMLDivElement> & {
@@ -10,31 +10,21 @@ type FloatingMenuProps = HTMLAttributes<HTMLDivElement> & {
 }
 
 /** A menu portaled to <body>, positioned under its anchor and kept on screen. */
-export function FloatingMenu({ anchorRef, open, onClose, children, className = 'compare-dropdown', ...props }: FloatingMenuProps) {
+export function FloatingMenu({ anchorRef, open, onClose, children, className = 'menu-popover', ...props }: FloatingMenuProps) {
   const menuRef = useRef<HTMLDivElement | null>(null)
   const [style, setStyle] = useState<CSSProperties | null>(null)
 
-  useEffect(() => {
-    if (!open || !anchorRef?.current) return
-    const rect = anchorRef.current.getBoundingClientRect()
-    const newStyle: CSSProperties = {
+  useLayoutEffect(() => {
+    if (!open) return
+    const anchor = anchorRef.current!.getBoundingClientRect()
+    const menu = menuRef.current!.getBoundingClientRect()
+    const below = anchor.bottom + 4
+    setStyle({
       position: 'fixed',
-      top: rect.bottom + 4,
-      left: rect.left,
+      top: below + menu.height > window.innerHeight - 8 ? Math.max(8, anchor.top - menu.height - 4) : below,
+      left: Math.max(8, Math.min(anchor.left, window.innerWidth - menu.width - 8)),
       zIndex: 100,
-    }
-    requestAnimationFrame(() => {
-      const menu = menuRef.current
-      if (!menu) return
-      const menuRect = menu.getBoundingClientRect()
-      if (menuRect.bottom > window.innerHeight - 8) {
-        setStyle((prev) => prev ? { ...prev, top: rect.top - menuRect.height - 4 } : prev)
-      }
-      if (menuRect.right > window.innerWidth - 8) {
-        setStyle((prev) => prev ? { ...prev, left: Math.max(8, window.innerWidth - menuRect.width - 8) } : prev)
-      }
     })
-    setStyle(newStyle)
   }, [open, anchorRef])
 
   useEffect(() => {
@@ -52,7 +42,7 @@ export function FloatingMenu({ anchorRef, open, onClose, children, className = '
   if (!open) return null
 
   return createPortal(
-    <div ref={menuRef} className={className} style={style ?? undefined} {...props}>
+    <div ref={menuRef} className={className} style={style ?? { position: 'fixed', top: 0, left: 0, visibility: 'hidden' }} {...props}>
       {children}
     </div>,
     document.body,

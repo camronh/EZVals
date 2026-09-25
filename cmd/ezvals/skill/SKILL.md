@@ -318,23 +318,23 @@ You should have everything you need to plan a good eval from here.
 ### [ezvals-docs/](ezvals-docs/)
 **When to read:** EZVals API reference—decorators, scoring, CLI, web UI
 
+- introduction.mdx, how-it-works.mdx - What EZVals is and how the pieces fit
 - quickstart.mdx - Getting started (Python and TypeScript)
-- decorators.mdx - The @eval decorator / evaluate() options
-- eval-context.mdx - EvalContext API
+- evals.mdx - Writing evals: the @eval decorator / evaluate() and EvalContext
 - scoring.mdx - Scoring with assertions and ctx.store()
-- parametrize.mdx - Cases
+- cases.mdx - Running one eval over many inputs
 - file-defaults.mdx - File-level defaults
-- evaluators.mdx - Post-processing evaluators
-- patterns.mdx - Common eval patterns
-- sessions.mdx - Sessions, runs, and run file layout
 - trials.mdx - Repeated trials, pass@k and pass^k
-- regrading.mdx - Re-scoring stored outputs
+- targets-and-regrading.mdx - Targets and re-scoring stored outputs
 - tracing.mdx - OpenTelemetry span capture
+- web-ui.mdx - Running, reviewing, annotating and comparing in the browser
+- sessions.mdx - Sessions, runs, and run file layout
 - querying.mdx - `ezvals query` tables and example SQL
-- cli.mdx - Command line interface and `run()`
-- web-ui.mdx - Interactive results exploration
+- coding-agents.mdx - Working with coding agents on evals
+- agent-tasks.mdx, comparing-models.mdx, llm-judge.mdx, rag-agent.mdx - Recipes
+- cli.mdx - Command line interface
+- python.mdx, typescript.mdx - SDK reference, including result and score shapes
 - http-api.mdx - The web server's REST API
-- eval-result.mdx, score.mdx - Result and score shapes
 
 ## Running Evals
 

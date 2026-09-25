@@ -1,0 +1,45 @@
+---
+title: Trials
+description: Run each eval several times to measure how reliable a nondeterministic agent is
+---
+
+One run can make a flaky agent look solid, or a solid one look broken. Trials run each eval N times and tell you both "can it do this?" and "does it do this every time?".
+
+## Set trials
+
+On an eval, a [case](/writing-evals/cases) or in [file defaults](/writing-evals/file-defaults):
+
+<CodeGroup>
+
+```python Python
+@eval(input="Book a flight to Paris for next Friday", target=travel_agent, trials=3)
+def test_booking(ctx: EvalContext):
+    assert ctx.output["booked"], "No booking made"
+```
+
+```ts TypeScript
+evaluate("test_booking", { input: "Book a flight to Paris for next Friday", target: travelAgent, trials: 3 }, (ctx) => {
+  assert((ctx.output as { booked: boolean }).booked, "No booking made");
+});
+```
+
+</CodeGroup>
+
+To run every eval N times without changing code, use `ezvals run --trials 5`, `"trials": 5` in `ezvals.json`, or the Trials setting in the web UI. A run-wide value overrides per-eval `trials`.
+
+## Read the results
+
+Each trial is its own result, with an id like `evals.py::test_booking~2` and the fields `trial` (starting at 1) and `trial_of` (the eval's id). You can open, annotate and rerun trials one at a time. A trial passes by the [usual rule](/writing-evals/scoring#when-a-result-passes): no error, at least one pass/fail score, and all pass/fail scores passed.
+
+Runs with trials report two extra numbers, in the UI stats and in the run JSON as `pass_at_k` and `pass_all_k`:
+
+| Metric | Meaning | Question it answers |
+|--------|---------|---------------------|
+| **pass@k** | Share of evals where at least one of the k trials passed | Can the agent do this at all? |
+| **pass^k** | Share of evals where every trial passed | Can I rely on it? |
+
+A big gap between the two means the agent can do the task but doesn't do it consistently. That usually points to an ambiguous prompt, sampling temperature or a brittle tool, not a missing capability. To list the flaky evals, [query the results](/reviewing/querying#flaky-evals).
+
+<Tip>
+Trials multiply cost and time. Use 3 to 5 trials on evals you suspect are flaky, or pass `--trials` for an occasional reliability check, and raise `--concurrency` to match.
+</Tip>

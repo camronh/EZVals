@@ -38,7 +38,7 @@ function llmInfo(span: Span) {
 export function TraceWaterfall({ spans }: { spans: Span[] }) {
   const rows = useMemo(() => flatten(spans), [spans])
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  if (!rows.length) return <div className="p-3 text-xs italic text-zinc-400">No spans recorded</div>
+  if (!rows.length) return <div className="p-4 text-[13px] text-theme-text-muted">No spans recorded</div>
 
   const start = Math.min(...spans.map((s) => s.start))
   const total = Math.max(1, Math.max(...spans.map((s) => s.end)) - start)
@@ -49,13 +49,13 @@ export function TraceWaterfall({ spans }: { spans: Span[] }) {
   const selected = spans.find((s) => s.span_id === selectedId)
 
   return (
-    <div className="trace-waterfall text-xs">
-      <div className="flex items-center gap-3 border-b border-zinc-200 px-3 py-2 text-[11px] text-zinc-500 dark:border-zinc-800">
+    <div className="trace-waterfall text-[12px]">
+      <div className="flex items-center gap-4 border-b border-theme-border px-4 py-2.5 text-[12px] text-theme-text-muted">
         <span>{spans.length} spans</span>
-        <span>{formatDuration(total / 1e6)}</span>
-        {tokens.input + tokens.output > 0 ? <span>{tokens.input.toLocaleString()} in · {tokens.output.toLocaleString()} out tokens</span> : null}
+        <span className="font-mono tabular-nums">{formatDuration(total / 1e6)}</span>
+        {tokens.input + tokens.output > 0 ? <span><span className="font-mono tabular-nums">{tokens.input.toLocaleString()}</span> in · <span className="font-mono tabular-nums">{tokens.output.toLocaleString()}</span> out tokens</span> : null}
       </div>
-      <div role="tree">
+      <div role="tree" className="py-1">
         {rows.map(({ span, depth }) => {
           const { model, input, output } = llmInfo(span)
           const failed = span.status === 'error'
@@ -66,30 +66,30 @@ export function TraceWaterfall({ spans }: { spans: Span[] }) {
               key={span.span_id}
               role="treeitem"
               aria-selected={span.span_id === selectedId}
-              className={`grid w-full grid-cols-[minmax(0,2fr)_minmax(0,3fr)_3.5rem] items-center gap-3 px-3 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800/60 ${span.span_id === selectedId ? 'bg-blue-50 dark:bg-blue-500/10' : ''}`}
+              className={`grid w-full grid-cols-[minmax(0,2fr)_minmax(0,3fr)_3.5rem] items-center gap-3 px-4 py-1.5 text-left ${span.span_id === selectedId ? 'bg-blue-500/10' : 'hover:bg-theme-bg-elevated'}`}
               onClick={() => setSelectedId(span.span_id === selectedId ? null : span.span_id)}
             >
               <span className="flex min-w-0 items-center gap-1.5" style={{ paddingLeft: depth * 14 }}>
-                <span className={`truncate font-mono ${failed ? 'text-rose-600 dark:text-rose-400' : 'text-zinc-700 dark:text-zinc-200'}`}>{span.name}</span>
-                {model && !span.name.includes(model) ? <span className="shrink-0 rounded bg-violet-500/10 px-1 py-0.5 text-[10px] text-violet-600 dark:text-violet-300">{model}</span> : null}
-                {input + output > 0 ? <span className="shrink-0 text-[10px] text-zinc-400">{input}→{output}</span> : null}
+                <span className={`truncate font-mono ${failed ? 'text-accent-error' : 'text-theme-text'}`}>{span.name}</span>
+                {model && !span.name.includes(model) ? <span className="shrink-0 rounded bg-theme-bg-elevated px-1 text-[11px] text-theme-text-secondary">{model}</span> : null}
+                {input + output > 0 ? <span className="shrink-0 font-mono text-[11px] tabular-nums text-theme-text-muted">{input}→{output}</span> : null}
               </span>
               <span className="relative h-4">
                 <span
-                  className={`absolute top-1 h-2 rounded-sm ${failed ? 'bg-rose-500' : model ? 'bg-violet-500' : 'bg-blue-500'}`}
+                  className={`absolute top-1 h-2 rounded-sm ${failed ? 'bg-accent-error' : model ? 'bg-blue-500' : 'bg-blue-500/40'}`}
                   style={{ left: `${left}%`, width: `${width}%` }}
                 />
               </span>
-              <span className="text-right font-mono text-[10px] text-zinc-400">{formatDuration((span.end - span.start) / 1e6)}</span>
+              <span className="text-right font-mono text-[11px] tabular-nums text-theme-text-muted">{formatDuration((span.end - span.start) / 1e6)}</span>
             </button>
           )
         })}
       </div>
       {selected ? (
-        <div className="border-t border-zinc-200 p-3 dark:border-zinc-800">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="font-mono font-semibold text-zinc-700 dark:text-zinc-200">{selected.name}</span>
-            {selected.status === 'error' ? <span className="text-rose-500">{selected.status_message || 'error'}</span> : null}
+        <div className="border-t border-theme-border p-4">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <span className="font-mono text-[13px] font-medium text-theme-text">{selected.name}</span>
+            {selected.status === 'error' ? <span className="text-accent-error">{selected.status_message || 'error'}</span> : null}
           </div>
           <DataViewer content={selected.attributes ?? {}} placeholder="No attributes" />
         </div>

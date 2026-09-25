@@ -2,6 +2,7 @@ import type { ColumnDef, ComparisonRun, ResultData, RunResultRow, SortRule } fro
 import type { ComparisonEntry } from './comparison'
 import type { FilterableRow } from './filters'
 import { formatValue } from './format'
+import { outcomeOf } from './stats'
 
 export const COLUMNS: ColumnDef[] = [
   { key: 'function', label: 'Eval', width: '15%', type: 'string', align: 'left' },
@@ -25,6 +26,7 @@ export type TableRow = FilterableRow & {
 export function filterable(row: RunResultRow): FilterableRow {
   const r = row.result
   return {
+    outcome: outcomeOf(r),
     annotation: r.annotation,
     dataset: row.dataset,
     labels: row.labels,

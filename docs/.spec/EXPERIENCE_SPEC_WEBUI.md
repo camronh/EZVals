@@ -14,6 +14,33 @@ Starts at `http://127.0.0.1:8000` (browser opens by default unless `--no-open` i
 
 ---
 
+## Layout
+
+The dashboard is three stacked regions above the results table:
+
+1. **Header**: the EZVals mark, the session and run name (the run picker), and the run actions on the right: Compare, New run, a "⋯" menu (Regrade, Reload evals, Settings) and the primary Run button.
+2. **Summary**: the run's headline numbers and one horizontal bar per score key (see [Summary](#summary)).
+3. **Filter bar**: the outcome switch (All / Failed / Errors, each with a count), search, Filters, Columns and Export. When rows are selected, the bar shows how many.
+
+The UI uses one neutral palette with a single blue accent; green, red and amber only ever mean passed, failed and in progress. Text uses the system font; monospace is reserved for code and data (inputs, outputs, ids, latencies).
+
+### Theme
+
+```gherkin
+Scenario: Theme follows the OS by default
+  Given the user has never picked a theme
+  When the UI opens
+  Then it uses the OS light/dark preference
+  And it switches live when the OS preference changes
+
+Scenario: Pick a theme
+  When the user picks System, Light or Dark in Settings
+  Then the UI switches immediately
+  And the choice is remembered in this browser
+```
+
+---
+
 ## Main Table View
 
 ### Initial State
@@ -25,6 +52,26 @@ Scenario: View discovered evaluations
   Then all discovered evaluations are listed
   And each row shows: function name, dataset, labels, status
   And status is "not_started" for all rows
+  And the summary says the evals have not been run yet
+
+Scenario: No evals found
+  Given discovery found no evals and reported no error
+  Then the table area explains that no evals were found in the served path
+  And shows a minimal example eval to copy
+```
+
+### Row Layout
+
+```gherkin
+Scenario: Eval cell
+  Then each row's eval cell shows the eval name, with dataset, labels, trial "#n" and span count on a quieter line beneath it
+  And a leading icon shows the row's outcome (see Result Status Indicators)
+
+Scenario: Score chips
+  Then a passed score shows as a green "✓ key" chip
+  And a failed score shows as a red "✗ key" chip
+  And a numeric score without pass/fail shows as a neutral "key 0.83" chip
+  And hovering a chip shows its full value and notes
 ```
 
 ### Table Sorting
@@ -47,14 +94,14 @@ Scenario: Annotation indicator in results table
 
 ### Run Button (Single Action)
 
-The top-right run control is a single stable action button.
+The primary button at the right of the header runs evals. While a run is active it is replaced, in the same place, by labeled Pause (or Resume) and Stop buttons.
 
 ```gherkin
 Scenario: Stable run button label
   Given the UI is open
   When the user views the Run button
-  Then the button label is "Run" when idle
-  And the button label is "Stop" while a run is active
+  Then the button label is "Run" when idle ("Run 3" when 3 rows are selected)
+  And the button label is "Stop" while a run is active, next to "Pause"/"Resume"
 
 Scenario: Selective run with checkboxes
   Given some evaluations are checked
@@ -69,9 +116,8 @@ Scenario: Run behavior
   And the timestamp updates
   And annotations are kept
 
-Scenario: New run from stats panel
-  Given the stats panel shows the current run name
-  When the user clicks the new-run icon next to the run name
+Scenario: New run from the header
+  When the user clicks "New run" in the header
   Then a new run file is created with an auto-generated friendly name
   And the new run has no completed results yet
 ```
@@ -107,9 +153,9 @@ Scenario: Pause and resume running evaluations
   When the user clicks Resume
   Then pending evaluations continue running from where the run paused
 
-Scenario: Reload server from UI
+Scenario: Reload evals from UI
   Given the UI is open
-  When the user clicks "Reload Server"
+  When the user chooses "Reload evals" in the header's "⋯" menu
   Then evals are rediscovered and ezvals.json is reloaded
   And the page reloads
 
@@ -124,11 +170,11 @@ Scenario: Code changes are picked up
 ```gherkin
 Scenario: Trials in the table
   Given a run with repeated trials
-  Then each trial is its own row with a "#n" chip next to the eval name
-  And the stats panel shows pass@k and pass^k next to the error count
+  Then each trial is its own row with "#n" on the eval's detail line
+  And the summary shows pass@k and pass^k
 
 Scenario: Regrade from the dashboard
-  When the user chooses "Regrade results" in the "…" menu
+  When the user chooses "Regrade" in the header's "⋯" menu
   Then selected rows (or all rows when none are selected) are regraded without re-running targets
   And a toast reports how many results were regraded and how many were skipped for having no target
 
@@ -139,14 +185,20 @@ Scenario: Span count
 
 ### Result Status Indicators
 
-| Status | Visual | Meaning |
+A finished row's icon shows its **outcome**, not just that it finished:
+
+| Outcome | Visual | Meaning |
 |--------|--------|---------|
-| `not_started` | Gray | Never run |
-| `pending` | Yellow spinner | Queued |
-| `running` | Blue spinner | Currently executing |
-| `completed` | Green check | Finished successfully |
-| `error` | Red X | Exception occurred |
-| `cancelled` | Gray slash | Stopped by user |
+| not run | Gray ring, dimmed row | Never run |
+| queued | Amber spinner | `pending` |
+| running | Blue spinner | Currently executing |
+| passed | Green check | Finished, no error, at least one pass/fail score and none failed |
+| failed | Red cross | At least one score failed |
+| error | Red warning | The eval raised (status `error` or an error message) |
+| scored | Gray check | Finished with only numeric scores, or no scores |
+| cancelled | Gray slash | Stopped by user |
+
+The row keeps `data-status` (the raw status) for tests and scripts.
 
 ---
 
@@ -424,18 +476,18 @@ Scenario: Export as PNG in comparison mode
 
 ### Run Selector
 
-The run selector displays as a dropdown when multiple runs exist in the session, otherwise as plain text.
+The header shows `session / run`. The run name opens the run picker when the session has other runs, otherwise it copies the name.
 
 ```gherkin
 Scenario: Single run in session
   Given only one run exists in the current session
-  When the user views the run name in the stats bar
+  When the user views the run name in the header
   Then it displays as plain text (not a dropdown)
   And the pencil edit icon is shown next to it
 
 Scenario: Multiple runs in session (dropdown)
   Given two or more runs exist in the current session
-  When the user views the run name in the stats bar
+  When the user views the run name in the header
   Then it displays as a dropdown selector
   And each option shows: run_name and formatted timestamp (e.g., "run-one (Dec 17, 9:52 AM)")
   And runs are sorted newest-first
@@ -448,7 +500,7 @@ Scenario: Switch run via dropdown
   And the dropdown updates to show the new selection
 
 Scenario: Rename run via inline editing
-  When the user clicks the pencil icon next to the run name in the stats bar
+  When the user clicks the pencil icon next to the run name in the header
   Then the run name becomes an editable text field
   And if a dropdown was shown, it hides and the input appears in its place
   And pressing Enter or clicking the checkmark saves the new name
@@ -457,7 +509,7 @@ Scenario: Rename run via inline editing
   And names keep spaces and punctuation; a blank name is rejected
 
 Scenario: Copy session/run name
-  When the user clicks on the session or run name in the stats bar
+  When the user clicks on the session name (or the run name of a single-run session) in the header
   Then the name is copied to the clipboard
   And a "Copied!" tooltip appears briefly
 
@@ -470,75 +522,89 @@ Scenario: Delete run
 
 ---
 
-## Stats Bar
+## Summary
 
-The top stats bar shows session/run info, test counts, and score breakdown.
-
-### Expanded View (default)
-
-Shows a bar chart with score breakdown:
-- Each score key has a colored bar (green ≥80%, amber ≥50%, red <50%)
-- Below each bar: percentage prominent on top, ratio smaller below
-  - Example: "87%" on first line, "54/62" smaller below
-- Left side shows: session name, run name (dropdown if multiple runs), test count, error count
-- Time column header tooltip shows average latency as `(Avg: 0.50s)`
-
-Compact mode is not available. The stats bar always uses expanded view.
-
-### Dynamic Stats
+A compact strip under the header answers "how did this run do?" at a glance.
 
 ```gherkin
+Scenario: Headline pass rate
+  Given the run has finished rows with pass/fail scores
+  Then the summary leads with the pass rate: passed rows / finished rows (passed, failed and errored)
+  And beside it: passed, failed and error counts, the number of evals and the average latency
+  And with trials, pass@k and pass^k
+
+Scenario: Numeric-only scores
+  Given no finished row has a pass/fail score
+  Then the headline is the number of finished evals instead of a pass rate
+
+Scenario: Change since the previous run
+  Given the session has an older run with results
+  And the current run is not running and no filter is active
+  Then the pass rate shows the change in points since that run (e.g. "▲ 4 pts")
+  And clicking it compares the two runs
+
+Scenario: Score bars
+  Then each score key has a horizontal bar with its name, pass rate (or average) and "passed/total"
+  And bars are green at ≥80%, amber at ≥50% and red below
+
+Scenario: Progress while running
+  Given a run is in progress
+  Then the summary shows a progress bar with "completed/total"
+
+Scenario: Not run yet
+  Given no row has been run
+  Then the summary says how many evals are ready to run
+
 Scenario: Stats update with filters
-  Given filters or search are active
-  When rows are filtered
-  Then stats bar shows "filtered/total" format (e.g., "TESTS 5/20")
-  And time header average latency and score chips calculate from visible rows only
-  And chips show actual filtered counts, not original totals
+  Given filters, search or the outcome switch narrow the rows
+  Then the counts, pass rate, latency and score bars describe the visible rows only
+  And the eval count reads "5 of 20 evals"
 ```
 
 ---
 
 ## Filtering
 
-### Three-State Filters
-
-Dataset, label, annotation, and trace data filters use a cycling toggle pattern:
-
-| Click | State | Visual | Behavior |
-|-------|-------|--------|----------|
-| 1st | Include | Blue | Show only matching rows |
-| 2nd | Exclude | Rose | Hide matching rows |
-| 3rd | Any | Gray | No filter applied |
+### Outcome Switch
 
 ```gherkin
-Scenario: Filter by dataset (include)
-  Given the filter menu is open
-  When the user clicks a dataset pill once
-  Then the pill turns blue
-  And only rows with that dataset are shown
+Scenario: Show only failures
+  When the user picks "Failed" in the filter bar's outcome switch
+  Then only failed and errored rows are shown
+  And "Errors" shows only errored rows, "All" shows everything
+  And each option shows its row count
+  And the choice is kept in the URL (`outcome=failed|errors`)
+```
 
-Scenario: Filter by dataset (exclude)
-  Given a dataset pill is blue (included)
-  When the user clicks the pill again
-  Then the pill turns rose with ✕ prefix
-  And rows with that dataset are hidden
+### Filters Panel
 
-Scenario: Clear dataset filter
-  Given a dataset pill is rose (excluded)
-  When the user clicks the pill again
-  Then the pill turns gray
-  And all rows are shown (no dataset filter)
+The Filters button (labeled, with a count of active filters) opens a panel.
+
+```gherkin
+Scenario: Filter by dataset or label
+  Given the filters panel is open
+  Then each dataset and label is a row with "Only" and "Hide" buttons
+  When the user clicks "Only"
+  Then only rows with that value are shown
+  When the user clicks "Hide"
+  Then rows with that value are hidden
+  And clicking the active button again clears it
+
+Scenario: Presence filters
+  Then Annotation, Error, URL and Messages each have an Any / Has / None switch
 ```
 
 ### Filter Types
 
 | Filter | States | Description |
 |--------|--------|-------------|
-| Dataset | include / exclude / any | Filter by dataset name |
-| Labels | include / exclude / any | Filter by label |
-| Annotation | has / no / any | Filter by presence of annotation |
-| Has URL | has / no / any | Filter by trace_data.url presence |
-| Has Messages | has / no / any | Filter by trace_data.messages presence |
+| Outcome | all / failed / errors | Quick switch in the filter bar |
+| Dataset | only / hide / any | Filter by dataset name |
+| Labels | only / hide / any | Filter by label |
+| Annotation | has / none / any | Filter by presence of annotation |
+| Error | has / none / any | Filter by presence of an error |
+| URL | has / none / any | Filter by trace_data.url presence |
+| Messages | has / none / any | Filter by trace_data.messages presence |
 | Score Value | numeric rules | Filter by score values |
 | Score Passed | boolean rules | Filter by pass/fail status |
 
@@ -614,7 +680,7 @@ A request while a run is in progress returns 409.
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/sessions` | GET | List all session names (from directories) |
-| `/api/sessions/{name}/runs` | GET | List runs in session |
+| `/api/sessions/{name}/runs` | GET | List runs in session: `run_id`, `run_name`, `timestamp`, `total_evaluations`, `total_passed`, `total_failed`, `total_errors` |
 | `/api/sessions/{name}` | DELETE | Delete entire session and all runs |
 | `/api/runs/{run_id}` | PATCH | Rename a run (`{"run_name"}`, trimmed; blank is a 400) |
 | `/api/runs/{run_id}` | DELETE | Delete specific run |
@@ -703,6 +769,7 @@ The API, `ezvals run --json` and `ezvals export -f json` present a run as:
   "total_evaluations": 50,
   "total_functions": 10,
   "total_passed": 45,
+  "total_failed": 3,
   "total_errors": 2,
   "total_with_scores": 48,
   "average_latency": 0.5,
@@ -754,42 +821,40 @@ Comparison mode allows users to view and compare results from multiple runs side
 ```gherkin
 Scenario: Start comparing runs
   Given the user has multiple runs in the current session
-  And the user is viewing a run in the stats panel
-  When the user clicks the "+ Compare" button next to the run name
-  Then a dropdown appears showing other available runs in the session
+  When the user clicks "Compare" in the header
+  Then a menu shows the other runs in the session
   And selecting a run enters comparison mode
-  And both runs are shown as color-coded chips
+
+Scenario: Compare with the previous run
+  When the user clicks the pass-rate change in the summary
+  Then comparison mode starts with the current and previous runs
 ```
 
 ### Comparison Mode UI
 
 ```gherkin
-Scenario: Left panel in comparison mode
-  Given comparison mode is active with 2+ runs
-  Then the left panel shows:
-    - Session name
-    - "comparing" label
-    - Color-coded chips for each run (max 4)
-    - Each chip shows: color dot, run name, test count in parentheses
-    - Non-primary chips have an "×" button to remove them
-    - A "+" button to add more runs (if < 4 runs)
-  And average latency is NOT shown (moved to chart)
-  And test count is NOT shown (embedded in chips)
+Scenario: Header in comparison mode
+  Given comparison mode is active
+  Then the header shows "Comparing N runs" and an "Exit" button in place of the run actions
+  And clicking "Exit" returns to the first run
+
+Scenario: Comparison summary
+  Given comparison mode is active with 2+ runs (max 4)
+  Then the summary is a table with one row per run:
+    - color dot and run name
+    - pass rate
+    - one column per score key (pass rate or average)
+    - average latency
+  And the best value in each column is emphasized
+  And non-primary rows have a remove (×) button
+  And an "Add run" button adds another run (if < 4 runs)
 
 Scenario: Reorder compared runs
   Given comparison mode is active with 2+ runs
-  When the user clicks up/down controls on a run chip
-  Then the chip order updates immediately without exiting comparison mode
-  And chart bars and comparison table columns follow the new run order
-  And the first chip remains the primary run (cannot be removed)
-
-Scenario: Chart in comparison mode
-  Given comparison mode is active
-  Then the chart shows:
-    - Grouped bars (one per run) for each score metric
-    - Bars color-coded to match run chips
-    - "Latency" as an additional metric (normalized 0-5s = 0-100%)
-    - Per-run values displayed below each metric group
+  When the user clicks up/down controls on a run row
+  Then the order updates immediately without exiting comparison mode
+  And comparison table columns follow the new run order
+  And the first row remains the primary run (cannot be removed)
 ```
 
 ### Comparison Table
@@ -855,11 +920,9 @@ Scenario: Maximum 4 runs
   Then the "+" button is hidden or disabled
   And no more runs can be added
 
-Scenario: Run button disabled
+Scenario: Run button hidden
   Given comparison mode is active
-  Then the Run button shows "Compare Mode"
-  And the button is disabled (grayed out)
-  And no dropdown is shown
+  Then the header shows "Comparing N runs" instead of the Run button
 ```
 
 ### Exiting Comparison Mode
@@ -867,7 +930,7 @@ Scenario: Run button disabled
 ```gherkin
 Scenario: Remove runs to exit
   Given comparison mode is active with 2 runs
-  When the user clicks "×" on the second run's chip
+  When the user clicks "×" on the second run's row
   Then that run is removed from comparison
   And the UI returns to normal (single-run) mode
   And the first run remains as the active run

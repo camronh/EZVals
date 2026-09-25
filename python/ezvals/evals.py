@@ -4,6 +4,7 @@ import contextvars
 import functools
 import importlib.util
 import inspect
+import os
 import sys
 import threading
 import time
@@ -14,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from ezvals.context import EvalContext, EvalResult, normalize_score
+from ezvals.context import EvalContext, EvalResult, normalize_scores
 
 # Parameters that file defaults and individual cases can set.
 PARAMS = {"input", "reference", "dataset", "labels", "metadata", "default_score_key", "timeout", "target", "evaluators",
@@ -90,12 +91,17 @@ class Eval:
             results = [_errored(ctx, f"TimeoutError: Evaluation timed out after {float(timeout)}s")]
         except AssertionError as e:
             if ctx is None:
-                results = [_errored(None, f"AssertionError: {e}\n{traceback.format_exc()}")]
-            else:
-                ctx.store(scores={"passed": False, "notes": str(e) or "Assertion failed"})
+                results = [_errored(None, f"AssertionError: {e}\n{describe(e)}")]
+            else:  # a bare `assert` has no message, so its source line explains the failure
+                notes = str(e) or traceback.extract_tb(e.__traceback__)[-1].line or "Assertion failed"
+                ctx.store(scores={"passed": False, "notes": notes})
                 results = [ctx.build()]
         except Exception as e:
-            results = [_errored(ctx, f"{type(e).__name__}: {e}\n{traceback.format_exc()}")]
+            results = [_errored(ctx, f"{type(e).__name__}: {e}\n{describe(e)}")]
+        if ctx is not None and inspect.iscoroutine(ctx.output):
+            ctx.output.close()
+            ctx.output = None
+            results = [ctx.build_with_error("TypeError: ctx.output was never awaited. Did you forget await?")]
         try:  # evaluators score every finished result, including ones a failed assertion scored
             for i in range(len(results)):
                 for evaluator in [] if results[i].error else p.get("evaluators") or []:
@@ -103,9 +109,9 @@ class Eval:
                     if isinstance(scored, EvalResult):
                         results[i] = scored
                     elif scored is not None:
-                        results[i].scores += [normalize_score(s, "pass") for s in (scored if isinstance(scored, list) else [scored])]
+                        results[i].scores += normalize_scores(scored, "pass")
         except Exception as e:
-            results = [_errored(ctx, f"{type(e).__name__}: {e}\n{traceback.format_exc()}")]
+            results = [_errored(ctx, f"{type(e).__name__}: {e}\n{describe(e)}")]
         for result in results:
             if not result.scores and not result.error:
                 result.scores = [{"key": p["default_score_key"], "passed": True}]
@@ -141,7 +147,7 @@ def expand(fn: EvalFunction, file_defaults: Optional[dict] = None, file: Optiona
         try:
             examples = _run_sync(_call(fn.params["input_loader"]))
         except Exception as e:
-            return [make(name, base, f"Input loader failed: {e}\n{traceback.format_exc()}")]
+            return [make(name, base, f"Input loader failed: {e}\n{describe(e)}")]
         cases = [ex if isinstance(ex, dict) else {k: getattr(ex, k) for k in PARAMS | {"id"} if hasattr(ex, k)} for ex in examples]
     elif "cases" in fn.params:
         cases = fn.params["cases"]
@@ -212,6 +218,16 @@ def _layer(base: dict, over: dict, merge_labels: bool) -> dict:
     if merge_labels and "labels" in over:
         out["labels"] = base["labels"] + [l for l in over["labels"] or [] if l not in base["labels"]] if over["labels"] else []
     return out
+
+
+_INTERNAL = (os.path.dirname(__file__), os.path.dirname(asyncio.__file__), threading.__file__, "<frozen")
+
+
+def describe(error: BaseException) -> str:
+    """The error's traceback through the user's own code only (not ezvals', asyncio's or threading's)."""
+    frames = [f for f in traceback.extract_tb(error.__traceback__) if not f.filename.startswith(_INTERNAL)]
+    where = "Traceback (most recent call last):\n" + "".join(traceback.format_list(frames)) if frames else ""
+    return where + "".join(traceback.format_exception_only(error))
 
 
 def _errored(ctx: Optional[EvalContext], error: str) -> EvalResult:

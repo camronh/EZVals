@@ -5,7 +5,6 @@ import (
 	"embed"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"io/fs"
@@ -58,11 +57,11 @@ func fail(code int, format string, args ...any) error {
 }
 
 func serveCmd(args []string) {
-	fs := flag.NewFlagSet("serve", flag.ExitOnError)
+	fs := newFlagSet("serve")
 	var labels multiFlag
 	dataset := fs.String("dataset", "", "filter by dataset(s), comma-separated")
 	fs.StringVar(dataset, "d", "", "shorthand for --dataset")
-	fs.Var(&labels, "label", "filter by label (repeatable)")
+	fs.Var(&labels, "label", "filter by `label` (repeatable)")
 	fs.Var(&labels, "l", "shorthand for --label")
 	resultsDir := fs.String("results-dir", "", "base directory for .ezvals/sessions")
 	port := fs.Int("port", 0, "port (default 8000)")
@@ -670,7 +669,7 @@ func (s *Server) routes() http.Handler {
 		runs := []map[string]any{}
 		for _, run := range s.store.Runs(r.PathValue("name")) {
 			runs = append(runs, map[string]any{"run_id": run.RunID, "run_name": run.RunName, "timestamp": run.CreatedAt,
-				"total_evaluations": run.TotalEvaluations, "total_passed": run.TotalPassed, "total_errors": run.TotalErrors})
+				"total_evaluations": run.TotalEvaluations, "total_passed": run.TotalPassed, "total_failed": run.TotalFailed, "total_errors": run.TotalErrors})
 		}
 		return map[string]any{"session_name": r.PathValue("name"), "runs": runs}, nil
 	})

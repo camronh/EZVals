@@ -128,17 +128,67 @@ func TestMarkdownTablesHaveOneDelimiterPerColumn(t *testing.T) {
 	}
 }
 
+// ezvals runs the host binary (from buildBinary) in dir, returning stdout, stderr and the exit code.
+func ezvals(root, binary, dir string, args ...string) (string, string, int) {
+	cmd := exec.Command(binary, args...)
+	var stderr bytes.Buffer
+	cmd.Dir, cmd.Env, cmd.Stderr = dir, sdkEnv(root), &stderr
+	out, _ := cmd.Output()
+	return string(out), stderr.String(), cmd.ProcessState.ExitCode()
+}
+
 func TestRunJSONHasCreatedAtNamesAndIsPrintedWithNoEvals(t *testing.T) {
 	root, binary := buildBinary(t)
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "evals.py"), []byte("from ezvals import eval\n\n@eval\ndef ok(ctx):\n    pass\n"), 0o644)
 	for _, args := range [][]string{{"evals.py", "--no-save"}, {"evals.py", "--json"}, {"evals.py::missing", "--no-save"}, {"evals.py", "--json", "--session", "测试", "--run-name", "!!"}} {
-		cmd := exec.Command(binary, append([]string{"run"}, args...)...)
-		cmd.Dir, cmd.Env = dir, sdkEnv(root)
-		out, err := cmd.Output()
+		out, stderr, code := ezvals(root, binary, dir, append([]string{"run"}, args...)...)
 		var run Run
-		if err != nil || json.Unmarshal(out, &run) != nil || run.CreatedAt == 0 || run.SessionName == "" || run.RunName == "" {
-			t.Fatalf("%v: err=%v\n%s", args, err, out)
+		if code != 0 && args[0] != "evals.py::missing" || json.Unmarshal([]byte(out), &run) != nil || run.CreatedAt == 0 || run.SessionName == "" || run.RunName == "" {
+			t.Fatalf("%v: exit %d\n%s\n%s", args, code, out, stderr)
 		}
+	}
+}
+
+func TestRunOutput(t *testing.T) {
+	root, binary := buildBinary(t)
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "evals.py"), []byte(`from ezvals import eval, EvalContext
+
+@eval(cases=[{"input": "a", "reference": "a"}, {"input": "b", "reference": "c"}])
+def compare(ctx: EvalContext):
+    ctx.output = ctx.input
+    assert ctx.output == ctx.reference, "mismatch"
+
+@eval(input="x")
+def crashes(ctx: EvalContext):
+    raise RuntimeError("upstream 500")
+
+@eval(input="x", trials=2)
+def steady(ctx: EvalContext):
+    ctx.store(scores=True)
+`), 0o644)
+	_, stderr, code := ezvals(root, binary, dir, "run", "evals.py", "--no-save")
+	for _, want := range []string{"\nevals.py\n", "◐ compare", "1/2 cases", "! crashes", "✓ steady", "2/2 trials  pass@2 ✓  pass^2 ✓",
+		"── failures ──\n✗ compare[1]  evals.py\n  pass: mismatch\n  input: \"b\"  output: \"b\"\n! crashes  evals.py\n  RuntimeError: upstream 500\n",
+		"3 passed  1 failed  1 error  (5 results · 3 evals"} {
+		if code != 0 || !strings.Contains(stderr, want) {
+			t.Fatalf("exit %d, missing %q in:\n%s", code, want, stderr)
+		}
+	}
+	if strings.Contains(stderr, "\x1b[") {
+		t.Fatal("no colors when stderr isn't a terminal")
+	}
+	if _, stderr, _ := ezvals(root, binary, dir, "run", "evals.py", "--no-save", "-q"); strings.Contains(stderr, "compare") || !strings.HasPrefix(stderr, "3 passed") {
+		t.Fatalf("quiet prints only the summary:\n%s", stderr)
+	}
+
+	out, stderr, code := ezvals(root, binary, dir, "run", "evals.py::compar", "--json")
+	if code != 4 || !strings.Contains(stderr, "No evals match 'compar' in evals.py. Did you mean compare?") || !strings.Contains(out, `"results":[]`) {
+		t.Fatalf("exit %d\n%s\n%s", code, out, stderr)
+	}
+	out, _, code = ezvals(root, binary, dir, "run", "missing.py", "--json")
+	if code != 1 || out != "{\"error\":\"Path missing.py does not exist\",\"results\":[]}\n" {
+		t.Fatalf("a discovery error is still JSON on stdout: exit %d\n%s", code, out)
 	}
 }

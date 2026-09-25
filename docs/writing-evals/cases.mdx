@@ -1,0 +1,131 @@
+---
+title: Cases
+description: Run one eval function over many rows of test data
+---
+
+Use cases when many inputs share the same check. You write the logic once, and each row becomes its own result that you can filter, rerun and compare.
+
+## Define cases
+
+Pass `cases`, a list of dicts (plain objects in TypeScript). Each case sets `input` and `reference` on `ctx`, and an optional `id` names it:
+
+<CodeGroup>
+
+```python Python
+@eval(
+    dataset="sentiment",
+    cases=[
+        {"id": "pos", "input": "I love this!", "reference": "positive"},
+        {"id": "neg", "input": "Terrible!", "reference": "negative"},
+        {"input": "It's fine", "reference": "neutral"},
+    ],
+)
+async def test_sentiment(ctx: EvalContext):
+    ctx.output = await classify(ctx.input)
+    assert ctx.output == ctx.reference
+```
+
+```ts TypeScript
+evaluate("test_sentiment", {
+  dataset: "sentiment",
+  cases: [
+    { id: "pos", input: "I love this!", reference: "positive" },
+    { id: "neg", input: "Terrible!", reference: "negative" },
+    { input: "It's fine", reference: "neutral" },
+  ],
+}, async (ctx) => {
+  ctx.output = await classify(String(ctx.input));
+  assert.equal(ctx.output, ctx.reference);
+});
+```
+
+</CodeGroup>
+
+This produces `test_sentiment[pos]`, `test_sentiment[neg]` and `test_sentiment[2]`. A case without an id is numbered by its position.
+
+When a case needs more than one value, make `input` a dict: `{"input": {"text": "...", "expected_intent": "refund"}}`.
+
+## What a case can override
+
+A case can set any eval option except `cases` and `input_loader`: `input`, `reference`, `dataset`, `labels`, `metadata`, `default_score_key`, `timeout`, `trials`, `target` and `evaluators`.
+
+- A field the case sets **replaces** the eval's value. This includes `input`: a case's input doesn't combine with the decorator's input.
+- `labels` and `metadata` **merge** with the eval's values. On a metadata key clash, the case wins.
+- Setting a field to `None` (`null`) clears the eval's value.
+
+## Grids
+
+Build a grid with a list comprehension (`flatMap` in TypeScript):
+
+<CodeGroup>
+
+```python Python
+GRID = [
+    {"id": f"{m}-{t}", "input": {"model": m, "temperature": t}}
+    for m in ["gpt-5", "claude-sonnet"]
+    for t in [0.0, 0.7]
+]
+
+@eval(dataset="models", cases=GRID)
+async def test_grid(ctx: EvalContext):
+    ctx.output = await run_model(**ctx.input)
+    assert ctx.output
+```
+
+```ts TypeScript
+const GRID = ["gpt-5", "claude-sonnet"].flatMap((model) =>
+  [0.0, 0.7].map((temperature) => ({ id: `${model}-${temperature}`, input: { model, temperature } })),
+);
+
+evaluate("test_grid", { dataset: "models", cases: GRID }, async (ctx) => {
+  ctx.output = await runModel(ctx.input as { model: string; temperature: number });
+  assert(ctx.output);
+});
+```
+
+</CodeGroup>
+
+To compare whole runs rather than rows, such as one run per model, use [run configs](/reviewing/sessions#run-configs) instead.
+
+## Load cases at discovery time
+
+`input_loader` (`inputLoader`) is a function, sync or async, that returns cases in the same shape. It runs when evals are discovered, not when the file is imported. That makes it a good fit for fetching from a database, a dataset API or a file:
+
+<CodeGroup>
+
+```python Python
+async def load_cases():
+    rows = await db.fetch_test_cases()
+    return [{"id": r.slug, "input": r.prompt, "reference": r.expected} for r in rows]
+
+@eval(dataset="from_db", input_loader=load_cases)
+async def test_from_db(ctx: EvalContext):
+    ctx.output = await agent(ctx.input)
+    assert ctx.output == ctx.reference
+```
+
+```ts TypeScript
+async function loadCases() {
+  const rows = await db.fetchTestCases();
+  return rows.map((r) => ({ id: r.slug, input: r.prompt, reference: r.expected }));
+}
+
+evaluate("test_from_db", { dataset: "from_db", inputLoader: loadCases }, async (ctx) => {
+  ctx.output = await agent(String(ctx.input));
+  assert.equal(ctx.output, ctx.reference);
+});
+```
+
+</CodeGroup>
+
+A loader can't be combined with `input`, `reference` or `cases`. If it raises, the eval records a single errored result that starts with `Input loader failed:`.
+
+## Run specific cases
+
+```bash
+ezvals run evals.py::test_sentiment            # every case
+ezvals run evals.py::test_sentiment[pos]       # one case
+ezvals run evals.py::test_sentiment@pos,test_sentiment@neg
+```
+
+`name@id` means the same as `name[id]` and doesn't need shell quoting.

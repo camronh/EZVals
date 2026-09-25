@@ -46,5 +46,21 @@ test("return values that aren't results, and bad evaluator scores, are errors", 
   const errors = await Promise.all(evals.map(async (e) => (await runEval(e))[0].error));
   assert.match(errors[0]!, /^Error: Evaluation function must return .* got string/);
   assert.match(errors[1]!, /got array/);
-  assert.match(errors[2]!, /^Error: Either 'value' or 'passed' must be provided in score/);
+  assert.match(errors[2]!, /^Error: Invalid score \{"key":"bad"\}: use true\/false, a number/);
+});
+
+test("unknown options suggest the closest one", () => {
+  assert.throws(() => evaluate("typo", { datset: "qa" } as never, () => {}), /^Error: Unknown option datset. Did you mean dataset\?$/);
+});
+
+test("unkeyed scores in one list would collide", async () => {
+  const [e] = await register("x.eval.ts", () => evaluate("collide", (ctx) => { ctx.store({ scores: [true, 0.5] }); }));
+  assert.match((await runEval(e))[0].error!, /^Error: Scores \[true,0.5\] would share the key 'pass': give each a key/);
+});
+
+test("an output that was never awaited is an error", async () => {
+  const [e] = await register("x.eval.ts", () => evaluate("forgets", (ctx) => { ctx.output = Promise.resolve("hi"); }));
+  const [result] = await runEval(e);
+  assert.equal(result.error, "TypeError: ctx.output was never awaited. Did you forget await?");
+  assert.equal(result.output, null);
 });

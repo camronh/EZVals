@@ -1,4 +1,9 @@
 (function () {
-  const saved = localStorage.getItem('ezvals:theme');
-  if (saved === 'light') document.documentElement.classList.remove('dark');
+  const media = matchMedia('(prefers-color-scheme: dark)');
+  const apply = () => {
+    const saved = localStorage.getItem('ezvals:theme');
+    document.documentElement.classList.toggle('dark', saved ? saved === 'dark' : media.matches);
+  };
+  apply();
+  media.addEventListener('change', apply);
 })();

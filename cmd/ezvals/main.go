@@ -77,6 +77,29 @@ func parseFlags(fs *flag.FlagSet, args []string) []string {
 	return positional
 }
 
+// newFlagSet prints its help as one `-s, --long VALUE  usage` line per flag, folding in the flag's
+// "shorthand for --long" alias.
+func newFlagSet(name string) *flag.FlagSet {
+	fs := flag.NewFlagSet(name, flag.ExitOnError)
+	fs.Usage = func() {
+		short := map[string]string{}
+		fs.VisitAll(func(f *flag.Flag) {
+			if long, ok := strings.CutPrefix(f.Usage, "shorthand for --"); ok {
+				short[long] = "-" + f.Name + ", "
+			}
+		})
+		fmt.Fprintf(os.Stderr, "Usage: ezvals %s [flags]\n\nFlags:\n", name)
+		fs.VisitAll(func(f *flag.Flag) {
+			if strings.HasPrefix(f.Usage, "shorthand for --") {
+				return
+			}
+			value, usage := flag.UnquoteUsage(f)
+			fmt.Fprintf(os.Stderr, "  %-28s %s\n", short[f.Name]+"--"+f.Name+" "+strings.ToUpper(value), usage)
+		})
+	}
+	return fs
+}
+
 type multiFlag []string
 
 func (m *multiFlag) String() string     { return strings.Join(*m, ",") }
@@ -287,11 +310,11 @@ type report struct {
 }
 
 func runCmd(args []string) {
-	fs := flag.NewFlagSet("run", flag.ExitOnError)
+	fs := newFlagSet("run")
 	var labels multiFlag
 	dataset := fs.String("dataset", "", "filter by dataset(s), comma-separated")
 	fs.StringVar(dataset, "d", "", "shorthand for --dataset")
-	fs.Var(&labels, "label", "filter by label (repeatable)")
+	fs.Var(&labels, "label", "filter by `label` (repeatable)")
 	fs.Var(&labels, "l", "shorthand for --label")
 	limit := fs.Int("limit", 0, "run at most this many evals")
 	output := fs.String("output", "", "write the results JSON here instead of the session store")
@@ -300,8 +323,10 @@ func runCmd(args []string) {
 	fs.IntVar(concurrency, "c", -1, "shorthand for --concurrency")
 	timeout := fs.Float64("timeout", 0, "per-eval timeout in seconds")
 	trials := fs.Int("trials", 0, "run every eval this many times (default: each eval's own trials)")
-	verbose := fs.Bool("verbose", false, "show eval output and errors")
+	verbose := fs.Bool("verbose", false, "show eval output and full error tracebacks")
 	fs.BoolVar(verbose, "v", false, "shorthand for --verbose")
+	quiet := fs.Bool("quiet", false, "print only the summary")
+	fs.BoolVar(quiet, "q", false, "shorthand for --quiet")
 	session := fs.String("session", "default", "session name")
 	runName := fs.String("run-name", "", "run name (default: the --config name, else a random name)")
 	noSave := fs.Bool("no-save", false, "print the results JSON instead of saving")
@@ -360,9 +385,11 @@ func runCmd(args []string) {
 	info.TracesEndpoint = endpoint(tracesBase, info.RunID)
 	workers, manifest, err := startWorkers(path, info, *verbose)
 	if err != nil {
+		if *jsonOut || *noSave {
+			json.NewEncoder(os.Stdout).Encode(map[string]any{"error": err.Error(), "results": []Row{}})
+		}
 		fatal("%v", err)
 	}
-	fmt.Fprintf(os.Stderr, "Running %s\n", positional[0])
 	header := Event{Type: "run", At: time.Now().Unix(), RunID: info.RunID, SessionName: info.SessionName, RunName: info.RunName,
 		Path: path, Dataset: *dataset, Labels: labels, FunctionName: strings.Join(selectors, ","), ConfigName: *configName}
 	evals := filterEvals(manifest, *dataset, labels, selectors)
@@ -371,13 +398,52 @@ func runCmd(args []string) {
 	}
 	if len(evals) == 0 {
 		stopWorkers(workers)
-		fmt.Fprintln(os.Stderr, "No evaluations found")
+		filters := ""
+		if *dataset != "" {
+			filters += " --dataset " + *dataset
+		}
+		for _, l := range labels {
+			filters += " --label " + l
+		}
+		message := "No evals found in " + path
+		if filters != "" {
+			message += " with" + filters
+		}
+		for _, s := range selectors {
+			if s = strings.TrimSpace(s); len(manifest) > 0 && len(filterEvals(manifest, "", nil, []string{s})) == 0 {
+				message = fmt.Sprintf("No evals match '%s' in %s.", s, path)
+				if guess := closest(s, manifest); guess != "" {
+					message += " Did you mean " + guess + "?"
+				}
+				break
+			}
+		}
+		fmt.Fprintln(os.Stderr, message)
 		if *jsonOut || *noSave {
 			json.NewEncoder(os.Stdout).Encode(report{Run: materialize([]Event{header})})
 		}
-		return
+		os.Exit(4)
 	}
 	evals = expandTrials(evals, *trials)
+	term := &terminal{verbose: *verbose, color: os.Getenv("NO_COLOR") == ""}
+	if stat, err := os.Stderr.Stat(); err != nil || stat.Mode()&os.ModeCharDevice == 0 {
+		term.color = false
+	}
+	remaining := map[string]int{} // results still to come, by group
+	var groups []string
+	printed := 0 // groups print in order, each once it and every group before it are done
+	for _, e := range evals {
+		g := groupOf(e.ID)
+		if _, seen := remaining[g]; !seen {
+			groups = append(groups, g)
+		}
+		remaining[g]++
+		_, fn, _ := strings.Cut(g, "::")
+		term.width = max(term.width, len(fn))
+	}
+	if !*quiet {
+		fmt.Fprintf(os.Stderr, "ezvals run %s  %s\n", positional[0], term.paint(dim, "(session "+info.SessionName+" · run "+info.RunName+")"))
+	}
 
 	store := openStore(cfg.sessionsDir())
 	save := *output == "" && !*noSave
@@ -400,15 +466,28 @@ func runCmd(args []string) {
 				fatal("%v", err)
 			}
 		}
-		if *verbose {
-			printErrors(es)
+		for _, e := range es {
+			if e.Type != "result" || *quiet {
+				continue
+			}
+			if remaining[groupOf(e.ID)]--; printed < len(groups) && remaining[groups[printed]] == 0 {
+				run := materialize(events)
+				for ; printed < len(groups) && remaining[groups[printed]] == 0; printed++ {
+					term.group(run, groups[printed])
+				}
+			}
 		}
 	}
 	collector.Track(info.RunID, emit)
 	emit(Event{Type: "evals", Evals: evals}, Event{Type: "queued", IDs: ids(evals)})
+	start := time.Now()
 	runJobs(workers, jobs(evals), *concurrency, emit)
 
 	report := report{Run: materialize(events)}
+	for ; printed < len(groups) && !*quiet; printed++ { // cancelled before all their results came in
+		term.group(report.Run, groups[printed])
+	}
+	term.summary(report.Run, len(groups), time.Since(start), *quiet)
 	if *output != "" {
 		data, _ := json.MarshalIndent(report.Run, "", "  ")
 		os.MkdirAll(filepath.Dir(*output), 0o755)
@@ -424,12 +503,234 @@ func runCmd(args []string) {
 		json.NewEncoder(os.Stdout).Encode(report)
 	}
 	if report.SavedPath != "" {
-		fmt.Fprintf(os.Stderr, "Results saved to %s\n", report.SavedPath)
+		fmt.Fprintf(os.Stderr, "Saved to %s %s\n", report.SavedPath, term.paint(dim, "· view: ezvals serve "+report.SavedPath))
+	}
+}
+
+// groupOf is the file and function (without its case or trial) of an eval id: <file>::<function>[case]~trial.
+func groupOf(id string) string {
+	group, _, _ := strings.Cut(id, "[")
+	group, _, _ = strings.Cut(group, "~")
+	return group
+}
+
+// closest suggests the function (or function@case) nearest a selector that matched nothing: one it prefixes, else
+// one within a few edits.
+func closest(selector string, evals []Eval) string {
+	best, bestDistance := "", max(2, len(selector)/3)+1
+	for _, e := range evals {
+		fn, c, _ := strings.Cut(strings.TrimSuffix(e.Function, "]"), "[")
+		candidates := []string{fn}
+		if c != "" {
+			candidates = append(candidates, fn+"@"+c)
+		}
+		for _, candidate := range candidates {
+			distance := 0
+			if !strings.HasPrefix(candidate, selector) { // Levenshtein distance
+				prev := make([]int, len(candidate)+1)
+				for j := range prev {
+					prev[j] = j
+				}
+				for i := 1; i <= len(selector); i++ {
+					cur := []int{i}
+					for j := 1; j <= len(candidate); j++ {
+						cost := 1
+						if selector[i-1] == candidate[j-1] {
+							cost = 0
+						}
+						cur = append(cur, min(prev[j]+1, cur[j-1]+1, prev[j-1]+cost))
+					}
+					prev = cur
+				}
+				distance = prev[len(candidate)]
+			}
+			if distance < bestDistance {
+				best, bestDistance = candidate, distance
+			}
+		}
+	}
+	return best
+}
+
+const (
+	dim     = "2"
+	red     = "31"
+	green   = "32"
+	yellow  = "33"
+	magenta = "35"
+)
+
+// marks shows each outcome, plus "partial" for a function whose results were mixed.
+var marks = map[string][2]string{"passed": {"✓", green}, "failed": {"✗", red}, "partial": {"◐", yellow},
+	"error": {"!", magenta}, "scored": {"○", ""}}
+
+// terminal prints a run's progress and summary to stderr.
+type terminal struct {
+	color, verbose bool
+	width          int    // of the longest function name
+	file           string // of the last function printed
+}
+
+func (t *terminal) paint(color, s string) string {
+	if !t.color || color == "" {
+		return s
+	}
+	return "\x1b[" + color + "m" + s + "\x1b[0m"
+}
+
+func (t *terminal) mark(outcome string) string { return t.paint(marks[outcome][1], marks[outcome][0]) }
+
+// chips shows each score key's pass rate or average.
+func (t *terminal) chips(chips []ScoreChip) []string {
+	var out []string
+	for _, c := range chips {
+		if c.Type == "ratio" {
+			out = append(out, fmt.Sprintf("%s %d%%", c.Key, c.Passed*100/c.Total))
+		} else if c.Count > 0 {
+			out = append(out, fmt.Sprintf("%s %.2f", c.Key, c.Avg))
+		}
+	}
+	return out
+}
+
+// group prints one line for a function, folding its cases and trials.
+func (t *terminal) group(run *Run, group string) {
+	var rows []Row
+	count := map[string]int{}
+	cases := map[string]bool{}
+	latency := 0.0
+	for _, row := range run.Results {
+		if groupOf(row.ID) != group {
+			continue
+		}
+		rows = append(rows, row)
+		count[outcome(row.Result)]++
+		cases[Eval{ID: row.ID, TrialOf: row.TrialOf}.sdkID()] = true
+		if row.Result.Latency != nil {
+			latency += *row.Result.Latency
+		}
+	}
+	file, fn, _ := strings.Cut(group, "::")
+	if file != t.file {
+		fmt.Fprintf(os.Stderr, "\n%s\n", file)
+		t.file = file
+	}
+	n := len(rows)
+	kind := "partial"
+	switch {
+	case count["error"] == n:
+		kind = "error"
+	case count["scored"] == n:
+		kind = "scored"
+	case count["passed"]+count["scored"] == n:
+		kind = "passed"
+	case count["passed"] == 0:
+		kind = "failed"
+	}
+	var details []string
+	if n > 1 {
+		unit := "results"
+		if rows[0].Trial > 0 && len(cases) == 1 {
+			unit = "trials"
+		} else if len(cases) == n {
+			unit = "cases"
+		}
+		if kind == "scored" {
+			details = append(details, fmt.Sprintf("%d %s", n, unit))
+		} else {
+			details = append(details, fmt.Sprintf("%d/%d %s", count["passed"], n, unit))
+		}
+		if unit == "trials" {
+			anyPassed, allPassed := "failed", "failed"
+			if count["passed"] > 0 {
+				anyPassed = "passed"
+			}
+			if count["passed"] == n {
+				allPassed = "passed"
+			}
+			details = append(details, fmt.Sprintf("pass@%d %s", n, t.mark(anyPassed)), fmt.Sprintf("pass^%d %s", n, t.mark(allPassed)))
+		}
+	}
+	if chips := scoreChips(rows); len(chips) > 1 || len(chips) == 1 && chips[0].Type != "ratio" {
+		details = append(details, t.chips(chips)...)
+	}
+	line := fmt.Sprintf("%-*s %s  %s", t.width, fn, t.paint(dim, fmt.Sprintf("%5.1fs", latency)), strings.Join(details, "  "))
+	fmt.Fprintf(os.Stderr, "  %s %s\n", t.mark(kind), strings.TrimSpace(line))
+}
+
+// summary prints the failures (unless quiet) and the counts of each outcome.
+func (t *terminal) summary(run *Run, evals int, elapsed time.Duration, quiet bool) {
+	count := map[string]int{}
+	var failures []Row
+	for _, row := range run.Results {
+		kind := outcome(row.Result)
+		count[kind]++
+		if kind == "failed" || kind == "error" {
+			failures = append(failures, row)
+		}
+	}
+	if !quiet && len(failures) > 0 {
+		fmt.Fprintf(os.Stderr, "\n%s\n", t.paint(dim, "── failures ──"))
+		truncate := func(v any) string {
+			data, _ := json.Marshal(v)
+			if s := []rune(string(data)); len(s) > 60 {
+				return string(s[:60]) + "…"
+			}
+			return string(data)
+		}
+		for i, row := range failures {
+			if i == 20 {
+				fmt.Fprintf(os.Stderr, "… and %d more\n", len(failures)-20)
+				break
+			}
+			file, name, _ := strings.Cut(row.ID, "::")
+			r := row.Result
+			fmt.Fprintf(os.Stderr, "%s %s  %s\n", t.mark(outcome(r)), name, t.paint(dim, file))
+			if r.Error != nil {
+				text := *r.Error
+				if !t.verbose {
+					text, _, _ = strings.Cut(text, "\n")
+				}
+				fmt.Fprintf(os.Stderr, "  %s\n", strings.ReplaceAll(strings.TrimSpace(text), "\n", "\n  "))
+			}
+			for _, s := range r.Scores {
+				if s.Passed != nil && !*s.Passed {
+					notes := "failed"
+					if s.Notes != nil && *s.Notes != "" {
+						notes = *s.Notes
+					}
+					fmt.Fprintf(os.Stderr, "  %s: %s\n", s.Key, notes)
+				}
+			}
+			fmt.Fprintf(os.Stderr, "  %s\n", t.paint(dim, "input: "+truncate(r.Input)+"  output: "+truncate(r.Output)))
+		}
+	}
+	parts := []string{t.paint(green, fmt.Sprintf("%d passed", count["passed"])), t.paint(red, fmt.Sprintf("%d failed", count["failed"]))}
+	for _, kind := range []string{"error", "scored", "cancelled"} {
+		if count[kind] > 0 {
+			label := kind
+			if kind == "error" && count[kind] > 1 {
+				label = "errors"
+			}
+			parts = append(parts, t.paint(marks[kind][1], fmt.Sprintf("%d %s", count[kind], label)))
+		}
+	}
+	if !quiet {
+		fmt.Fprintln(os.Stderr)
+	}
+	fmt.Fprintf(os.Stderr, "%s  %s\n", strings.Join(parts, "  "),
+		t.paint(dim, fmt.Sprintf("(%d results · %d evals · %.1fs)", len(run.Results), evals, elapsed.Seconds())))
+	stats := t.chips(scoreChips(run.Results))
+	if run.PassAtK != nil {
+		stats = append(stats, fmt.Sprintf("pass@%d %.0f%%", run.Trials, *run.PassAtK*100), fmt.Sprintf("pass^%d %.0f%%", run.Trials, *run.PassAllK*100))
+	}
+	if len(stats) > 0 {
+		fmt.Fprintln(os.Stderr, t.paint(dim, strings.Join(stats, " · ")))
 	}
 }
 
 func regradeCmd(args []string) {
-	fs := flag.NewFlagSet("regrade", flag.ExitOnError)
+	fs := newFlagSet("regrade")
 	concurrency := fs.Int("concurrency", 0, "results to regrade in parallel (default: ezvals.json, else 1)")
 	fs.IntVar(concurrency, "c", 0, "shorthand for --concurrency")
 	verbose := fs.Bool("verbose", false, "show eval output and errors")
@@ -511,7 +812,7 @@ func loadRunFile(path string) (*Run, error) {
 }
 
 func exportCmd(args []string) {
-	fs := flag.NewFlagSet("export", flag.ExitOnError)
+	fs := newFlagSet("export")
 	format := fs.String("format", "json", "json, csv or md")
 	fs.StringVar(format, "f", "json", "shorthand for --format")
 	output := fs.String("output", "", "output file (default: RUN_NAME.FORMAT)")

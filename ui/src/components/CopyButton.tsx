@@ -13,7 +13,7 @@ export function CopyButton({ text, className = '', title = 'Copy' }: { text: () 
         setTimeout(() => setCopied(false), 1500)
       }}
     >
-      {copied ? <Icon name="check" className="h-3.5 w-3.5 text-emerald-500" /> : <Icon name="copy" />}
+      {copied ? <Icon name="check" className="h-3.5 w-3.5 text-accent-success" /> : <Icon name="copy" />}
     </button>
   )
 }

@@ -7,7 +7,7 @@ const meta: Meta<typeof SettingsModal> = {
   component: SettingsModal,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div className="h-[480px]"><Story /></div>],
-  args: { configNames: [], activeConfig: null, onConfigSelect: fn(), onToggleTheme: fn(), onSave: fn(), onClose: fn() },
+  args: { configNames: [], activeConfig: null, onConfigSelect: fn(), onSave: fn(), onClose: fn() },
 }
 export default meta
 type Story = StoryObj<typeof SettingsModal>

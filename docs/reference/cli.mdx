@@ -1,0 +1,176 @@
+---
+title: CLI
+description: Every ezvals command and flag, plus ezvals.json
+---
+
+This is the full list of commands and flags, for when you need to look one up. In a TypeScript project, prefix commands with `npx` (`npx ezvals run evals/`).
+
+| Command | Purpose |
+|---------|---------|
+| [`ezvals run`](#ezvals-run) | Run evals from the terminal, for you, a coding agent or CI |
+| [`ezvals serve`](#ezvals-serve) | Open the web UI |
+| [`ezvals regrade`](#ezvals-regrade) | Score a saved run's outputs again without calling the agent |
+| [`ezvals query`](#ezvals-query) | Query saved runs with SQL |
+| [`ezvals export`](#ezvals-export) | Export a run as JSON, CSV or Markdown |
+| [`ezvals skills`](#ezvals-skills) | Install the evals skill for coding agents |
+| `ezvals version` | Print the version (also `--version`) |
+
+`ezvals COMMAND -h` prints a command's flags.
+
+## `ezvals run`
+
+```bash
+ezvals run evals/                                  # a directory
+ezvals run evals/support.py                        # a file
+ezvals run evals.py::test_refund,test_escalation   # functions
+ezvals run evals.py::test_math[low]                # one case
+ezvals run evals.py::test_math@low,test_math@high  # several cases
+```
+
+**What gets discovered.** Directories are searched recursively for `.py` files and `*.eval.ts`, `*.eval.mts`, `*.eval.js` and `*.eval.mjs` files, and evals in every language found run together in one run. Python files whose names start with `_` are skipped, as are hidden directories, directories starting with `__`, `node_modules` and `venv`.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-d, --dataset` | all | Only these datasets (comma-separated) |
+| `-l, --label` | all | Only evals with this label. Repeat for several; they're OR'd together, and AND'd with `--dataset` |
+| `--limit` | none | Run at most this many evals |
+| `-c, --concurrency` | 1 | Evals to run in parallel |
+| `--timeout` | none | Timeout per eval, in seconds. Overrides each eval's own timeout |
+| `--trials` | per eval | Run every eval this many times. Overrides each eval's own trials |
+| `--session` | `default` | Session to save the run in |
+| `--run-name` | generated | Run name. Defaults to the `--config` name, otherwise a generated name |
+| `--config` | none | Named config from `ezvals.json`, exposed as `ctx.config` |
+| `--json` | off | Also print the run as JSON to stdout, including `saved_path` |
+| `--no-save` | off | Print the run as JSON to stdout and don't save it |
+| `-o, --output` | none | Save the run JSON to this file instead of the session folder |
+| `-q, --quiet` | off | Print only the summary |
+| `-v, --verbose` | off | Show what evals print, and full tracebacks for errors |
+| `--rename` | none | `ezvals run --rename RUN_ID NEW_NAME` renames a saved run |
+
+**Output.** The human-readable output goes to stderr, grouped by file. Each eval function gets one line, as soon as all its results are in, with a mark for its outcome:
+
+| Mark | Meaning |
+|------|---------|
+| ✓ | Every result passed |
+| ✗ | No result passed |
+| ◐ | Some passed and some failed or errored |
+| ! | Every result errored |
+| ○ | Only numeric scores |
+
+Each line also shows how many of the eval's cases or trials passed, score averages where they apply, and the latency. A failures section follows, listing each failed or errored result (up to 20) with its failing scores' notes or its error, input and output. A summary at the end counts results by outcome, gives each score's average (plus pass@k and pass^k for trials), and names the saved run file.
+
+With `--json`, stdout is only the run JSON, so a script or coding agent can read it while you still see the human output.
+
+**Exit codes.** Failed evals don't make the command fail. Read the JSON to decide whether a CI job should fail.
+
+| Code | Meaning |
+|------|---------|
+| 0 | The run completed, whatever the results |
+| 1 | Invalid argument, the path doesn't exist, or an eval file failed to import |
+| 2 | Unknown command or flag |
+| 4 | No evals matched the path, selector and filters |
+
+## `ezvals serve`
+
+```bash
+ezvals serve evals/                                  # discover evals, don't run them yet
+ezvals serve evals/ --run                            # and run them straight away
+ezvals serve .ezvals/sessions/default/a1b2c3d4.jsonl # reopen a saved run
+ezvals serve evals/ --session upgrade --compare-runs baseline,tuned
+```
+
+The server listens on `127.0.0.1` only. If the port is taken, it tries the next nine ports.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-d, --dataset` | all | Only these datasets |
+| `-l, --label` | all | Only evals with this label (repeatable) |
+| `--run` | off | Start running all evals on startup |
+| `--session` | new random name | Session for runs started from the UI |
+| `--run-name` | generated | Open this run if it exists in the session, otherwise use it as the next run's name |
+| `--compare-runs` | none | 2 to 4 comma-separated run names to open in comparison mode |
+| `--config` | none | Named config from `ezvals.json` |
+| `--port` | 8000 | Port |
+| `--results-dir` | `.` | Base directory for `.ezvals/sessions` |
+| `--open` / `--no-open` | open | Open a browser |
+| `--search` | none | Start with this search text |
+| `--annotation` | `any` | Start filtered to results with (`yes`) or without (`no`) an annotation |
+| `--has-error` / `--no-has-error` | none | Start filtered by whether a result has an error |
+| `--has-url` / `--no-has-url` | none | Start filtered by whether a result has a trace URL |
+| `--has-messages` / `--no-has-messages` | none | Start filtered by whether a result has messages |
+
+When you open a saved run whose eval files still exist, you can keep running evals in it. Otherwise it opens read-only.
+
+## `ezvals regrade`
+
+```bash
+ezvals regrade a1b2c3d4                                 # run id
+ezvals regrade .ezvals/sessions/default/a1b2c3d4.jsonl  # or run file
+```
+
+Runs the eval code again on the stored outputs without calling the target, and saves the new scores to the same run. Results that can't be regraded are skipped and counted. See [Regrading](/writing-evals/targets-and-regrading#regrading).
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-c, --concurrency` | config, else 1 | Results to regrade in parallel |
+| `-v, --verbose` | off | Show eval output and errors |
+| `--json` | off | Print the regraded run JSON |
+
+## `ezvals query`
+
+```bash
+ezvals query "SELECT run_name, total_passed FROM runs"
+ezvals query --schema
+```
+
+Loads every saved run into SQLite and prints the rows. `--json` prints them as a JSON array. See [Querying results](/reviewing/querying) for the tables.
+
+## `ezvals export`
+
+```bash
+ezvals export .ezvals/sessions/default/a1b2c3d4.jsonl -f csv
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-f, --format` | `json` | `json` (the whole run), `csv` (every result) or `md` (a report with score bars and a results table) |
+| `-o, --output` | `<run name>.<format>` | Output file |
+
+## `ezvals skills`
+
+```bash
+ezvals skills add --claude --codex   # install for these agents
+ezvals skills doctor                 # check the installation
+ezvals skills remove                 # remove it everywhere
+```
+
+`add` needs at least one of `--agents`, `--claude`, `--codex`, `--cursor`, `--windsurf`, `--kiro` or `--roo`. Every subcommand accepts `-g, --global` to use your home directory instead of the project. See [Using with coding agents](/reviewing/coding-agents).
+
+## Configuration
+
+`ezvals.json` in the directory you run from sets defaults for `run` and `serve`. Command-line flags take precedence over it. The file is created when you save settings in the web UI, and you can also write it yourself.
+
+```json ezvals.json
+{
+  "concurrency": 4,
+  "timeout": 60,
+  "configs": {
+    "gpt-4.1": { "model": "gpt-4.1" },
+    "sonnet": { "model": "claude-sonnet-4-5" }
+  }
+}
+```
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `concurrency` | 1 | Evals to run in parallel |
+| `timeout` | none | Timeout per eval, in seconds |
+| `trials` | none | Run every eval this many times |
+| `verbose` | false | Show what evals print |
+| `port` | 8000 | Port for `ezvals serve` |
+| `results_dir` | `.` | Base directory for `.ezvals/sessions` |
+| `overwrite` | true | A new run replaces an older run with the same name in the same session |
+| `completion_notifications` | false | Browser notification and sound when a run started from the UI finishes |
+| `configs` | `{}` | Named [run configs](/reviewing/sessions#run-configs) |
+
+`concurrency`, `timeout` and `trials` also apply to runs started from the web UI, and `concurrency` applies to regrades.

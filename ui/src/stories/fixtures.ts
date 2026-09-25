@@ -118,9 +118,9 @@ export const trialsRun = run('c9d0e1f2', 'three-trials', [
 ], { trials: 3, pass_at_k: 1, pass_all_k: 0.5 })
 
 export const sessionRuns: SessionRun[] = [
-  { run_id: 'e5f6a7b8', run_name: 'improved', timestamp: 1_790_290_000, total_evaluations: 6, total_passed: 5, total_errors: 0 },
-  { run_id: 'a1b2c3d4', run_name: 'baseline', timestamp: 1_790_280_000, total_evaluations: 6, total_passed: 4, total_errors: 1 },
-  { run_id: 'f0e1d2c3', run_name: 'gpt-5-mini', timestamp: 1_790_270_000, total_evaluations: 6, total_passed: 3, total_errors: 2 },
+  { run_id: 'e5f6a7b8', run_name: 'improved', timestamp: 1_790_290_000, total_evaluations: 6, total_passed: 5, total_failed: 1, total_errors: 0 },
+  { run_id: 'a1b2c3d4', run_name: 'baseline', timestamp: 1_790_280_000, total_evaluations: 6, total_passed: 4, total_failed: 1, total_errors: 1 },
+  { run_id: 'f0e1d2c3', run_name: 'gpt-5-mini', timestamp: 1_790_270_000, total_evaluations: 6, total_passed: 3, total_failed: 1, total_errors: 2 },
 ]
 
 /** MSW handlers serving `active` as the active run of a small session. */

@@ -14,7 +14,7 @@ export type DashboardQuery = {
 
 const OPS: Record<string, ValueRule['op']> = { gt: '>', gte: '>=', lt: '<', lte: '<=', eq: '==', neq: '!=' }
 const OP_NAMES = Object.fromEntries(Object.entries(OPS).map(([name, op]) => [op, name]))
-const FILTER_PARAMS = ['annotation', 'has_error', 'has_url', 'has_messages', 'score_value', 'score_passed', 'dataset_in', 'dataset_out', 'label_in', 'label_out']
+const FILTER_PARAMS = ['outcome', 'annotation', 'has_error', 'has_url', 'has_messages', 'score_value', 'score_passed', 'dataset_in', 'dataset_out', 'label_in', 'label_out']
 
 function triState(value: string | null) {
   return value === '1' ? true : value === '0' ? false : null
@@ -23,6 +23,7 @@ function triState(value: string | null) {
 export function readQuery(params: URLSearchParams): DashboardQuery {
   const all = (name: string) => params.getAll(name).map((v) => v.trim()).filter(Boolean)
   const annotation = params.get('annotation')
+  const outcome = params.get('outcome')
   const compareRunIds = [...new Set(all('compare_run_id'))]
   const runId = params.get('run_id')?.trim() || null
   if (compareRunIds.length === 1 && runId && runId !== compareRunIds[0]) compareRunIds.unshift(runId)
@@ -33,6 +34,7 @@ export function readQuery(params: URLSearchParams): DashboardQuery {
     search: params.get('search'),
     filters: FILTER_PARAMS.some((p) => params.has(p)) ? {
       ...defaultFilters(),
+      outcome: outcome === 'failed' || outcome === 'errors' ? outcome : 'all',
       annotation: annotation === 'yes' || annotation === 'no' ? annotation : 'any',
       hasError: triState(params.get('has_error')),
       hasUrl: triState(params.get('has_url')),
@@ -67,6 +69,7 @@ export function writeQuery(current: URLSearchParams, state: { runId?: string; co
   if (state.compareRunIds.length > 1) state.compareRunIds.forEach((id) => params.append('compare_run_id', id))
   if (state.search.trim()) params.set('search', state.search.trim())
   if (state.searchColumns.length < COLUMN_KEYS.length) state.searchColumns.forEach((c) => params.append('search_col', c))
+  if (f.outcome !== 'all') params.set('outcome', f.outcome)
   if (f.annotation !== 'any') params.set('annotation', f.annotation)
   if (f.hasError !== null) params.set('has_error', f.hasError ? '1' : '0')
   if (f.hasUrl !== null) params.set('has_url', f.hasUrl ? '1' : '0')

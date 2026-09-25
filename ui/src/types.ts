@@ -108,6 +108,7 @@ export interface SessionRun {
   timestamp?: number
   total_evaluations?: number
   total_passed?: number
+  total_failed?: number
   total_errors?: number
 }
 
@@ -130,7 +131,10 @@ export interface PassedRule {
 
 export type TriState = boolean | null
 
+export type OutcomeFilter = 'all' | 'failed' | 'errors'
+
 export interface FilterState {
+  outcome: OutcomeFilter
   valueRules: ValueRule[]
   passedRules: PassedRule[]
   annotation: 'any' | 'yes' | 'no'
