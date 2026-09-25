@@ -119,6 +119,24 @@ Scenario: Code changes are picked up
   Then the edited code runs (every run starts fresh eval processes)
 ```
 
+### Trials, Regrading and Spans
+
+```gherkin
+Scenario: Trials in the table
+  Given a run with repeated trials
+  Then each trial is its own row with a "#n" chip next to the eval name
+  And the stats panel shows pass@k and pass^k next to the error count
+
+Scenario: Regrade from the dashboard
+  When the user chooses "Regrade results" in the "…" menu
+  Then selected rows (or all rows when none are selected) are regraded without re-running targets
+  And a toast reports how many results were regraded and how many were skipped for having no target
+
+Scenario: Span count
+  Given a result recorded OpenTelemetry spans
+  Then its eval cell shows a trace icon with the span count
+```
+
 ### Result Status Indicators
 
 | Status | Visual | Meaning |
@@ -152,6 +170,7 @@ Scenario: Detail view contents
     - Run Data (expandable JSON)
     - Annotations (editable)
     - Tools used (unique tool names from trace_data.messages tool calls, if present)
+    - Spans (count; opens the span waterfall), if any were recorded
     - Latency
     - Error message (if any)
 
@@ -162,6 +181,19 @@ Scenario: Message-format data rendering
   Then those sections default to a pretty chat-style rendering
   And each section provides a Pretty/Raw toggle
   And Raw shows the underlying JSON payload without transformation
+
+Scenario: Span waterfall
+  Given the result recorded spans
+  When the user opens "Spans" in the sidebar
+  Then a drawer shows the spans as a nested waterfall with durations
+  And LLM spans show their model and input→output token counts, with totals in the header
+  And failed spans are highlighted
+  And clicking a span shows its attributes
+
+Scenario: Regrade one result
+  Given the result finished and its eval has a target
+  When the user clicks "Regrade" in the header
+  Then the output stays, the eval body scores it again, and the scores update when done
 
 Scenario: Output loading state during active run
   Given the detail view is open
@@ -537,6 +569,8 @@ The UI is backed by these REST endpoints, also available programmatically.
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/runs/rerun` | POST | Run active eval configuration (optionally selected indices) |
+| `/api/runs/regrade` | POST | Regrade the active run (optionally `{"indices": [...]}`); returns `regraded` and `skipped_without_target` |
+| `/otlp/{run_id}/v1/traces` | POST | OTLP/HTTP (protobuf) span export from SDK workers |
 | `/api/runs/pause` | POST | Pause queued execution after in-flight evals finish |
 | `/api/runs/resume` | POST | Resume pending evals on a paused run |
 | `/api/runs/stop` | POST | Cancel pending/running evals |
@@ -652,10 +686,14 @@ The API, `ezvals run --json` and `ezvals export -f json` present a run as:
   "average_latency": 0.5,
   "results": [
     {
-      "id": "evals/support.py::test_refund",
+      "id": "evals/support.py::test_refund~2",
       "function": "test_refund",
       "dataset": "customer_service",
       "labels": ["production"],
+      "trial": 2,
+      "trial_of": "evals/support.py::test_refund",
+      "span_count": 5,
+      "regradable": true,
       "result": {
         "input": "I want a refund",
         "output": "I'll help you with that",
@@ -681,7 +719,7 @@ The API, `ezvals run --json` and `ezvals export -f json` present a run as:
 }
 ```
 
-`created_at` is when the run last started running (unix seconds). `/results` and `/api/runs/{run_id}/data` add `score_chips`, `eval_path`, and for the active run `is_paused` and `selected_total`.
+`trial`, `trial_of`, `span_count` and `regradable` appear only when they apply; runs with trials also carry `trials`, `pass_at_k` and `pass_all_k`. The single-result endpoint (`/api/runs/{run_id}/results/{index}`) adds the row's `spans`. `created_at` is when the run last started running (unix seconds). `/results` and `/api/runs/{run_id}/data` add `score_chips`, `eval_path`, and for the active run `is_paused` and `selected_total`.
 
 ---
 

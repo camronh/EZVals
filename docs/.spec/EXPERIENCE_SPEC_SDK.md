@@ -33,16 +33,34 @@ Scenario: Discovery fails
   And the host prints the error and exits 1
 
 Scenario: Running evals
-  When the host writes {"run": "<id>"}
+  When the host writes {"id": "<request id>", "run": "<eval id>"}
   Then the worker starts that eval without waiting for earlier ones to finish
-  And writes {"type": "result", "id": "<id>", "results": [RESULT, ...]} when it completes
+  And writes {"type": "result", "id": "<request id>", "results": [RESULT, ...]} when it completes
+  (The request id is the eval id, or "<eval id>~<n>" for trial n, so trials of one eval can run at once.)
+
+Scenario: Regrading a stored result
+  When the host writes {"id": ..., "run": ..., "grade": RESULT}
+  Then the worker runs the eval without its target
+  And the context starts with the stored input, output, latency, metadata and trace data
+  And the eval body and evaluators score it again
 
 Scenario: Shutdown
   When stdin closes
   Then the worker finishes in-flight evals, reports them, and exits
 ```
 
-The environment variable `EZVALS_RUN` holds `{"run_id", "session_name", "run_name", "eval_path", "config", "timeout"}`. The first five are exposed on the eval context; `timeout`, when set, overrides every eval's own timeout.
+The environment variable `EZVALS_RUN` holds `{"run_id", "session_name", "run_name", "eval_path", "config", "timeout", "traces_endpoint"}`. The first five are exposed on the eval context; `timeout`, when set, overrides every eval's own timeout.
+
+### Tracing
+
+When `traces_endpoint` is set and the project has OpenTelemetry installed, the SDK exports spans there over OTLP/HTTP (protobuf):
+
+- every span started while a request runs gets the attribute `ezvals.eval_id` = the request id
+- each request runs inside a root span named `eval <function>` (or `grade <function>` when regrading)
+- spans are flushed before the result is sent, so a result's spans are always stored with it
+- the SDK attaches to the project's own tracer provider when it has one, so spans keep flowing to other backends too
+
+The host drops spans without `ezvals.eval_id` and appends the rest to the run as `spans` events.
 
 The host owns concurrency (it never has more than `--concurrency` evals in flight), pausing (it stops sending ids) and stopping (it kills the worker). If a worker exits with evals in flight, those evals get an error result.
 
@@ -50,8 +68,10 @@ The host owns concurrency (it never has more than `--concurrency` evals in fligh
 
 ```json
 {"id": "evals/support.py::test_refund[angry]", "function": "test_refund[angry]", "dataset": "support",
- "labels": ["prod"], "input": "...", "reference": "...", "metadata": {}}
+ "labels": ["prod"], "input": "...", "reference": "...", "metadata": {}, "trials": 3, "target": true}
 ```
+
+`trials` is how many times the eval asks to run (the host expands it, unless `--trials` overrides it). `target` tells the host the eval can be regraded.
 
 `id` is `<file as passed>::<function>`, where `function` is the eval name plus `[case id or index]` for cases and loader examples. Ids are stable across runs as long as the code is unchanged.
 
@@ -74,8 +94,9 @@ Each run is `.ezvals/sessions/<session>/<run_id>.jsonl`, an append-only log. `ru
 |-------|--------|---------|
 | `run` | `run_id`, `session_name`, `run_name`, `path`, `dataset`, `labels`, `function_name`, `config_name` | Header, always first |
 | `evals` | `evals: [EVAL]` | The eval list; replaces any earlier one |
-| `queued` | `ids` | These evals will run; their earlier output is hidden until they finish again |
+| `queued` | `ids`, `grade` | These evals will run; their earlier output is hidden until they finish again. With `grade`, they are being regraded and keep their spans |
 | `started` | `id` | |
+| `spans` | `id`, `spans` | OpenTelemetry spans recorded while the eval ran: `trace_id`, `span_id`, `parent_span_id`, `name`, `start`/`end` (unix ns), `attributes`, `status`, `status_message` |
 | `result` | `id`, `results: [RESULT]` | |
 | `cancelled` | `ids` | Queued or running evals that were stopped |
 | `edit` | `id`, `n`, `field` (`annotation` or `scores`), `value` | A human edit to result `n` of eval `id`. Score edits are discarded when the eval runs again; annotations survive reruns |
@@ -87,4 +108,4 @@ Reading a run replays the log into the run JSON served by the API and written by
 
 ## Conformance
 
-Every SDK must pass `conformance/`: each fixture exists once per language (`basics.py`, `basics.eval.ts`, ...) and all of them must produce the results in `<fixture>.expected.json`. A new SDK adds its fixtures and a worker command; `go test ./cmd/ezvals -run TestConformance` checks it.
+Every SDK must pass `conformance/`: each fixture exists once per language (`basics.py`, `basics.eval.ts`, ...) and all of them must produce the results in `<fixture>.expected.json`, including trial rows and span counts. `TestConformanceRegrade` checks that regrading keeps the stored output and spans while re-scoring. A new SDK adds its fixtures and a worker command; `go test ./cmd/ezvals -run TestConformance` checks it.

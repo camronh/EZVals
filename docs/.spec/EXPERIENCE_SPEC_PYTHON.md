@@ -94,6 +94,7 @@ Scenario: Pre-populated context fields
 | `timeout` | float | None | Max execution time (seconds) | ✓ |
 | `target` | callable | None | Pre-hook that runs first | ✓ |
 | `evaluators` | list[callable] | [] | Post-processing score functions | ✓ |
+| `trials` | int | 1 | How many times `ezvals run` runs the eval (each trial is its own result) | ✓ |
 | `input_loader` | callable | None | Async/sync function that returns examples | — |
 | `cases` | list[EvalCase] | None | Case definitions that expand into multiple eval variants | — |
 
@@ -517,6 +518,66 @@ Scenario: Mutually exclusive with input=/reference=
 Scenario: Mutually exclusive with cases
   Given @eval(input_loader=fn, cases=[...])
   Then ValueError raised at decoration time
+```
+
+---
+
+## Trials
+
+**Intent:** User wants to measure how reliably a nondeterministic agent passes, not whether it passed once.
+
+```gherkin
+Scenario: Repeated trials
+  Given @eval(trials=3)
+  When the eval runs
+  Then it runs 3 times, each a separate result with trial 1, 2 and 3
+  And the run reports pass@3 (share of evals with a passing trial) and pass^3 (share whose trials all passed)
+  And a trial passes when it finished without error and all its pass/fail scores passed
+
+Scenario: Trials for every eval
+  Given `ezvals run evals/ --trials 5` (or "trials": 5 in ezvals.json)
+  Then every eval runs 5 times, overriding each eval's own trials
+```
+
+---
+
+## Regrading
+
+**Intent:** User wants to iterate on graders without paying to re-run the agent.
+
+```gherkin
+Scenario: Regrade a run
+  Given a finished run whose evals get their output from a target
+  When the user runs `ezvals regrade <run_id>` (or Regrade in the UI)
+  Then each eval body and its evaluators run again on the stored output, input, latency, metadata and trace data
+  And the target does not run
+  And the new scores replace the old ones in the same run
+
+Scenario: Evals without a target
+  Given an eval computes its output in its own body
+  When its run is regraded
+  Then it is skipped (re-running the body would re-run the agent) and the skip is reported
+```
+
+**Guidance:** put the agent call in `target=` and the scoring in the eval body, and every result can be regraded.
+
+---
+
+## Tracing
+
+**Intent:** User wants to see what their agent did (LLM calls, tool calls, token usage) for each result without writing trace code.
+
+```gherkin
+Scenario: Spans are recorded per eval
+  Given the project has OpenTelemetry installed (`pip install "ezvals[otel]"`)
+  And the agent emits OpenTelemetry spans (an instrumentation library, or tracer.start_as_current_span)
+  When an eval runs
+  Then every span started during the eval is saved with its result
+  And spans keep going to any tracer provider the project configured itself
+
+Scenario: No OpenTelemetry
+  Given opentelemetry is not installed
+  Then evals run normally and no spans are recorded
 ```
 
 ---

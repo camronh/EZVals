@@ -70,6 +70,10 @@ EZVals is a **pytest-inspired, code-first evaluation framework** for LLM applica
 | Target hooks | Separated agent invocation | [Python](./EXPERIENCE_SPEC_PYTHON.md#target-hooks) |
 | Filtering (`--dataset`, `--label`) | Selective runs | [CLI](./EXPERIENCE_SPEC_CLI.md#filtering-options) |
 | Run/Stop in UI | Interactive execution | [WebUI](./EXPERIENCE_SPEC_WEBUI.md#running-evaluations) |
+| Trials | Measure reliability of nondeterministic agents (pass@k, pass^k) | [Python](./EXPERIENCE_SPEC_PYTHON.md#trials) |
+| Regrading | Iterate on graders without re-running agents | [Python](./EXPERIENCE_SPEC_PYTHON.md#regrading) |
+| Tracing | OpenTelemetry spans saved with each result | [Python](./EXPERIENCE_SPEC_PYTHON.md#tracing) |
+| `ezvals query` | SQL across all saved runs | [CLI](./EXPERIENCE_SPEC_CLI.md#ezvals-query) |
 
 ### Tier 3: Conveniences
 
@@ -174,7 +178,8 @@ These are mistakes new users commonly make.
 | `conformance/` (run by `go test`) | Every SDK produces identical results for the same fixture: scoring, assertions, errors, timeouts, cases, loaders, file defaults, targets, evaluators |
 | `cmd/ezvals/*_test.go` | Event log folding, storage, filters, the HTTP API with real workers |
 | `python/tests/`, `typescript/test/` | Language-specific API surface |
-| `e2e/` | The web UI in a browser: running, stopping, detail view, annotations, filters, comparison, export |
+| `e2e/` | The web UI in a browser against a real server: running, stopping, detail view, annotations, filters, comparison, export |
+| `ui/**/*.stories.tsx` (`npm test` in `ui/`) | Every UI component and page in its states, rendered in a browser; interaction stories assert behavior. Browse them with `make storybook` |
 
 ---
 

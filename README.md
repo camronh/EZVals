@@ -45,7 +45,12 @@ ezvals run evals/                  # headless; saves to .ezvals/sessions/
 ezvals run evals/ --json           # ...and print the results as JSON (handy for agents)
 ezvals serve evals/                # web UI: run, filter, annotate, compare runs
 ezvals run evals/support.py::test_refund -c 8 --timeout 30
+ezvals run evals/ --trials 5         # run each eval 5 times; reports pass@5 and pass^5
+ezvals regrade a1b2c3d4              # re-score a run's outputs after changing a grader, without re-running the agent
+ezvals query "SELECT run_name, total_passed FROM runs"   # SQL over every saved run (see: ezvals query --schema)
 ```
+
+If your project uses OpenTelemetry (`pip install "ezvals[otel]"`), every span your agent emits during an eval (LLM calls, tool calls, token usage) is saved with its result and shown as a waterfall in the UI.
 
 TypeScript projects run the same commands through `npx ezvals`. A directory with both languages runs as one.
 
@@ -68,7 +73,8 @@ Requires Go, Node, and uv.
 ```bash
 make build                         # UI + host binary (into python/ezvals/bin) + TypeScript SDK
 make test                          # Go (incl. cross-language conformance), Python and TypeScript tests
-make test-e2e                      # browser tests for the web UI
+make test-e2e                      # browser tests for the web UI against a real server
+make storybook                     # every UI component and page in its states (also run as tests by `make test`)
 uv run --project python ezvals serve examples
 ```
 

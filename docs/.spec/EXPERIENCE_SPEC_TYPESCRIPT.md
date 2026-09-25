@@ -32,7 +32,7 @@ evaluate("minimal", (ctx) => { ctx.output = "options are optional"; });
 
 | Option | Python equivalent |
 |--------|-------------------|
-| `input`, `reference`, `dataset`, `labels`, `metadata`, `timeout` (seconds), `target`, `evaluators`, `cases` | Same names |
+| `input`, `reference`, `dataset`, `labels`, `metadata`, `timeout` (seconds), `trials`, `target`, `evaluators`, `cases` | Same names |
 | `defaultScoreKey` | `default_score_key` |
 | `inputLoader` | `input_loader` |
 
@@ -72,3 +72,15 @@ export const ezvalsDefaults = { dataset: "support", labels: ["prod"], metadata: 
 ```
 
 Same keys (in camelCase) and precedence as Python's `ezvals_defaults`.
+
+---
+
+## Tracing
+
+```gherkin
+Scenario: Spans are recorded per eval
+  Given the project has @opentelemetry/sdk-trace-node and @opentelemetry/exporter-trace-otlp-proto installed
+  And has not registered its own global tracer provider
+  When an eval runs
+  Then spans started during the eval (e.g. the Vercel AI SDK with experimental_telemetry enabled) are saved with its result
+```

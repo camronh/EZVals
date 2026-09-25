@@ -10,6 +10,8 @@ This document specifies the command-line interface experience for EZVals.
 |---------|---------|
 | `ezvals run` | Execute evaluations headlessly (for agents/CI) |
 | `ezvals serve` | Start web UI for interactive use |
+| `ezvals regrade` | Re-score a run's stored outputs without re-running targets |
+| `ezvals query` | Query saved runs with SQL |
 | `ezvals export` | Export a run to various formats (JSON, CSV, Markdown) |
 
 ---
@@ -86,6 +88,11 @@ Scenario: Run with concurrency
 Scenario: Run with timeout
   When the user runs `ezvals run evals/ --timeout 30.0`
   Then evaluations exceeding 30 seconds terminate with timeout error
+
+Scenario: Run every eval several times
+  When the user runs `ezvals run evals/ --trials 5`
+  Then every eval runs 5 times (overriding each eval's own trials)
+  And the run reports pass@5 and pass^5 (see the Python spec's Trials section)
 ```
 
 ### Output Options
@@ -264,6 +271,47 @@ Scenario: Continue previous session
 
 ---
 
+## `ezvals regrade`
+
+**Intent:** User changed a grader and wants new scores for an existing run without re-running the agent.
+
+```gherkin
+Scenario: Regrade a saved run
+  When the user runs `ezvals regrade a1b2c3d4` (a run id or a run file)
+  Then finished results of evals that have a target are scored again, without running the target
+  And results of evals without a target are skipped, with a count printed to stderr
+  And the new scores are saved to the same run
+
+Scenario: Eval source is gone
+  Given the run's eval path no longer exists
+  Then the command fails: regrading runs the eval code again
+```
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `-c, --concurrency` | int | config | Results to regrade in parallel |
+| `-v, --verbose` | flag | false | Show eval output and errors |
+| `--json` | flag | false | Print the regraded run JSON |
+
+---
+
+## `ezvals query`
+
+**Intent:** User (often a coding agent) wants to analyze results across runs.
+
+```gherkin
+Scenario: Query runs with SQL
+  When the user runs `ezvals query "SELECT run_name, total_passed FROM runs"`
+  Then every saved run is loaded into an in-memory SQLite database
+  And the rows print as a table (or JSON with --json)
+
+Scenario: See the tables
+  When the user runs `ezvals query --schema`
+  Then the tables (runs, results, scores, spans) and example queries are printed
+```
+
+---
+
 ## `ezvals export`
 
 **Intent:** User wants to export a run file to various formats (for sharing, reporting, or further analysis). Run files from older versions (`.json`) are accepted too.
@@ -327,6 +375,7 @@ Scenario: Export to Markdown
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `concurrency` | int | 1 | Parallel evaluations |
+| `trials` | int | none | Run every eval this many times |
 | `timeout` | float | null | Global timeout (seconds) |
 | `verbose` | bool | false | Show eval stdout |
 | `port` | int | 8000 | Default port for `ezvals serve` |
@@ -409,6 +458,7 @@ Scenario: Eval file fails to import
 | `--limit` | int | none | Max evaluations to run |
 | `-c, --concurrency` | int | 1 | Parallel evaluations |
 | `--timeout` | float | none | Global timeout (seconds) |
+| `--trials` | int | per eval | Run every eval this many times |
 | `-v, --verbose` | flag | false | Show eval stdout |
 | `-o, --output` | path | auto | Custom output path |
 | `--no-save` | flag | false | JSON to stdout only |
