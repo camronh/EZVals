@@ -1,0 +1,91 @@
+---
+title: Querying Results
+description: Analyze every saved run with SQL
+---
+
+`ezvals query` loads every saved run into an in-memory SQLite database and runs your SQL against it. It's the fastest way to answer questions across runs ("did the new prompt regress anything?", "which evals are flaky?", "how many tokens did that cost?"), and it's especially handy for coding agents analyzing results.
+
+```bash
+ezvals query "SELECT run_name, pass_at_k, pass_all_k FROM runs ORDER BY created_at DESC LIMIT 5"
+```
+
+Results print as a table. Add `--json` to get rows as a JSON array. `ezvals query --schema` prints the tables and some example queries.
+
+Runs are read from `.ezvals/sessions/` (or the `results_dir` in `ezvals.json`), so run it from your project root.
+
+## Tables
+
+| Table | One row per | Columns |
+|-------|-------------|---------|
+| `runs` | run | `run_id`, `session_name`, `run_name`, `created_at`, `path`, `config_name`, `total_evaluations`, `total_passed`, `total_errors`, `average_latency`, `trials`, `pass_at_k`, `pass_all_k` |
+| `results` | result row | `run_id`, `row`, `eval_id`, `function`, `dataset`, `labels`, `trial`, `status`, `passed`, `input`, `output`, `reference`, `error`, `latency`, `metadata`, `trace_data`, `annotation` |
+| `scores` | score | `run_id`, `row`, `eval_id`, `function`, `key`, `value`, `passed`, `notes` |
+| `spans` | [trace span](/guides/tracing) | `run_id`, `eval_id`, `trace_id`, `span_id`, `parent_span_id`, `name`, `start_ms`, `duration_ms`, `status`, `attributes` |
+
+- `results.passed` is `1` when the result finished without an error and all its pass/fail scores passed.
+- `results.trial` is the [trial](/guides/trials) number, `0` for evals without trials.
+- `labels`, `input`, `output`, `reference`, `metadata`, `trace_data`, and `attributes` hold JSON. Read them with `json_extract`, e.g. `json_extract(metadata, '$.model')`. Keys with dots need quotes: `json_extract(attributes, '$."gen_ai.request.model"')`.
+- Join tables on `run_id`, plus `row` (results ↔ scores) or `eval_id` (results ↔ spans).
+
+## Example Queries
+
+### Compare pass rates across runs
+
+```sql
+SELECT r.run_name, avg(res.passed) AS pass_rate, r.average_latency
+FROM runs r JOIN results res USING (run_id)
+WHERE r.session_name = 'model-comparison'
+GROUP BY r.run_id ORDER BY r.created_at
+```
+
+### Find failing evals in the latest run
+
+```sql
+SELECT eval_id, error, output
+FROM results
+WHERE run_id = (SELECT run_id FROM runs ORDER BY created_at DESC LIMIT 1)
+  AND passed = 0
+```
+
+### Average a numeric score by run
+
+```sql
+SELECT r.run_name, avg(s.value) AS avg_relevance
+FROM scores s JOIN runs r USING (run_id)
+WHERE s.key = 'relevance'
+GROUP BY r.run_id
+```
+
+### Find flaky evals
+
+Evals where some trials passed and some failed:
+
+```sql
+SELECT substr(eval_id, 1, instr(eval_id, '~') - 1) AS eval, count(*) AS trials, sum(passed) AS passes
+FROM results
+WHERE run_id = 'a1b2c3d4' AND trial > 0
+GROUP BY eval
+HAVING passes BETWEEN 1 AND trials - 1
+```
+
+### Token usage per run
+
+```sql
+SELECT r.run_name,
+       sum(json_extract(s.attributes, '$."gen_ai.usage.input_tokens"'))  AS input_tokens,
+       sum(json_extract(s.attributes, '$."gen_ai.usage.output_tokens"')) AS output_tokens
+FROM spans s JOIN runs r USING (run_id)
+GROUP BY r.run_id
+```
+
+### Slowest spans
+
+```sql
+SELECT name, count(*) AS calls, avg(duration_ms) AS avg_ms
+FROM spans
+GROUP BY name ORDER BY avg_ms DESC LIMIT 10
+```
+
+<Tip>
+Pair `--json` with `jq` in scripts: `ezvals query "SELECT ..." --json | jq '.[0]'`.
+</Tip>

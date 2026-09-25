@@ -5,10 +5,12 @@ description: Command-line interface for running evaluations
 
 ## Commands
 
-EZVals has three main commands:
+EZVals has these commands:
 
 - `ezvals serve` - Start the web UI to browse and run evaluations interactively
 - `ezvals run` - Run evaluations headlessly (for CI/CD pipelines)
+- `ezvals regrade` - Re-score a saved run without re-running agents
+- `ezvals query` - Query saved runs with SQL
 - `ezvals export` - Export a run to various formats (JSON, CSV, Markdown)
 
 The CLI is the same whether it's installed from pip (`ezvals ...`) or npm (`npx ezvals ...`). Paths can contain Python eval files (`.py`), TypeScript eval files (`*.eval.ts`, `.mts`, `.js`, `.mjs`), or both; a mixed directory runs as one run.
@@ -234,6 +236,14 @@ ezvals run evals/ -c 4
 ezvals run evals/ --timeout 30.0
 ```
 
+<ParamField path="--trials" type="integer">
+  Run every eval this many times, overriding per-eval `trials`. Each trial is its own result, and the run reports `pass_at_k` and `pass_all_k`. See [Repeated Trials](/guides/trials).
+</ParamField>
+
+```bash
+ezvals run evals/ --trials 5
+```
+
 ### Output Options
 
 <ParamField path="-v, --verbose" type="flag">
@@ -246,7 +256,7 @@ ezvals run evals/ -v
 ```
 
 <ParamField path="--json" type="flag">
-  Print the full run as JSON to stdout (`run_id`, `session_name`, `run_name`, totals, `results`, and `saved_path`). Results are still saved.
+  Print the full run as JSON to stdout (`run_id`, `session_name`, `run_name`, totals, `results`, and `saved_path`, plus `trials`, `pass_at_k`, and `pass_all_k` for runs with trials). Results are still saved.
 </ParamField>
 
 ```bash
@@ -315,6 +325,54 @@ Status lines (`Running …`, `Results saved to …`) go to stderr, so stdout sta
 Running evals/
 Results saved to .ezvals/sessions/default/a1b2c3d4.jsonl
 ```
+
+## ezvals regrade
+
+Re-score a saved run's outputs with your current grading code, without re-running the agents. The eval body and evaluators run again on each stored output; the `target` is skipped. See [Regrading](/guides/regrading).
+
+```bash
+ezvals regrade RUN_ID|RUN_FILE [OPTIONS]
+```
+
+```bash
+ezvals regrade a1b2c3d4
+ezvals regrade .ezvals/sessions/default/a1b2c3d4.jsonl --json
+```
+
+Only finished results of evals with a `target` are regraded; the command prints how many results it skipped because their eval has no target. The run is updated in place.
+
+<ParamField path="-c, --concurrency" type="integer" default="1">
+  Results to regrade in parallel. Defaults to `concurrency` in `ezvals.json`.
+</ParamField>
+
+<ParamField path="-v, --verbose" type="flag">
+  Show eval output and errors.
+</ParamField>
+
+<ParamField path="--json" type="flag">
+  Print the regraded run as JSON to stdout.
+</ParamField>
+
+## ezvals query
+
+Load every saved run into an in-memory SQLite database and run a SQL query. See [Querying Results](/guides/querying) for the tables and example queries.
+
+```bash
+ezvals query "SQL" [OPTIONS]
+```
+
+```bash
+ezvals query "SELECT run_name, total_passed, total_evaluations FROM runs ORDER BY created_at DESC"
+ezvals query "SELECT function, avg(passed) FROM results WHERE run_id = 'a1b2c3d4' GROUP BY function" --json
+```
+
+<ParamField path="--json" type="flag">
+  Print rows as a JSON array instead of a table.
+</ParamField>
+
+<ParamField path="--schema" type="flag">
+  Print the tables (`runs`, `results`, `scores`, `spans`) and example queries.
+</ParamField>
 
 ## ezvals export
 
@@ -450,6 +508,26 @@ ezvals run evals/ -v --limit 5
 ezvals run evals/ -c 16 --timeout 120
 ```
 
+### Measure Reliability with Trials
+
+```bash
+ezvals run evals/ --trials 5 --json | jq '{pass_at_k, pass_all_k}'
+```
+
+### Iterate on a Grader
+
+```bash
+ezvals run evals/ --session judge-tuning     # run the agents once
+# edit the grading code...
+ezvals regrade a1b2c3d4                       # re-score the same outputs
+```
+
+### Query Results
+
+```bash
+ezvals query "SELECT run_name, pass_at_k, pass_all_k FROM runs ORDER BY created_at DESC LIMIT 5"
+```
+
 ### Session Tracking
 
 ```bash
@@ -480,6 +558,7 @@ EZVals reads an optional `ezvals.json` from the current directory for default CL
 |--------|------|-------------|---------|
 | `concurrency` | integer | Number of concurrent evaluations | `run` |
 | `timeout` | float | Global timeout in seconds (overrides per-eval timeouts) | `run`, `serve` |
+| `trials` | integer | Run every eval this many times (overrides per-eval `trials`) | `run`, `serve` |
 | `verbose` | boolean | Show output from eval functions | `run`, `serve` |
 | `results_dir` | string | Base directory; runs are stored in `{results_dir}/.ezvals/sessions` (default `.`) | `run`, `serve` |
 | `overwrite` | boolean | Replace an existing run with the same name in a session (default `true`) | `run`, `serve` |

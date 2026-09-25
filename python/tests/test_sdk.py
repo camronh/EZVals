@@ -149,6 +149,7 @@ def test_run_matches_the_cli(tmp_path: Path, monkeypatch):
     (tmp_path / "evals.py").write_text(EVAL_FILE)
     report = run("evals.py", session="sdk", run_name="baseline")
     assert (report["session_name"], report["run_name"], report["total_evaluations"]) == ("sdk", "baseline", 2)
+    assert run("evals.py", trials=2, no_save=True)["trials"] == 2
     assert Path(report["saved_path"]).exists()
     assert not (tmp_path / "ezvals.json").exists()
     with pytest.raises(ValueError, match="Path missing.py does not exist"):

@@ -38,6 +38,7 @@ async def test_policy_question(ctx: EvalContext):
 - **Reusability**: Write one target, use across many evals
 - **Latency tracking**: Target latency is tracked separately from grading
 - **Clean separation**: Agent logic vs. assertion logic stay separate
+- **Regradable**: `ezvals regrade` can re-score stored outputs without re-running the target
 - **Data capture**: Store conversation history, tool calls, sources for debugging and grading
 
 ## Where to Store Data
@@ -167,26 +168,23 @@ async def conversation_target(ctx: EvalContext):
 
 ## Handling Non-Determinism
 
-Agent behavior varies between runs. For reliability testing, run multiple trials:
+Agent behavior varies between runs. Don't loop inside the target; set `trials` and EZVals runs the whole eval N times, one result row per trial, and reports pass@k and pass^k:
 
 ```python
-async def multi_trial_target(ctx: EvalContext, trials: int = 3):
-    """Run agent multiple times and track consistency."""
-    results = []
-    for _ in range(trials):
-        output = await agent(ctx.input)
-        results.append(output)
-
-    ctx.store(
-        output=results[0],  # Primary result
-        trace_data={
-            "all_results": results,
-            "unique_answers": len(set(results)),
-        },
-    )
+@eval(input="Book a flight to Paris", target=booking_target, trials=3)
+async def test_booking(ctx: EvalContext):
+    assert ctx.output["booked"], "No booking made"
 ```
 
-See the [use-cases/coding-agents.md](use-cases/coding-agents.md) guide for pass@k and pass^k patterns.
+`ezvals run --trials N` does the same for every eval. See [running.md](running.md#repeated-trials-flaky-agents) and [use-cases/coding-agents.md](use-cases/coding-agents.md) for pass@k and pass^k.
+
+## Targets Make Evals Regradable
+
+`ezvals regrade RUN_ID` re-runs the eval body and evaluators on stored outputs but skips the `target`. So **put the agent call in `target=` and keep scoring in the eval body**; then you can change graders or LLM-judge prompts and re-score the last run for free instead of re-running the agent. Evals that call the agent inline in the body can't be regraded (they're skipped). See [running.md](running.md#regrading-iterate-on-graders-without-re-running-the-agent).
+
+## Tracing Instead of Manual Capture
+
+If the project has OpenTelemetry installed (`pip install "ezvals[otel]"`, or `@opentelemetry/sdk-trace-node` + `@opentelemetry/exporter-trace-otlp-proto` in TS), every span created during the eval (instrumented LLM calls, tool calls, custom spans) is recorded with the result automatically, including model names and token counts. You don't need to copy tool calls or token usage into `trace_data` by hand when the agent's SDK is instrumented. See [running.md](running.md#tracing-see-what-the-agent-did).
 
 ## Environment Setup
 
@@ -211,6 +209,7 @@ Each trial should start from the same clean state to ensure independent measurem
 When to use a shared target vs. inline agent calls:
 
 **Use a shared target when:**
+- You'll iterate on graders or LLM judges (only evals with a `target` can be regraded)
 - Multiple evals test the same agent with different grading criteria
 - You need consistent data capture across evals
 - Agent invocation involves setup (auth, state reset, config)

@@ -1,0 +1,78 @@
+---
+title: Repeated Trials
+description: Run each eval several times to measure how reliable a nondeterministic agent is
+---
+
+Agents are nondeterministic. The same input can pass once and fail the next time, so a single run can make a flaky agent look solid (or a solid one look broken). Trials run each eval N times and report both "can it do this?" and "does it do this every time?".
+
+## Setting Trials
+
+Set `trials` on an eval:
+
+<CodeGroup>
+
+```python Python
+@eval(input="Book a flight to Paris for next Friday", target=travel_agent, trials=3)
+def test_booking(ctx: EvalContext):
+    assert ctx.output["booked"], "No booking made"
+```
+
+```ts TypeScript
+evaluate("test_booking", { input: "Book a flight to Paris for next Friday", target: travelAgent, trials: 3 }, (ctx) => {
+  assert((ctx.output as { booked: boolean }).booked, "No booking made");
+});
+```
+
+</CodeGroup>
+
+`trials` also works per case (`cases=[{"input": ..., "trials": 5}]`) and in [file defaults](/guides/file-defaults).
+
+To run **every** eval N times without touching code, use the CLI flag, `ezvals.json`, or the **Trials** field in the UI's Settings:
+
+```bash
+ezvals run evals/ --trials 5
+```
+
+```json
+// ezvals.json
+{ "trials": 5 }
+```
+
+A run-wide value overrides the per-eval `trials`.
+
+## Results
+
+Each trial is its own result row, so you can open, annotate, and rerun trials individually. In the UI, trial rows show a `#2`-style chip next to the eval name.
+
+A trial **passes** when it finished without an error and all its pass/fail scores passed. Runs with trials report two extra numbers:
+
+| Metric | Meaning | Question it answers |
+|--------|---------|---------------------|
+| **pass@k** | Share of evals where *at least one* of the k trials passed | Can the agent do this at all? |
+| **pass^k** | Share of evals where *every* trial passed | Can I rely on it? |
+
+A big gap between the two means the agent is capable but inconsistent. That usually points to prompt ambiguity, sampling temperature, or a brittle tool, rather than a missing capability.
+
+Both appear in the UI stats panel (as `pass@3` / `pass^3`) and in `ezvals run --json`:
+
+```json
+{
+  "run_id": "a1b2c3d4",
+  "total_evaluations": 30,
+  "trials": 3,
+  "pass_at_k": 0.9,
+  "pass_all_k": 0.6,
+  "results": [
+    {"id": "evals.py::test_booking~1", "trial": 1, "trial_of": "evals.py::test_booking", "result": {...}},
+    {"id": "evals.py::test_booking~2", "trial": 2, "trial_of": "evals.py::test_booking", "result": {...}}
+  ]
+}
+```
+
+Trial rows have ids like `<eval id>~2`, with `trial` (1-based) and `trial_of` (the eval's id).
+
+<Tip>
+Trials multiply cost and time. Use a handful (3-5) on the evals you suspect are flaky, or pass `--trials` for an occasional reliability check, and pair it with `--concurrency`.
+</Tip>
+
+To find the flaky evals across trials, [query your results](/guides/querying#find-flaky-evals).

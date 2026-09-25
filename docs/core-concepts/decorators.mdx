@@ -99,6 +99,18 @@ async def test_with_timeout(ctx: EvalContext):
 
 At the deadline the eval stops and its result gets `error = "TimeoutError: Evaluation timed out after 5.0s"`. A global `--timeout` on the CLI (or `timeout` in `ezvals.json`) overrides per-eval timeouts.
 
+### Trials
+
+Run the eval several times, since agents don't always give the same answer twice:
+
+```python
+@eval(input="Book a flight to Paris", target=travel_agent, trials=3)
+async def test_booking(ctx: EvalContext):
+    assert ctx.output["booked"]
+```
+
+Each trial is its own result, and the run reports pass@k and pass^k. `ezvals run --trials N` (or `trials` in `ezvals.json`) overrides this for every eval. See [Repeated Trials](/guides/trials).
+
 ### Target Hook
 
 Run a function before the evaluation body:
@@ -114,6 +126,8 @@ async def test_weather(ctx: EvalContext):
 ```
 
 This separates agent invocation from assertion logic. A target can also just return the output; a returned value becomes `ctx.output`.
+
+Keeping the agent call in `target` also makes the eval [regradable](/guides/regrading): you can re-score stored outputs after changing the assertions or evaluators, without running the agent again.
 
 ### Evaluators
 
@@ -205,7 +219,7 @@ evaluate("test_cancellation_handling", {
 });
 ```
 
-Options: `input`, `reference`, `dataset`, `labels`, `metadata`, `defaultScoreKey`, `timeout` (seconds), `target`, `evaluators`, `cases`, `inputLoader`. With no options, use `evaluate(name, fn)`. A function can also return an array of results (`{ input, output, scores, ... }`).
+Options: `input`, `reference`, `dataset`, `labels`, `metadata`, `defaultScoreKey`, `timeout` (seconds), `trials`, `target`, `evaluators`, `cases`, `inputLoader`. With no options, use `evaluate(name, fn)`. A function can also return an array of results (`{ input, output, scores, ... }`).
 
 ## All Options Reference
 
@@ -218,6 +232,7 @@ Options: `input`, `reference`, `dataset`, `labels`, `metadata`, `defaultScoreKey
 | `metadata` | dict | Pre-populate ctx.metadata |
 | `default_score_key` | str | Key for auto-added scores |
 | `timeout` | float | Max execution time in seconds |
+| `trials` | int | Run the eval this many times (one result per trial) |
 | `target` | callable | Pre-hook to run before evaluation |
 | `evaluators` | list[callable] | Post-processing score functions |
 | `input_loader` | callable | Async/sync function returning examples |

@@ -88,6 +88,13 @@ Full comparison: http://127.0.0.1:8000/?compare_run_id=a1b2...&compare_run_id=c3
 
 Results can be exported as JSON, CSV, Markdown, or PNG from the dashboard or CLI.
 
+Built for how agents actually behave:
+
+- **[Repeated trials](/guides/trials)**: run each eval N times and see pass@k and pass^k, because one run of a nondeterministic agent can mislead.
+- **[Regrading](/guides/regrading)**: re-score stored outputs after changing a grader or LLM judge, without re-running the agent.
+- **[Tracing](/guides/tracing)**: every OpenTelemetry span (LLM calls, tool calls, tokens) is recorded with its eval, with no code changes.
+- **[SQL over results](/guides/querying)**: `ezvals query` lets you (or your agent) analyze every saved run with SQL.
+
 ## What an Eval Looks Like
 
 An eval is a function with an input, a call to your agent, and a check. Write it in whichever language your agent is in; one directory can hold both.

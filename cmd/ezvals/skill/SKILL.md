@@ -30,7 +30,7 @@ Evals answer evolving questions about your system:
 | **Grader** | Function that scores the output. Returns 0-1 or pass/fail. |
 | **Dataset** | Collection of test cases (inputs + optional expected outputs). |
 | **Task** | Single test case: one input to evaluate. |
-| **Trial** | One execution of a task. Multiple trials handle non-determinism. |
+| **Trial** | One execution of a task. Multiple trials handle non-determinism (`@eval(trials=N)` or `ezvals run --trials N`). |
 | **Transcript** | Full record of what happened during a trial (tool calls, reasoning steps, intermediate results). For the Anthropic API, this is the full messages array at the end of an eval run. |
 | **Outcome** | The final result/output from the target. A flight-booking agent might say "Your flight has been booked" in the transcript, but the outcome is whether a reservation exists in the database. |
 | **pass@k** | Passes if ANY of k trials succeed. Measures "can it ever work?" As k increases, pass@k rises. |
@@ -47,12 +47,13 @@ If the user is migrating from Phoenix Arize, map old concepts to EZVals primitiv
 |------|------------|
 | Dataset in Phoenix | `cases=[...]`, `dataset=`, or `input_loader=` |
 | Task/experiment run | `@eval` function execution |
-| Span-level trace analysis | `ctx.store(metadata=...)` plus run/result inspection in `ezvals serve` |
+| Span-level trace analysis | Automatic OpenTelemetry span capture (`pip install "ezvals[otel]"`), shown in `ezvals serve` and queryable with `ezvals query` |
 | Evaluator templates / rubric prompts | Assertions, `ctx.store(scores=...)`, or LLM-as-judge graders in eval code |
 | Pass/fail evaluator output | Assertion success/failure or boolean score via `ctx.store(scores=[...])` |
 | Numeric evaluator score | Numeric `score.value` (0-1 or arbitrary scale) via `ctx.store(scores=[...])` |
 | Human annotation/correction loops | Web UI edits to scores/annotations (`correction_history` tracks before/after) |
-| Compare experiments | Multiple runs in one session + compare view/URL filters |
+| Compare experiments | Multiple runs in one session + compare view/URL filters, or SQL across runs with `ezvals query` |
+| Re-running evaluators on an existing experiment | `ezvals regrade RUN_ID` (evals with `target=`) |
 
 Common migration approach (adapt as needed):
 
@@ -116,7 +117,7 @@ To rerun a specific list of failing evals, use explicit path selectors instead o
 For specific case IDs, use `@case_id` selectors:
 `ezvals run evals.py::test_a@case_id_1,test_a@case_id_2`
 
-This eval runs your RAG agent against each test case and reports which passed. The `cases` parameter generates three separate evals from one function. Failed assertions become failing scores with the assertion message as notes. Any other exception is recorded as the result's `error` (`"<ExceptionType>: <message>\n<traceback>"`).
+This eval runs your RAG agent against each test case and reports which passed. Keeping the agent call in `target=` (and grading in the body) means you can later change the grader and `ezvals regrade` the stored outputs without re-running the agent. The `cases` parameter generates three separate evals from one function. Failed assertions become failing scores with the assertion message as notes. Any other exception is recorded as the result's `error` (`"<ExceptionType>: <message>\n<traceback>"`).
 
 Every run starts fresh worker processes, so edits to eval code are always picked up on the next `ezvals run` or UI run; there's no need to restart `ezvals serve`.
 
@@ -146,7 +147,7 @@ evaluate("test_rag_accuracy", {
 });
 ```
 
-The API mirrors Python in camelCase: `evaluate(name, fn)` or `evaluate(name, options, fn)`; options `input`, `reference`, `dataset`, `labels`, `metadata`, `defaultScoreKey`, `timeout` (seconds), `target`, `evaluators`, `cases`, `inputLoader`; file defaults via `export const ezvalsDefaults = {...}`; `ctx.store({ output, scores, messages, traceUrl, metadata, traceData, latency })`; run info `ctx.runId`, `ctx.sessionName`, `ctx.runName`, `ctx.config`. Any thrown `AssertionError` (e.g. from `node:assert`) becomes a failing score. A function can return an array of results `{ input, output, scores, ... }`.
+The API mirrors Python in camelCase: `evaluate(name, fn)` or `evaluate(name, options, fn)`; options `input`, `reference`, `dataset`, `labels`, `metadata`, `defaultScoreKey`, `timeout` (seconds), `trials`, `target`, `evaluators`, `cases`, `inputLoader`; file defaults via `export const ezvalsDefaults = {...}`; `ctx.store({ output, scores, messages, traceUrl, metadata, traceData, latency })`; run info `ctx.runId`, `ctx.sessionName`, `ctx.runName`, `ctx.config`. Any thrown `AssertionError` (e.g. from `node:assert`) becomes a failing score. A function can return an array of results `{ input, output, scores, ... }`.
 
 ## Eval Planning Flow
 
@@ -269,6 +270,10 @@ You should have everything you need to plan a good eval from here.
 
 - `ezvals run` vs `ezvals serve`
 - Session and run naming best practices
+- Repeated trials, pass@k / pass^k (`--trials`)
+- Regrading stored outputs after changing graders (`ezvals regrade`)
+- Tracing setup (OpenTelemetry spans)
+- SQL analysis over all runs (`ezvals query`)
 - Serving results for user review
 - Comparing runs and exporting results
 
@@ -322,6 +327,10 @@ You should have everything you need to plan a good eval from here.
 - evaluators.mdx - Post-processing evaluators
 - patterns.mdx - Common eval patterns
 - sessions.mdx - Sessions, runs, and run file layout
+- trials.mdx - Repeated trials, pass@k and pass^k
+- regrading.mdx - Re-scoring stored outputs
+- tracing.mdx - OpenTelemetry span capture
+- querying.mdx - `ezvals query` tables and example SQL
 - cli.mdx - Command line interface and `run()`
 - web-ui.mdx - Interactive results exploration
 - http-api.mdx - The web server's REST API
@@ -339,6 +348,17 @@ ezvals serve evals/ --session my-experiment
 # Start serve without launching a browser window
 ezvals serve evals/ --session my-experiment --no-open
 ```
+
+## Trials, Regrading, Tracing, and SQL (When to Use)
+
+| Situation | Use | Command |
+|-----------|-----|---------|
+| Agent is nondeterministic, results flip between runs, or the user asks "how reliable is it?" | Trials: report pass@k (any trial passed) and pass^k (all passed) | `@eval(trials=3)` or `ezvals run evals/ --trials 5 --json` → `pass_at_k`, `pass_all_k` |
+| You changed an assertion, evaluator, or LLM-judge prompt and only need new scores | Regrade: re-runs grading on stored outputs, skips `target` | `ezvals regrade RUN_ID` |
+| You need to see why the agent failed (LLM calls, tool calls, tokens) | Tracing: spans recorded automatically when OpenTelemetry is installed | `pip install "ezvals[otel]"` |
+| Analyzing results: across runs, per score, flaky trials, token usage | SQL over all saved runs | `ezvals query "SELECT ..." --json`, `ezvals query --schema` |
+
+**Write evals so they can be regraded:** put the agent call in `target=` and the scoring in the eval body or `evaluators=`. Evals that call the agent inline are skipped by regrade. Details and example queries: [running.md](running.md).
 
 ## Sharing Results via URL (Agent Guidance)
 

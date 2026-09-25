@@ -215,6 +215,22 @@ def calibrate_judge(judge_fn, labeled_examples):
     print(f"True Negative Rate: {tnr:.1%}")
 ```
 
+### Iterating on a Judge with Regrade
+
+Don't re-run the agent every time you tweak a judge prompt. If the agent call is in `target=` and the judge is in the eval body or `evaluators=`, re-score the stored outputs:
+
+```bash
+ezvals run evals/ --session judge-tuning --run-name v1     # agent runs once
+# ...edit the judge prompt...
+ezvals regrade a1b2c3d4                                     # judge re-runs on the same outputs
+```
+
+The run's scores are replaced in place, so the judge is compared on identical outputs each time. Evals without a `target` are skipped (the CLI prints how many). Have humans record their labels as **annotations** (e.g. `PASS` / `FAIL` in the UI): annotations survive regrading, manual score edits don't. Then measure agreement with SQL:
+
+```bash
+ezvals query "SELECT r.annotation, s.passed, count(*) FROM results r JOIN scores s ON s.run_id = r.run_id AND s.row = r.row WHERE r.run_id = 'a1b2c3d4' AND s.key = 'quality' AND r.annotation IS NOT NULL GROUP BY 1, 2"
+```
+
 ## Multiple Scores with store()
 
 Use `ctx.store(scores=...)` for numeric scores or multiple named metrics:

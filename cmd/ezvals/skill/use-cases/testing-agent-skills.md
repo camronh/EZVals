@@ -245,6 +245,14 @@ The judge itself needs calibration. On your first run, review every result:
 
 This is normal. Judge alignment is iterative, just like prompt engineering.
 
+Because the CLI agent runs in `target=`, you don't need to re-run it (minutes per case) to test a judge change. Edit `judge_plan` or the should-statements, then re-score the stored plans:
+
+```bash
+ezvals regrade a1b2c3d4    # run_id of the baseline run (from "Results saved to .../<run_id>.jsonl")
+```
+
+Headless CLI agents are also highly nondeterministic. Before concluding that a skill change helped, run with `--trials 3` and compare pass^k (`pass_all_k`), not a single run.
+
 ## Regression Testing Agent Config Changes
 
 When a user is about to change their CLAUDE.md, system prompt, or agent instructions, this is a testing-agent-skills scenario. The key elements: (1) check if existing evals are already in place and reuse them, (2) headless CLI agent (`claude -p`) as target with plan-only contract, (3) run against the current project directory (no separate sandbox), (4) `--session`/`--run-name` to name baseline vs. post-change runs, (5) add new behavior checks to existing datasets, (6) compare side-by-side in `ezvals serve`.

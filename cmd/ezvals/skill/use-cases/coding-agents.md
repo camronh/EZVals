@@ -112,70 +112,28 @@ def test_code_quality(ctx: EvalContext):
 
 ## Handling Non-Determinism
 
-Agent behavior varies between runs. Use pass@k and pass^k metrics.
-
-### pass@k: "Can It Ever Work?"
-
-Measures the probability of at least one success in k attempts. Use when one working solution is all you need.
+Agent behavior varies between runs; one run can make a flaky agent look fine. Use EZVals trials instead of hand-rolled loops: each trial is its own result row (with its own output, scores, and spans), and the run reports pass@k and pass^k.
 
 ```python
-@eval(input="Solve this complex algorithm problem", dataset="hard_problems")
-def test_hard_task_pass_at_5(ctx: EvalContext):
-    successes = 0
-    all_outputs = []
-
-    for _ in range(5):
-        output = coding_agent(ctx.input)
-        all_outputs.append(output)
-        if verify_solution(output):
-            successes += 1
-
-    ctx.store(
-        output=all_outputs[0],
-        trace_data={"all_outputs": all_outputs},
-        scores={"passed": successes > 0, "key": "pass_at_5", "notes": f"{successes}/5 succeeded"},
-    )
-
-### pass^k: "Is It Reliable?"
-
-Measures the probability that ALL k trials succeed. Use for customer-facing agents where consistency matters.
-
-```python
-@eval(input="Generate a function to validate email addresses", dataset="critical_tasks")
-def test_reliability(ctx: EvalContext):
-    results = []
-    for _ in range(3):
-        output = coding_agent(ctx.input)
-        # Execute and test
-        local_ns = {}
-        exec(output, {}, local_ns)
-        validate_email = local_ns.get("validate_email")
-        passed = (
-            validate_email("test@example.com") == True and
-            validate_email("invalid") == False
-        )
-        results.append(passed)
-
-    # pass^3: all 3 must succeed
-    all_passed = all(results)
-    ctx.store(scores={"passed": all_passed, "key": "pass_to_3", "notes": f"{sum(results)}/3 succeeded"})
+@eval(input="Solve this complex algorithm problem", dataset="hard_problems", target=run_coding_agent, trials=5)
+def test_hard_task(ctx: EvalContext):
+    assert verify_solution(ctx.output), "Solution failed verification"
 ```
 
-### Pass Rate
+Or run every eval N times without code changes:
 
-For most cases, just measure what percentage pass:
+```bash
+ezvals run evals/ --trials 5 --json | jq '{trials, pass_at_k, pass_all_k}'
+```
 
-```python
-@eval(input="Standard coding task", metadata={"trials": 10})
-def test_pass_rate(ctx: EvalContext):
-    results = []
-    for _ in range(ctx.metadata["trials"]):
-        output = coding_agent(ctx.input)
-        results.append(verify_solution(output))
+- **pass@k** (`pass_at_k`): share of evals where at least one trial passed. "Can it ever work?" Use when one working solution is enough (e.g. the user can retry).
+- **pass^k** (`pass_all_k`): share of evals where every trial passed. "Is it reliable?" Use for customer-facing agents where consistency matters.
+- A big gap between them means the agent is capable but inconsistent: look at the failing trials of evals that also have passing ones.
 
-    pass_rate = sum(results) / len(results)
-    ctx.store(scores={"value": pass_rate, "key": "pass_rate", "notes": f"Pass rate: {pass_rate:.0%}"})
-    assert pass_rate >= 0.8, f"Pass rate {pass_rate:.0%} below 80% threshold"
+A trial passes when it finished without error and all its pass/fail scores passed. To list the flaky evals:
+
+```bash
+ezvals query "SELECT substr(eval_id, 1, instr(eval_id, '~') - 1) AS eval, count(*) AS trials, sum(passed) AS passes FROM results WHERE run_id = 'a1b2c3d4' AND trial > 0 GROUP BY eval HAVING passes BETWEEN 1 AND trials - 1"
 ```
 
 ## Environment Isolation

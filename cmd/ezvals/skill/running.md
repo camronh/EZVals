@@ -145,6 +145,9 @@ ezvals run evals/ --timeout 60.0
 
 # Show eval output (prints, logs) and errors as they happen
 ezvals run evals/ --verbose
+
+# Run every eval 5 times (overrides per-eval trials) to measure reliability
+ezvals run evals/ --trials 5
 ```
 
 ### Output Options
@@ -162,7 +165,97 @@ ezvals run evals/ --no-save
 ezvals run evals/ --output results.json
 ```
 
-**Prefer `--json` when you need to analyze results**: it gives you totals and every result in one document without reading the run file.
+**Prefer `--json` when you need to analyze results**: it gives you totals and every result in one document without reading the run file. For questions across runs (or over scores and spans), use [`ezvals query`](#querying-results-with-sql) instead.
+
+## Repeated Trials (Flaky Agents)
+
+Agents are nondeterministic: one run can pass or fail by luck. **Use trials when** an eval flips between runs, when the user asks "how reliable is it?", before declaring a prompt/model change an improvement on a small dataset, or for agentic tasks with long tool-use chains.
+
+```python
+@eval(input="Book a flight to Paris", target=booking_target, trials=3)   # this eval, 3 times
+def test_booking(ctx: EvalContext): ...
+```
+
+```bash
+ezvals run evals/ --trials 5 --session reliability --run-name baseline     # every eval, 5 times
+```
+
+`trials` also works per case (`{"input": ..., "trials": 5}`), in file defaults, and as `"trials": N` in `ezvals.json` (TS: `evaluate(name, { trials: 3 }, fn)`). A run-wide value (`--trials`, `ezvals.json`, UI Settings) overrides per-eval values.
+
+Each trial is its own result row: id `<eval id>~N`, with `trial` (1-based) and `trial_of` (the eval's id). A trial passes when it finished without error and all its pass/fail scores passed. The run reports:
+
+- `pass_at_k`: share of evals where at least one trial passed ("can it do this?")
+- `pass_all_k`: share of evals where every trial passed ("can we rely on it?")
+
+```bash
+ezvals run evals/ --trials 5 --json | jq '{trials, pass_at_k, pass_all_k}'
+```
+
+Report both numbers to the user; a big gap means capable but inconsistent. The UI shows them as `pass@5` / `pass^5` in the stats panel. Trials multiply cost: use 3-5, add `--concurrency`.
+
+## Regrading: Iterate on Graders Without Re-running the Agent
+
+`ezvals regrade` re-scores a saved run: it runs the eval body and evaluators again on the stored `output`, `input`, `latency`, `metadata`, and `trace_data`, but **skips the `target`**. **Use it when** you changed an assertion, evaluator, or LLM-judge prompt and want new scores for the same outputs, e.g. calibrating a judge against human labels.
+
+```bash
+ezvals run evals/ --session judge-tuning --run-name v1    # "Results saved to .ezvals/sessions/judge-tuning/a1b2c3d4.jsonl"
+# ...edit grading code...
+ezvals regrade a1b2c3d4                                    # run_id or the run file path; -c N for parallelism
+ezvals regrade a1b2c3d4 --json                             # print the regraded run
+```
+
+- Only evals whose agent call is in `target=` can be regraded. **When writing evals, put the agent call in `target=` and keep scoring in the body** so graders can be iterated on for free.
+- Results of evals without a target are skipped (the CLI prints `Skipping N result(s)...`); so are errored/unfinished results and evals that return several results.
+- The run is updated in place with the current eval code; manual score edits are replaced, annotations are kept.
+- In the UI: "…" menu → **Regrade results** (only selected rows if any are checked), or **Regrade** on a result's detail page.
+- With tracing, original spans are kept and the grading gets its own `grade <name>` span.
+
+To compare old vs new grader side by side instead of overwriting, re-run into a new run name (`ezvals run ... --run-name judge-v2`); that re-runs the agent though.
+
+## Tracing: See What the Agent Did
+
+If the project has OpenTelemetry installed, every span created while an eval runs (LLM calls from instrumented SDKs, tool calls, custom spans) is recorded with that eval's result. No eval code changes. **Set it up when** you need to debug why an agent failed, see tool-call sequences, or compare token usage/latency between runs.
+
+```bash
+pip install "ezvals[otel]"      # Python: opentelemetry-sdk + opentelemetry-exporter-otlp-proto-http
+npm install @opentelemetry/sdk-trace-node @opentelemetry/exporter-trace-otlp-proto   # TypeScript
+```
+
+- Python: if the project already configured a tracer provider (Langfuse, LangSmith, ...), EZVals adds itself to it and spans still go there too. TypeScript: works when the project hasn't registered its own global tracer provider.
+- Spans come from anything that emits OpenTelemetry: OpenLLMetry/Traceloop instrumentations (e.g. `OpenAIInstrumentor().instrument()`), LangChain via OpenInference, the OpenAI Agents SDK (with an OpenTelemetry instrumentation such as OpenInference), the Vercel AI SDK with `experimental_telemetry: { isEnabled: true }`, or manual `tracer.start_as_current_span("tool_call")`.
+- Each eval has a root span `eval <name>`; regrading adds `grade <name>`.
+- UI: span count in the results table; detail page → **Spans** shows a waterfall with durations, model names, and token counts (`gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`).
+- Rows in `--json` output have `span_count`; spans themselves are in the `spans` table of `ezvals query`.
+
+## Querying Results with SQL
+
+`ezvals query "SQL"` loads every saved run (from `.ezvals/sessions/`, run it from the project root) into in-memory SQLite. **Prefer it over parsing run JSON** for analysis across runs, per-score aggregates, flaky trials, and token usage. Add `--json` for machine-readable rows; `ezvals query --schema` prints the schema.
+
+| Table | Columns |
+|-------|---------|
+| `runs` | `run_id, session_name, run_name, created_at, path, config_name, total_evaluations, total_passed, total_errors, average_latency, trials, pass_at_k, pass_all_k` |
+| `results` | `run_id, row, eval_id, function, dataset, labels JSON, trial, status, passed, input JSON, output JSON, reference JSON, error, latency, metadata JSON, trace_data JSON, annotation` |
+| `scores` | `run_id, row, eval_id, function, key, value, passed, notes` |
+| `spans` | `run_id, eval_id, trace_id, span_id, parent_span_id, name, start_ms, duration_ms, status, attributes JSON` |
+
+`results.passed` = finished without error and all pass/fail scores passed. `trial` is 0 for evals without trials. Read JSON columns with `json_extract(col, '$.key')`; dotted keys need quotes: `'$."gen_ai.usage.input_tokens"'`. Join results ↔ scores on `(run_id, row)`, results ↔ spans on `(run_id, eval_id)`.
+
+```bash
+# Pass rate per run in a session
+ezvals query "SELECT r.run_name, avg(res.passed) AS pass_rate, r.average_latency FROM runs r JOIN results res USING (run_id) WHERE r.session_name = 'model-comparison' GROUP BY r.run_id ORDER BY r.created_at"
+
+# Failing results in the latest run
+ezvals query "SELECT eval_id, error, output FROM results WHERE run_id = (SELECT run_id FROM runs ORDER BY created_at DESC LIMIT 1) AND passed = 0" --json
+
+# Average a numeric score by run
+ezvals query "SELECT r.run_name, avg(s.value) FROM scores s JOIN runs r USING (run_id) WHERE s.key = 'relevance' GROUP BY r.run_id"
+
+# Flaky evals (some trials passed, some failed)
+ezvals query "SELECT substr(eval_id, 1, instr(eval_id, '~') - 1) AS eval, count(*) AS trials, sum(passed) AS passes FROM results WHERE run_id = 'a1b2c3d4' AND trial > 0 GROUP BY eval HAVING passes BETWEEN 1 AND trials - 1"
+
+# Token usage per run (needs tracing)
+ezvals query "SELECT r.run_name, sum(json_extract(s.attributes, '$.\"gen_ai.usage.input_tokens\"')) AS input_tokens, sum(json_extract(s.attributes, '$.\"gen_ai.usage.output_tokens\"')) AS output_tokens FROM spans s JOIN runs r USING (run_id) GROUP BY r.run_id"
+```
 
 ## Temporary Ad-Hoc Runs (No Saved Files)
 
@@ -380,6 +473,8 @@ At least one of `value` or `passed` is always present on each score.
 
 ### Parsing Recipes (Python)
 
+For most analysis, [`ezvals query`](#querying-results-with-sql) is shorter. Parse the JSON when you need it in a script:
+
 ```python
 import json
 
@@ -526,6 +621,7 @@ Optionally create `ezvals.json` in your project root for defaults (it's never cr
 {
   "concurrency": 4,
   "timeout": 120,
+  "trials": 3,
   "port": 8000
 }
 ```
@@ -541,3 +637,6 @@ CLI flags always override config values.
 5. **Use `--verbose` during development** - Surface eval stdout/logging and errors quickly
 6. **Use `--json` to analyze results** - Parse stdout instead of reading run files
 7. **Commit the session name** - Include it in PR descriptions for traceability
+8. **Use trials for flaky agents** - Report pass@k and pass^k, not a single run's pass rate
+9. **Regrade, don't re-run, when only grading changed** - `ezvals regrade RUN_ID`
+10. **Use `ezvals query` for cross-run analysis** - SQL over runs, results, scores, and spans

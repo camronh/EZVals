@@ -172,7 +172,7 @@ async def test_classification(ctx: EvalContext):
 
 ## Run Metadata (for Observability)
 
-When your eval function runs, the context includes metadata about the current run and eval. This is useful for tagging traces in LangSmith or other observability tools.
+When your eval function runs, the context includes metadata about the current run and eval. This is useful for tagging traces in LangSmith or other observability tools. (If your project uses OpenTelemetry, EZVals also [records spans](/guides/tracing) for each eval automatically.)
 
 ```python
 @eval(dataset="customer_service", labels=["production"])

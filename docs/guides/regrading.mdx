@@ -1,0 +1,65 @@
+---
+title: Regrading
+description: Re-score stored outputs without re-running your agent
+---
+
+Tuning a grader (a stricter assertion, a better LLM-judge prompt) usually means re-running the whole agent just to see new scores. Regrading skips that: it scores the outputs you already have again, with your current grading code.
+
+## Put the Agent in `target`
+
+Regrading re-runs the eval body and evaluators but **skips the `target`**. So only evals that call their agent in `target=` can be regraded:
+
+<CodeGroup>
+
+```python Python
+def run_agent(ctx: EvalContext):
+    ctx.output = support_agent(ctx.input)        # expensive: skipped on regrade
+
+@eval(input="I want a refund", target=run_agent)
+def test_refund(ctx: EvalContext):
+    verdict = llm_judge(ctx.input, ctx.output)   # re-runs on regrade
+    ctx.store(scores={"key": "helpful", "passed": verdict.passed, "notes": verdict.reason})
+```
+
+```ts TypeScript
+const runAgent = (ctx: EvalContext) => supportAgent(String(ctx.input)); // skipped on regrade
+
+evaluate("test_refund", { input: "I want a refund", target: runAgent }, async (ctx) => {
+  const verdict = await llmJudge(ctx.input, ctx.output);                 // re-runs on regrade
+  ctx.store({ scores: { key: "helpful", passed: verdict.passed, notes: verdict.reason } });
+});
+```
+
+</CodeGroup>
+
+<Tip>
+Rule of thumb: agent call in `target=`, scoring in the eval body (or `evaluators=`). Then you can iterate on graders and LLM judges as often as you like without paying for agent runs.
+</Tip>
+
+When regrading, the eval body gets the stored `output`, `input`, `latency`, `metadata`, and `trace_data` on `ctx`, exactly as the target left them.
+
+## Regrade a Run
+
+From the CLI, pass a run ID or run file:
+
+```bash
+ezvals regrade a1b2c3d4
+ezvals regrade .ezvals/sessions/default/a1b2c3d4.jsonl
+```
+
+In the UI:
+
+- **"…" menu → Regrade results** regrades the whole run, or only the selected rows if any are checked.
+- **Regrade** on a result's detail page regrades that one result.
+
+The run is updated in place: new scores replace the old ones. Results that can't be regraded are skipped. The CLI prints how many were skipped for lacking a target, and the UI shows it in a toast. Skipped results include:
+
+- results from evals without a `target`
+- results that errored or never finished
+- evals that return several results at once
+
+Regrading uses the eval code as it is now, so the eval file must still exist. Manual score edits are replaced by the new scores; annotations are kept.
+
+## Tracing
+
+If [tracing](/guides/tracing) is on, the original spans (your agent's LLM and tool calls) are kept, and the grading gets its own `grade <name>` span, so you can see what the judge did and what it cost.

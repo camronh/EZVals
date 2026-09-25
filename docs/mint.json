@@ -61,6 +61,10 @@
         "guides/web-ui",
         "guides/sessions",
         "guides/evaluators",
+        "guides/trials",
+        "guides/regrading",
+        "guides/tracing",
+        "guides/querying",
         "guides/agent-skill"
       ]
     },

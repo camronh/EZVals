@@ -35,6 +35,9 @@ Stop the server with `Ctrl+C`.
 - **Run Selected**: Check rows, then click play to rerun only those evaluations
 - **Run All**: With nothing selected, click play to rerun everything
 - **Stop**: Cancel pending and running evaluations mid-run
+- **Regrade results** (overflow menu): Re-score stored outputs without re-running targets, for the selected rows or the whole run. See [Regrading](/guides/regrading)
+
+To run every eval several times, set **Trials** in Settings. Trial rows show a `#2`-style chip, and the stats panel adds pass@k and pass^k. See [Repeated Trials](/guides/trials).
 
 ## Search and Columns
 
@@ -53,6 +56,8 @@ When opening detail from comparison mode, URLs keep repeated `compare_run_id` qu
 
 - `/runs/{run_id}/results/{index}?compare_run_id=runA&compare_run_id=runB`
 - `/runs/{run_id}/results/{index}?compare_run_id=runB` (auto-includes the current detail run as base)
+
+The detail page's **Regrade** button re-scores that one result (for evals with a `target`). If [tracing](/guides/tracing) recorded spans, the table shows a span count and the **Spans** button opens a waterfall of every span with durations, models, and token counts.
 
 When `input`, `output`, `reference`, or trace `messages` contain chat-style message arrays (OpenAI, Anthropic, or similar `{role, content}` variants), the detail view auto-renders them in a chat-style layout. Use the **Pretty**/**Raw** toggle in each section to switch between formatted message boxes and raw JSON.
 

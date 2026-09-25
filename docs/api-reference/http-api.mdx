@@ -31,9 +31,31 @@ Get current run results with aggregated statistics.
 }
 ```
 
+Runs with [trials](/guides/trials) also include `trials`, `pass_at_k`, and `pass_all_k`.
+
+Each item in `results` is a result row:
+
+```json
+{
+  "id": "evals.py::test_refund~2",
+  "function": "test_refund",
+  "dataset": "support",
+  "labels": [],
+  "trial": 2,
+  "trial_of": "evals.py::test_refund",
+  "span_count": 4,
+  "regradable": true,
+  "result": {"input": "...", "output": "...", "scores": [...], "status": "completed"}
+}
+```
+
+- `trial` / `trial_of`: present on trial rows (trial number and the eval's id)
+- `span_count`: number of [OpenTelemetry spans](/guides/tracing) recorded for the result
+- `regradable`: the eval has a `target`, so a finished result can be [regraded](/guides/regrading)
+
 ### `GET /api/runs/{run_id}/results/{index}`
 
-Get a single result by index.
+Get a single result by index. The `result` row also includes `spans`, the full list of recorded spans (`trace_id`, `span_id`, `parent_span_id`, `name`, `start`/`end` in unix nanoseconds, `attributes`, `status`).
 
 - `run_id`: Run ID or `"latest"`
 - `index`: 0-based result index
@@ -70,6 +92,24 @@ Rerun evaluations in the active run. Omit `indices` to rerun all. Optionally pas
 
 ```json
 {"ok": true, "run_id": "a1b2c3d4"}
+```
+
+### POST /api/runs/regrade
+
+Re-score stored results in the active run without re-running targets. Omit `indices` to regrade all results. Results of evals without a target are skipped and counted.
+
+**Request:**
+
+```json
+{
+  "indices": [0, 2, 5]
+}
+```
+
+**Response:**
+
+```json
+{"ok": true, "regraded": 2, "skipped_without_target": 1}
 ```
 
 ### POST /api/runs/new
@@ -297,6 +337,7 @@ Get current configuration.
 ```json
 {
   "concurrency": 4,
+  "trials": 3,
   "timeout": 30.0,
   "verbose": false,
   "results_dir": ".",

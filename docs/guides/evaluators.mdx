@@ -24,6 +24,10 @@ async def test_response(ctx: EvalContext):
     ctx.output = await my_agent(ctx.input)
 ```
 
+<Tip>
+If the agent call lives in a `target`, you can change an evaluator and [regrade](/guides/regrading) stored outputs instead of re-running the agent.
+</Tip>
+
 ## Multiple Evaluators
 
 Chain evaluators for multiple automated checks:

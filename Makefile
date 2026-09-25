@@ -10,10 +10,7 @@ ui:
 	cd ui && npm ci --silent && npm run build
 
 # The skill ships with a copy of the user docs.
-skill-storybook:
-	cd ui && npm run storybook
-
-docs:
+skill-docs:
 	rm -rf cmd/ezvals/skill/ezvals-docs && mkdir -p cmd/ezvals/skill/ezvals-docs
 	cp docs/introduction.mdx docs/examples/*.mdx docs/core-concepts/*.mdx docs/guides/*.mdx docs/api-reference/*.mdx cmd/ezvals/skill/ezvals-docs/
 	cp docs/setup.mdx cmd/ezvals/skill/ezvals-docs/quickstart.mdx

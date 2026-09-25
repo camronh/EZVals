@@ -18,11 +18,11 @@ def main():
 
 def run(path: str, dataset: Optional[str] = None, labels: Optional[list] = None, limit: Optional[int] = None,
         output: Optional[str] = None, concurrency: Optional[int] = None, timeout: Optional[float] = None,
-        session: Optional[str] = None, run_name: Optional[str] = None, no_save: bool = False,
+        trials: Optional[int] = None, session: Optional[str] = None, run_name: Optional[str] = None, no_save: bool = False,
         config: Optional[str] = None) -> dict:
     """Programmatic `ezvals run`. Returns the run (results, totals, ids) plus `saved_path`."""
     flags = {"--dataset": dataset, "--limit": limit, "--output": output, "--concurrency": concurrency,
-             "--timeout": timeout, "--session": session, "--run-name": run_name, "--config": config}
+             "--timeout": timeout, "--trials": trials, "--session": session, "--run-name": run_name, "--config": config}
     args = [str(BINARY), "run", path, "--json"]
     args += [arg for flag, value in flags.items() if value is not None for arg in (flag, str(value))]
     args += [arg for label in labels or [] for arg in ("--label", label)]

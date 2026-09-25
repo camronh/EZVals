@@ -54,7 +54,7 @@ Once installed, just ask Claude Code to help with evaluation tasks:
 | [targets.md](targets.md) | Target function patterns, data capture, reusability |
 | [datasets.md](datasets.md) | Error analysis, sizing, sourcing, avoiding saturation |
 | [GRADERS.md](GRADERS.md) | Code vs model graders, LLM-as-judge, calibration |
-| [running.md](running.md) | CLI usage, sessions, serving results, comparing runs |
+| [running.md](running.md) | CLI usage, sessions, trials, regrading, tracing, SQL queries, serving and comparing runs |
 | [synthetic-data.md](synthetic-data.md) | Dimension-based generation, validation, mixing with real data |
 
 ### Use Cases
