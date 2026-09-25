@@ -3,9 +3,11 @@ title: The @eval Decorator
 description: Configure and register evaluation functions
 ---
 
-The `@eval` decorator marks functions as evaluations. Here's a complete example:
+The `@eval` decorator marks functions as evaluations. In TypeScript, `evaluate(name, options, fn)` does the same, with options in camelCase (see [TypeScript](/typescript)). Here's a complete example:
 
-```python
+<CodeGroup>
+
+```python Python
 from ezvals import eval, EvalContext
 
 @eval(
@@ -21,6 +23,27 @@ async def test_cancellation_handling(ctx: EvalContext):
     assert "cancel" in ctx.output.lower(), "Should address cancellation"
     assert len(ctx.output) > 50, "Response too short"
 ```
+
+```ts TypeScript
+import assert from "node:assert";
+import { evaluate } from "ezvals";
+
+evaluate("test_cancellation_handling", {
+  dataset: "customer_service",
+  labels: ["production", "critical"],
+  input: "I want to cancel my subscription",
+  metadata: { category: "cancellation" },
+  timeout: 10,
+}, async (ctx) => {
+  ctx.output = await customerAgent(String(ctx.input));
+  const output = String(ctx.output);
+
+  assert(output.toLowerCase().includes("cancel"), "Should address cancellation");
+  assert(output.length > 50, "Response too short");
+});
+```
+
+</CodeGroup>
 
 ## Configuration Options
 
@@ -115,7 +138,9 @@ Each trial is its own result, and the run reports pass@k and pass^k. `ezvals run
 
 Run a function before the evaluation body:
 
-```python
+<CodeGroup>
+
+```python Python
 def call_agent(ctx: EvalContext):
     ctx.output = my_agent(ctx.input)
 
@@ -125,6 +150,16 @@ async def test_weather(ctx: EvalContext):
     assert "weather" in ctx.output.lower()
 ```
 
+```ts TypeScript
+const callAgent = (ctx: EvalContext) => myAgent(String(ctx.input)); // returned value becomes ctx.output
+
+evaluate("test_weather", { input: "What's the weather?", target: callAgent }, (ctx) => {
+  assert(String(ctx.output).toLowerCase().includes("weather"));
+});
+```
+
+</CodeGroup>
+
 This separates agent invocation from assertion logic. A target can also just return the output; a returned value becomes `ctx.output`.
 
 Keeping the agent call in `target` also makes the eval [regradable](/guides/regrading): you can re-score stored outputs after changing the assertions or evaluators, without running the agent again.
@@ -133,7 +168,9 @@ Keeping the agent call in `target` also makes the eval [regradable](/guides/regr
 
 Post-processing functions that add scores:
 
-```python
+<CodeGroup>
+
+```python Python
 def check_length(result):
     return {
         "key": "length",
@@ -147,11 +184,28 @@ async def test_response(ctx: EvalContext):
     # check_length runs after, adds "length" score
 ```
 
+```ts TypeScript
+const checkLength = (result: EvalResult) => ({
+  key: "length",
+  passed: String(result.output).length > 10,
+  notes: `Output length: ${String(result.output).length}`,
+});
+
+evaluate("test_response", { input: "test", evaluators: [checkLength] }, async (ctx) => {
+  ctx.output = await myAgent(String(ctx.input));
+  // checkLength runs after, adds "length" score
+});
+```
+
+</CodeGroup>
+
 ### Input Loader
 
 Load test examples dynamically from external sources (databases, APIs):
 
-```python
+<CodeGroup>
+
+```python Python
 async def fetch_from_db():
     examples = await db.get_test_cases()
     return [{"input": e.prompt, "reference": e.expected} for e in examples]
@@ -162,6 +216,20 @@ async def test_from_database(ctx: EvalContext):
     assert ctx.output == ctx.reference
 ```
 
+```ts TypeScript
+async function fetchFromDb() {
+  const examples = await db.getTestCases();
+  return examples.map((e) => ({ input: e.prompt, reference: e.expected }));
+}
+
+evaluate("test_from_database", { dataset: "dynamic", inputLoader: fetchFromDb }, async (ctx) => {
+  ctx.output = await myAgent(String(ctx.input));
+  assert.equal(ctx.output, ctx.reference);
+});
+```
+
+</CodeGroup>
+
 Each example from the loader becomes a separate eval. The loader runs when evals are discovered (not at import time), making it ideal for fetching from LangSmith, databases, or APIs.
 
 **Loader return format:** the same shape as [`cases`](/core-concepts/parametrize). Return a list of dicts with any case keys (`id`, `input`, `reference`, `metadata`, `labels`, `dataset`, ...), or objects with matching attributes. Metadata and labels merge with the decorator's, just like cases.
@@ -169,18 +237,20 @@ Each example from the loader becomes a separate eval. The loader runs when evals
 If the loader raises, a single errored result is recorded with `error = "Input loader failed: <message>"`.
 
 <Note>
-`input_loader` cannot be combined with `input=`, `reference=`, or `cases=`.
+`input_loader` (`inputLoader` in TypeScript) cannot be combined with `input=`, `reference=`, or `cases=`.
 </Note>
 
 ## Sync and Async
 
-Both sync and async functions work—just use `async def` if your code uses `await`.
+Both sync and async functions work—just use `async def` (or an `async` function in TypeScript) if your code uses `await`.
 
 ## Returning Multiple Results
 
-Return a list of `EvalResult` objects for batch evaluations:
+Return a list of `EvalResult` objects for batch evaluations (plain objects with the same fields in TypeScript):
 
-```python
+<CodeGroup>
+
+```python Python
 from ezvals import eval, EvalResult
 
 @eval(dataset="batch")
@@ -196,32 +266,22 @@ def test_batch():
     return results
 ```
 
-## TypeScript
-
-In TypeScript, `evaluate(name, options, fn)` takes the same options in camelCase. The function receives the context and may be async.
-
-```ts
-import assert from "node:assert";
-import { evaluate, type EvalContext } from "ezvals";
-
-async function callAgent(ctx: EvalContext) {
-  return customerAgent(String(ctx.input)); // returned value becomes ctx.output
-}
-
-evaluate("test_cancellation_handling", {
-  dataset: "customer_service",
-  labels: ["production", "critical"],
-  input: "I want to cancel my subscription",
-  timeout: 10,
-  target: callAgent,
-}, (ctx) => {
-  assert(String(ctx.output).toLowerCase().includes("cancel"), "Should address cancellation");
+```ts TypeScript
+evaluate("test_batch", { dataset: "batch" }, async () => {
+  const results = [];
+  for (const prompt of ["hello", "hi", "hey"]) {
+    const output = await myAgent(prompt);
+    results.push({ input: prompt, output, scores: [{ key: "valid", passed: true }] });
+  }
+  return results;
 });
 ```
 
-Options: `input`, `reference`, `dataset`, `labels`, `metadata`, `defaultScoreKey`, `timeout` (seconds), `trials`, `target`, `evaluators`, `cases`, `inputLoader`. With no options, use `evaluate(name, fn)`. A function can also return an array of results (`{ input, output, scores, ... }`).
+</CodeGroup>
 
 ## All Options Reference
+
+In TypeScript, `default_score_key` and `input_loader` are `defaultScoreKey` and `inputLoader`; the other names are the same. With no options, use `evaluate(name, fn)`.
 
 | Option | Type | Description |
 |--------|------|-------------|

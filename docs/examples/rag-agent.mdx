@@ -32,7 +32,9 @@ flowchart LR
 
 ## The Eval
 
-```python
+<CodeGroup>
+
+```python Python
 from ezvals import eval, EvalContext
 
 async def run_agent(ctx: EvalContext):
@@ -70,6 +72,41 @@ async def test_rag_agent(ctx: EvalContext):
     ctx.store(scores={"passed": pass_result.is_correct, "key": "pass", "notes": pass_result.explanation})
 ```
 
+```ts TypeScript
+import { evaluate, type EvalContext } from "ezvals";
+
+async function runAgent(ctx: EvalContext) {
+  const results = await runRagAgent(String(ctx.input));
+  ctx.store({ output: results.response, metadata: { source_docs: results.metadata.source_docs } });
+}
+
+evaluate("test_rag_agent", {
+  target: runAgent,
+  dataset: "rag_qa",
+  cases: [
+    { input: "What is our refund policy?", reference: "30-day money-back guarantee" },
+    { input: "How do I reset my password?", reference: "Click 'Forgot Password' on the login page" },
+    { input: "What payment methods do you accept?", reference: "Visa, Mastercard, and PayPal" },
+    { input: "How long does shipping take?", reference: "3-5 business days for standard shipping" },
+    { input: "Can I change my order after placing it?", reference: "Within 1 hour of placing the order" },
+    // ... hundreds more rows
+  ],
+}, async (ctx) => {
+  // LLM-as-a-Judge for hallucination
+  const { score, reasoning } = await hallucinationJudge({
+    answer: ctx.output,
+    sources: ctx.metadata.source_docs,
+  });
+  ctx.store({ scores: { key: "hallucination", value: score, notes: reasoning } });
+
+  // Check pass against reference
+  const passResult = await passJudge({ answer: ctx.output, reference: ctx.reference });
+  ctx.store({ scores: { key: "pass", passed: passResult.isCorrect, notes: passResult.explanation } });
+});
+```
+
+</CodeGroup>
+
 ## What's Happening
 
 **Case dataset** — `cases=` creates one eval run per row. Each row sets `ctx.input` and `ctx.reference` automatically.
@@ -78,7 +115,7 @@ async def test_rag_agent(ctx: EvalContext):
 
 **Storing context for analysis** — We save the retrieved documents to `ctx.metadata`. This shows up in the results JSON and Web UI, so you can debug retrieval issues.
 
-**Multiple scoring criteria** — We use `ctx.store(scores=...)` for a numeric hallucination score and a pass/fail `pass` score. Both appear in your results. (A bare `assert` would also work for pass/fail, but once another score is stored, a passing assertion doesn't add a `pass` score of its own; only failures do.)
+**Multiple scoring criteria** — We use `ctx.store(scores=...)` (`ctx.store({ scores })` in TypeScript) for a numeric hallucination score and a pass/fail `pass` score. Both appear in your results. (A bare `assert` would also work for pass/fail, but once another score is stored, a passing assertion doesn't add a `pass` score of its own; only failures do.)
 
 **LLM-as-judge** — The `hallucination_judge` and `pass_judge` are placeholder functions representing whatever LLM judge you're using (OpenAI, Anthropic, your own prompts, etc.).
 
@@ -94,6 +131,8 @@ ezvals serve evals/rag_agent.py
 # Run verbosely to see each result
 ezvals run evals/rag_agent.py --verbose
 ```
+
+For the TypeScript version, save it as `evals/rag_agent.eval.ts` and use `npx ezvals run evals/rag_agent.eval.ts`.
 
 ## Example Results
 

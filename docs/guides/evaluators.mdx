@@ -7,9 +7,11 @@ Evaluators are functions that run after an evaluation completes, adding addition
 
 ## Basic Evaluator
 
-An evaluator receives an `EvalResult` and returns a score dictionary:
+An evaluator receives an `EvalResult` and returns a score dictionary. In TypeScript, it receives a plain result object (typed `EvalResult`, with `traceData` in camelCase) and returns a score object:
 
-```python
+<CodeGroup>
+
+```python Python
 def check_length(result):
     """Check if output meets minimum length."""
     length = len(result.output)
@@ -23,6 +25,23 @@ def check_length(result):
 async def test_response(ctx: EvalContext):
     ctx.output = await my_agent(ctx.input)
 ```
+
+```ts TypeScript
+import { evaluate, type EvalResult } from "ezvals";
+
+function checkLength(result: EvalResult) {
+  const length = String(result.output).length;
+  return { key: "length", passed: length >= 50, notes: `Length: ${length} characters` };
+}
+
+evaluate("test_response", { input: "Explain recursion", dataset: "demo", evaluators: [checkLength] }, async (ctx) => {
+  ctx.output = await myAgent(String(ctx.input));
+});
+```
+
+</CodeGroup>
+
+An evaluator can also return a list of scores, or `True`/`False` or a number for a score keyed `pass`.
 
 <Tip>
 If the agent call lives in a `target`, you can change an evaluator and [regrade](/guides/regrading) stored outputs instead of re-running the agent.
@@ -93,7 +112,9 @@ def semantic_similarity(result):
 
 ### LLM-as-Judge
 
-```python
+<CodeGroup>
+
+```python Python
 async def llm_judge(result):
     """Use an LLM to evaluate quality."""
     prompt = f"""
@@ -113,6 +134,22 @@ async def llm_judge(result):
         "notes": f"LLM score: {score}/10"
     }
 ```
+
+```ts TypeScript
+async function llmJudge(result: EvalResult) {
+  const prompt = `Rate this response on a scale of 1-10:
+
+Question: ${result.input}
+Response: ${result.output}
+
+Return just the number.`;
+
+  const score = parseInt(await callLlm(prompt), 10);
+  return { key: "llm_quality", value: score / 10, passed: score >= 7, notes: `LLM score: ${score}/10` };
+}
+```
+
+</CodeGroup>
 
 ### Content Safety
 
@@ -155,7 +192,9 @@ def json_valid(result):
 
 Create evaluator sets for different use cases:
 
-```python
+<CodeGroup>
+
+```python Python
 # evaluators.py
 
 def make_length_checker(min_len, max_len):
@@ -188,9 +227,27 @@ CREATIVE_EVALUATORS = [
 ]
 ```
 
+```ts TypeScript
+// evaluators.ts
+import type { EvalResult } from "ezvals";
+
+export const makeLengthChecker = (minLen: number, maxLen: number) => (result: EvalResult) => {
+  const length = String(result.output).length;
+  return { key: "length", passed: minLen <= length && length <= maxLen, notes: `Length ${length}, expected ${minLen}-${maxLen}` };
+};
+
+// Standard evaluator sets
+export const QA_EVALUATORS = [exactMatch, semanticSimilarity, makeLengthChecker(50, 500)];
+export const SAFETY_EVALUATORS = [safetyCheck, toxicityCheck, biasCheck];
+```
+
+</CodeGroup>
+
 Use them:
 
-```python
+<CodeGroup>
+
+```python Python
 from evaluators import QA_EVALUATORS, SAFETY_EVALUATORS
 
 @eval(dataset="qa", evaluators=QA_EVALUATORS + SAFETY_EVALUATORS)
@@ -198,9 +255,19 @@ async def test_factual_qa(ctx: EvalContext):
     ...
 ```
 
+```ts TypeScript
+import { QA_EVALUATORS, SAFETY_EVALUATORS } from "./evaluators.ts";
+
+evaluate("test_factual_qa", { dataset: "qa", evaluators: [...QA_EVALUATORS, ...SAFETY_EVALUATORS] }, async (ctx) => {
+  // ...
+});
+```
+
+</CodeGroup>
+
 ## Async Evaluators
 
-Evaluators can be async:
+Evaluators can be async (as `llmJudge` above is in TypeScript):
 
 ```python
 async def async_evaluator(result):
@@ -215,9 +282,11 @@ async def async_evaluator(result):
 
 ## Returning None
 
-Return `None` to skip adding a score:
+Return `None` (`null` or `undefined` in TypeScript) to skip adding a score:
 
-```python
+<CodeGroup>
+
+```python Python
 def conditional_evaluator(result):
     if result.reference is None:
         return None  # No score added
@@ -225,6 +294,17 @@ def conditional_evaluator(result):
     # ... evaluation logic
     return {"key": "comparison", "passed": True}
 ```
+
+```ts TypeScript
+function conditionalEvaluator(result: EvalResult) {
+  if (result.reference == null) return null; // No score added
+
+  // ... evaluation logic
+  return { key: "comparison", passed: true };
+}
+```
+
+</CodeGroup>
 
 ## Evaluator vs In-Function Scoring
 
@@ -248,6 +328,6 @@ def conditional_evaluator(result):
 
 1. **Keep evaluators focused**: One evaluator, one metric
 2. **Return meaningful notes**: Help debug failures
-3. **Handle edge cases**: Check for None values
+3. **Handle edge cases**: Check for `None` (`null`) values
 4. **Make them reusable**: Parameterize thresholds
 5. **Group related evaluators**: Create logical collections

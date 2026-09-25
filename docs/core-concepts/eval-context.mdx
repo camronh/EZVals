@@ -5,7 +5,9 @@ description: The context object that powers evaluation result construction
 
 Every eval function receives an `EvalContext` that accumulates evaluation data and builds into an `EvalResult`.
 
-```python
+<CodeGroup>
+
+```python Python
 from ezvals import eval, EvalContext
 
 @eval(input="What is 2 + 2?", dataset="demo")
@@ -13,6 +15,20 @@ async def my_eval(ctx: EvalContext):
     ctx.output = await my_agent(ctx.input)
     assert ctx.output == "4", f"Expected 4, got {ctx.output}"
 ```
+
+```ts TypeScript
+import assert from "node:assert";
+import { evaluate } from "ezvals";
+
+evaluate("my_eval", { input: "What is 2 + 2?", dataset: "demo" }, async (ctx) => {
+  ctx.output = await myAgent(String(ctx.input));
+  assert.equal(ctx.output, "4", `Expected 4, got ${ctx.output}`);
+});
+```
+
+</CodeGroup>
+
+The Python examples below map directly to TypeScript with camelCase names; see [TypeScript](#typescript) at the end of this page.
 
 ## Pre-populated Fields
 

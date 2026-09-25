@@ -7,9 +7,11 @@ Use file-level defaults to share common configuration across all evaluations in 
 
 ## Basic Usage
 
-Define a `ezvals_defaults` dictionary at the module level:
+Define an `ezvals_defaults` dictionary at the module level (in TypeScript, export `ezvalsDefaults` with the same fields in camelCase):
 
-```python
+<CodeGroup>
+
+```python Python
 # evals/customer_service.py
 
 ezvals_defaults = {
@@ -28,24 +30,37 @@ async def test_complaint(ctx: EvalContext):
     assert "sorry" in ctx.output.lower(), "Should express empathy"
 ```
 
+```ts TypeScript
+// evals/customer_service.eval.ts
+import assert from "node:assert";
+import { evaluate } from "ezvals";
+
+export const ezvalsDefaults = {
+  labels: ["production"],
+  defaultScoreKey: "quality",
+};
+
+evaluate("test_refund", { input: "I want a refund" }, async (ctx) => {
+  ctx.output = await agent(ctx.input);
+  assert(String(ctx.output).toLowerCase().includes("refund"), "Should acknowledge refund");
+});
+
+evaluate("test_complaint", { input: "Your product is broken" }, async (ctx) => {
+  ctx.output = await agent(ctx.input);
+  assert(String(ctx.output).toLowerCase().includes("sorry"), "Should express empathy");
+});
+```
+
+</CodeGroup>
+
 Both evaluations will have:
 - `labels=["production"]`
 - `default_score_key="quality"`
 - `dataset="customer_service"` (auto-inferred from filename)
 
 <Note>
-The `dataset` field is inferred from the filename when neither the file defaults nor the decorator set it. Precedence is: filename < `ezvals_defaults` < `@eval(...)` < each case.
+The `dataset` field is inferred from the filename when neither the file defaults nor the decorator set it (`customer_service.eval.ts` → `customer_service`). Precedence is: filename < `ezvals_defaults` < `@eval(...)` / `evaluate()` options < each case.
 </Note>
-
-In TypeScript, export `ezvalsDefaults` with the same fields in camelCase:
-
-```ts
-// evals/customer_service.eval.ts
-export const ezvalsDefaults = {
-  labels: ["production"],
-  defaultScoreKey: "quality",
-};
-```
 
 ## Overriding Defaults
 
@@ -77,7 +92,7 @@ async def test_edge_case(ctx: EvalContext):
 |-------|------|-------------|
 | `dataset` | str | Default dataset name (rarely needed—auto-inferred from filename) |
 | `labels` | list[str] | Default labels |
-| `default_score_key` | str | Default score key |
+| `default_score_key` | str | Default score key (`defaultScoreKey` in TypeScript) |
 | `metadata` | dict | Default metadata |
 | `timeout` | float | Default timeout |
 | `trials` | int | Default number of [trials](/guides/trials) |
@@ -110,7 +125,9 @@ Decorator values override file defaults for the same keys.
 Evaluators from decorators **replace** file defaults—they are not merged.
 </Warning>
 
-```python
+<CodeGroup>
+
+```python Python
 def file_evaluator(result):
     return {"key": "file_check", "passed": True}
 
@@ -130,6 +147,21 @@ async def test_with_override(ctx: EvalContext):
     # Only specific_evaluator runs, not file_evaluator
     ...
 ```
+
+```ts TypeScript
+const fileEvaluator = () => ({ key: "file_check", passed: true });
+const specificEvaluator = () => ({ key: "specific_check", passed: true });
+
+export const ezvalsDefaults = { evaluators: [fileEvaluator] };
+
+evaluate("test_uses_default", (ctx) => { /* uses fileEvaluator */ });
+
+evaluate("test_with_override", { evaluators: [specificEvaluator] }, (ctx) => {
+  // Only specificEvaluator runs, not fileEvaluator
+});
+```
+
+</CodeGroup>
 
 To use both, explicitly include them:
 

@@ -30,12 +30,17 @@
       "name": "PyPI",
       "icon": "python",
       "url": "https://pypi.org/project/ezvals"
+    },
+    {
+      "name": "npm",
+      "icon": "npm",
+      "url": "https://www.npmjs.com/package/ezvals"
     }
   ],
   "navigation": [
     {
       "group": "Getting Started",
-      "pages": ["introduction", "setup"]
+      "pages": ["introduction", "setup", "typescript"]
     },
     {
       "group": "Examples",

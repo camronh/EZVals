@@ -3,18 +3,29 @@ title: Evaluation Patterns
 description: Common patterns for writing effective evaluations
 ---
 
-This guide covers proven patterns for structuring your evaluations.
+This guide covers proven patterns for structuring your evaluations. TypeScript snippets assume `import assert from "node:assert"` and `import { evaluate, type EvalContext } from "ezvals"`.
 
 ## Pattern 1: Simple Assertion
 
-The most straightforward pattern—use assertions like pytest:
+The most straightforward pattern—use assertions like pytest (`node:assert` in TypeScript):
 
-```python
+<CodeGroup>
+
+```python Python
 @eval(input="What is 2 + 2?", dataset="demo")
 async def test_simple(ctx: EvalContext):
     ctx.output = await my_agent(ctx.input)
     assert ctx.output == "4", f"Expected 4, got {ctx.output}"
 ```
+
+```ts TypeScript
+evaluate("test_simple", { input: "What is 2 + 2?", dataset: "demo" }, async (ctx) => {
+  ctx.output = await myAgent(String(ctx.input));
+  assert.equal(ctx.output, "4", `Expected 4, got ${ctx.output}`);
+});
+```
+
+</CodeGroup>
 
 **Use when:** Most evaluations. This is the default approach.
 
@@ -35,7 +46,9 @@ async def test_capital(ctx: EvalContext):
 
 Separate agent invocation from scoring:
 
-```python
+<CodeGroup>
+
+```python Python
 async def call_agent(ctx: EvalContext):
     """Reusable agent caller."""
     ctx.output = await my_agent(ctx.input)
@@ -51,13 +64,32 @@ async def test_humor(ctx: EvalContext):
     assert len(ctx.output) > 20, "Response too short"
 ```
 
+```ts TypeScript
+// Reusable agent caller: a returned value becomes ctx.output
+const callAgent = (ctx: EvalContext) => myAgent(String(ctx.input));
+
+evaluate("test_weather", { input: "What's the weather like?", target: callAgent, dataset: "qa" }, (ctx) => {
+  // ctx.output already populated by target
+  assert(String(ctx.output).toLowerCase().includes("weather"), "Should mention weather");
+});
+
+evaluate("test_humor", { input: "Tell me a joke", target: callAgent, dataset: "creative" }, (ctx) => {
+  // Same agent, different assertions
+  assert(String(ctx.output).length > 20, "Response too short");
+});
+```
+
+</CodeGroup>
+
 **Use when:** Multiple tests with same agent, different assertions.
 
 ## Pattern 4: Multiple Results
 
 Return multiple results from one function:
 
-```python
+<CodeGroup>
+
+```python Python
 from ezvals import eval, EvalResult
 
 @eval(dataset="batch")
@@ -87,13 +119,43 @@ def test_batch_prompts():
     return results
 ```
 
+```ts TypeScript
+evaluate("test_batch_prompts", { dataset: "batch" }, async () => {
+  const prompts = [
+    ["Hello", "greeting"],
+    ["Goodbye", "farewell"],
+    ["Help me", "support"],
+  ];
+
+  const results = [];
+  for (const [prompt, expectedIntent] of prompts) {
+    const output = await myAgent(prompt);
+    const detected = detectIntent(output);
+
+    // Plain objects with EvalResult fields
+    results.push({
+      input: prompt,
+      output,
+      reference: expectedIntent,
+      scores: [{ key: "intent", passed: detected === expectedIntent, notes: `Detected: ${detected}` }],
+    });
+  }
+
+  return results;
+});
+```
+
+</CodeGroup>
+
 **Use when:** Dynamic test case generation, external data sources.
 
 ## Pattern 5: Cases with Context
 
 Combine cases with context for clean data-driven tests:
 
-```python
+<CodeGroup>
+
+```python Python
 @eval(
     dataset="sentiment",
     default_score_key="accuracy",
@@ -108,6 +170,24 @@ async def test_sentiment(ctx: EvalContext):
     ctx.output = await analyze_sentiment(ctx.input)
     assert ctx.output == ctx.reference
 ```
+
+```ts TypeScript
+evaluate("test_sentiment", {
+  dataset: "sentiment",
+  defaultScoreKey: "accuracy",
+  cases: [
+    { input: "I love this product!", reference: "positive" },
+    { input: "This is terrible", reference: "negative" },
+    { input: "It's okay I guess", reference: "neutral" },
+  ],
+}, async (ctx) => {
+  // ctx.input and ctx.reference are auto-populated
+  ctx.output = await analyzeSentiment(String(ctx.input));
+  assert.equal(ctx.output, ctx.reference);
+});
+```
+
+</CodeGroup>
 
 Or with custom input fields:
 
@@ -159,9 +239,11 @@ async def test_edge_case(ctx: EvalContext):
 
 ## Pattern 7: Multi-Metric Evaluation
 
-Use `store(scores=...)` when you need multiple named metrics or numeric scores:
+Use `store(scores=...)` (`ctx.store({ scores })` in TypeScript) when you need multiple named metrics or numeric scores:
 
-```python
+<CodeGroup>
+
+```python Python
 @eval(input="Explain quantum computing", dataset="qa")
 async def test_comprehensive(ctx: EvalContext):
     ctx.output = await my_agent(ctx.input)
@@ -178,6 +260,29 @@ async def test_comprehensive(ctx: EvalContext):
         {"passed": len(ctx.output) < 500, "key": "brevity", "notes": f"Length: {len(ctx.output)}"}
     ])
 ```
+
+```ts TypeScript
+evaluate("test_comprehensive", { input: "Explain quantum computing", dataset: "qa" }, async (ctx) => {
+  const output = await myAgent(String(ctx.input));
+  ctx.output = output;
+
+  // Must-pass requirements as assertions
+  assert(output, "Got no output");
+  assert(output.length > 50, "Response too short");
+
+  // Numeric/named metrics with store()
+  const keywords = ["quantum", "superposition", "qubit"];
+  const matches = keywords.filter((kw) => output.toLowerCase().includes(kw)).length;
+  ctx.store({
+    scores: [
+      { key: "coverage", value: matches / keywords.length, notes: `${matches}/${keywords.length} keywords` },
+      { key: "brevity", passed: output.length < 500, notes: `Length: ${output.length}` },
+    ],
+  });
+});
+```
+
+</CodeGroup>
 
 **Use when:** You need numeric scores or multiple independent metrics.
 

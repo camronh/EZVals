@@ -17,10 +17,10 @@ A score tells you *that* an eval failed; a trace tells you *why*. If your projec
   </Tab>
   <Tab title="TypeScript">
     ```bash
-    npm install @opentelemetry/sdk-trace-node @opentelemetry/exporter-trace-otlp-proto
+    npm install --save-dev @opentelemetry/sdk-trace-node @opentelemetry/exporter-trace-otlp-proto
     ```
 
-    Tracing works when your project hasn't registered its own global tracer provider.
+    These are optional peer dependencies of `ezvals`. Tracing works when your project hasn't registered its own global tracer provider; unlike Python, EZVals doesn't attach to an existing one.
   </Tab>
 </Tabs>
 
@@ -52,6 +52,7 @@ def search_docs(query):
 ```
 
 ```ts TypeScript
+import { trace } from "@opentelemetry/api";
 import { generateText } from "ai";
 
 // Vercel AI SDK: opt in per call
@@ -60,6 +61,20 @@ const { text } = await generateText({
   prompt: String(ctx.input),
   experimental_telemetry: { isEnabled: true },
 });
+
+// Your own spans
+const tracer = trace.getTracer("my-agent");
+
+function searchDocs(query: string) {
+  return tracer.startActiveSpan("search_docs", (span) => {
+    span.setAttribute("query", query);
+    try {
+      return index.search(query);
+    } finally {
+      span.end();
+    }
+  });
+}
 ```
 
 </CodeGroup>
@@ -78,5 +93,5 @@ Model names and token counts come from the GenAI semantic conventions (`gen_ai.r
 Spans are also available to SQL, for questions like "how many tokens did each run use?" or "which tool is slowest?". See [Querying Results](/guides/querying#token-usage-per-run).
 
 <Note>
-Tracing is complementary to `trace_data`: use `ctx.store(messages=..., trace_url=...)` to attach a conversation or a link to an external trace, and OpenTelemetry for the step-by-step timing of what happened.
+Tracing is complementary to `trace_data`: use `ctx.store(messages=..., trace_url=...)` (`ctx.store({ messages, traceUrl })` in TypeScript) to attach a conversation or a link to an external trace, and OpenTelemetry for the step-by-step timing of what happened.
 </Note>

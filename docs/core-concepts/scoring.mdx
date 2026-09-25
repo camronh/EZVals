@@ -7,14 +7,28 @@ EZVals uses assertions as the primary way to score evaluations. If you've writte
 
 ## Assertions
 
-Use Python's `assert` statement to validate your outputs:
+Use Python's `assert` statement (or `node:assert` in TypeScript) to validate your outputs:
 
-```python
+<CodeGroup>
+
+```python Python
 @eval(input="What is the capital of France?", dataset="qa")
 async def test_answer_quality(ctx: EvalContext):
     ctx.output = await my_agent(ctx.input)
     assert "paris" in ctx.output.lower(), "Should mention Paris"
 ```
+
+```ts TypeScript
+import assert from "node:assert";
+import { evaluate } from "ezvals";
+
+evaluate("test_answer_quality", { input: "What is the capital of France?", dataset: "qa" }, async (ctx) => {
+  ctx.output = await myAgent(String(ctx.input));
+  assert(String(ctx.output).toLowerCase().includes("paris"), "Should mention Paris");
+});
+```
+
+</CodeGroup>
 
 When assertions pass, your eval passes. When they fail, the assertion message becomes the failure reason in your results.
 
@@ -85,25 +99,13 @@ When all assertions pass and no other score was stored, a passing score is autom
 
 Any other exception is not a score: it's recorded as the result's `error`, with the exception type, message, and traceback.
 
-### In TypeScript
-
-Use `node:assert`. Any thrown error named `AssertionError` becomes a failing score the same way:
-
-```ts
-import assert from "node:assert";
-import { evaluate } from "ezvals";
-
-evaluate("test_answer_quality", { input: "What is the capital of France?", dataset: "qa" }, async (ctx) => {
-  ctx.output = await myAgent(ctx.input);
-  assert(String(ctx.output).toLowerCase().includes("paris"), "Should mention Paris");
-});
-```
+In TypeScript, any thrown error named `AssertionError` (from `node:assert`, chai, ...) becomes a failing score the same way.
 
 ---
 
 ## store() for Explicit Scoring
 
-Use `store(scores=...)` when you need more control than assertions provide:
+Use `store(scores=...)` (`ctx.store({ scores })` in TypeScript) when you need more control than assertions provide:
 
 - **Numeric scores** (confidence values, similarity scores)
 - **Multiple named metrics** per evaluation
@@ -120,7 +122,9 @@ async def test_with_confidence(ctx: EvalContext):
 
 ### Multiple Named Metrics
 
-```python
+<CodeGroup>
+
+```python Python
 @eval(input="Explain quantum computing", dataset="qa")
 async def test_comprehensive(ctx: EvalContext):
     ctx.output = await my_agent(ctx.input)
@@ -132,16 +136,22 @@ async def test_comprehensive(ctx: EvalContext):
     ])
 ```
 
-In TypeScript, pass the same shapes to `ctx.store({ scores })`:
+```ts TypeScript
+evaluate("test_comprehensive", { input: "Explain quantum computing", dataset: "qa" }, async (ctx) => {
+  const output = await myAgent(String(ctx.input));
+  ctx.output = output;
 
-```ts
-ctx.store({
-  scores: [
-    { key: "relevance", passed: String(ctx.output).includes("quantum") },
-    { key: "similarity", value: similarity(ctx.output, ctx.reference) },
-  ],
+  ctx.store({
+    scores: [
+      { key: "relevance", passed: output.toLowerCase().includes("quantum"), notes: "Mentions quantum" },
+      { key: "brevity", passed: output.length < 500, notes: `Length: ${output.length}` },
+      { key: "similarity", value: calculateSimilarity(output, reference), notes: "Semantic similarity" },
+    ],
+  });
 });
 ```
+
+</CodeGroup>
 
 ### Combining Assertions and store()
 
@@ -166,7 +176,9 @@ async def test_mixed(ctx: EvalContext):
 
 Evaluators are functions that run after the eval completes and add additional scores:
 
-```python
+<CodeGroup>
+
+```python Python
 def check_format(result):
     """Check if output is valid JSON."""
     try:
@@ -180,6 +192,24 @@ async def test_json_response(ctx: EvalContext):
     ctx.output = await api_call(ctx.input)
     assert "user" in ctx.output, "Should contain user data"
 ```
+
+```ts TypeScript
+function checkFormat(result: EvalResult) {
+  try {
+    JSON.parse(String(result.output));
+    return { key: "format", passed: true };
+  } catch {
+    return { key: "format", passed: false, notes: "Invalid JSON" };
+  }
+}
+
+evaluate("test_json_response", { input: "Get user data", dataset: "api", evaluators: [checkFormat] }, async (ctx) => {
+  ctx.output = await apiCall(String(ctx.input));
+  assert(String(ctx.output).includes("user"), "Should contain user data");
+});
+```
+
+</CodeGroup>
 
 Evaluators are useful for reusable checks across many evals.
 
