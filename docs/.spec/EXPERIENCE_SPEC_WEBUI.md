@@ -780,7 +780,7 @@ A request while a run is in progress returns 409.
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/config` | GET | Get ezvals.json config |
-| `/api/config` | PUT | Save the Settings keys (`concurrency`, `timeout`, `trials`, `results_dir`, `completion_notifications`): the body replaces them, and a key sent as null or left out goes back to its default. Other keys in ezvals.json (`configs`, `port`, `overwrite`, `verbose`) are kept |
+| `/api/config` | PUT | Save the Settings keys (`concurrency`, `timeout`, `trials`, `results_dir`, `completion_notifications`): the body replaces them, and a key sent as null or left out goes back to its default. Only the keys whose value changes are written. Every other key in ezvals.json, including a project's own keys, stays as it was, in the same order |
 | `/api/configs` | GET | Config profile names and the active one |
 | `/api/configs/select` | POST | Choose the config profile for the next run |
 

@@ -90,7 +90,7 @@ Each run is `.ezvals/sessions/<session>/<run_id>.jsonl`, an append-only log. `ru
 | `edit` | `id`, `n`, `field` (`annotation` or `scores`), `value` | A human edit to result `n` of eval `id`. Score edits are discarded when the eval runs again; annotations survive reruns |
 | `renamed` | `run_name` | |
 
-Reading a run replays the log into the run JSON served by the API and written by `ezvals export -f json` (see [EXPERIENCE_SPEC_WEBUI.md](./EXPERIENCE_SPEC_WEBUI.md#json-schema)). Runs saved by older versions as `<run_name>_<run_id>.json` are read in place and never rewritten or deleted, except when the user deletes the run. The first change to one (a rerun, regrade or edit) starts its `<run_id>.jsonl` beside it, and the `.jsonl` is used from then on.
+Reading a run replays the log into the run JSON served by the API and written by `ezvals export -f json` (see [EXPERIENCE_SPEC_WEBUI.md](./EXPERIENCE_SPEC_WEBUI.md#json-schema)). Runs saved by older versions as `<run_name>_<run_id>.json` are read in place and never rewritten or deleted, except when the user deletes the run. The first change to one (a rerun, regrade or edit) starts its `<run_id>.jsonl` beside it, and the `.jsonl` is used from then on. Legacy results record their function but not its file, so they match today's evals by function (as runs are lined up for comparison): rerunning some rows keeps the other results, and regrading finds each result's eval.
 
 ---
 

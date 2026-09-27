@@ -206,6 +206,37 @@ func TestConfigPutReplacesEditableKeys(t *testing.T) {
 	}
 }
 
+func TestConfigPutOnlyWritesChangedKeys(t *testing.T) {
+	_, ts, _ := newTestServer(t)
+	before := `{
+  "concurrency": 8,
+  "timeout": 3600,
+  "results_dir": ".",
+  "completion_notifications": false,
+  "configs": {
+    "gpt": {
+      "model": "x",
+      "concurrency": 1
+    }
+  },
+  "my_project": {
+    "sizes": [
+      8000,
+      16000
+    ]
+  }
+}
+`
+	os.WriteFile("ezvals.json", []byte(before), 0o644)
+	if code, _ := call(t, ts, "PUT", "/api/config", `{"concurrency": 4, "timeout": 3600, "trials": 0, "results_dir": ".", "completion_notifications": false}`); code != 200 {
+		t.Fatal(code)
+	}
+	after, _ := os.ReadFile("ezvals.json")
+	if want := strings.Replace(before, `"concurrency": 8`, `"concurrency": 4`, 1); string(after) != want {
+		t.Fatalf("ezvals.json =\n%s\nwant\n%s", after, want)
+	}
+}
+
 func TestRunNamesKeepSpacesAndRejectBlank(t *testing.T) {
 	s, ts, _ := newTestServer(t)
 	call(t, ts, "POST", "/api/runs/new", `{"run_name": "  baseline run (v2) "}`)

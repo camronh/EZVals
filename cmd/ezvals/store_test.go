@@ -197,6 +197,33 @@ func TestLegacyCLIRunsWithoutStatusKeepResults(t *testing.T) {
 	}
 }
 
+func TestLegacyRunsMatchCurrentEvalsByFunction(t *testing.T) {
+	dir := t.TempDir()
+	legacy := `{"session_name": "s", "run_name": "old", "run_id": "abc", "created_at": 5, "path": "evals.py",
+		"results": [{"function": "f[a]", "result": {"input": 1, "output": "old a", "scores": [{"key": "pass", "passed": false}]}},
+		{"function": "f[b]", "result": {"input": 2, "output": "old b", "scores": [{"key": "pass", "passed": true}]}}]}`
+	os.MkdirAll(filepath.Join(dir, "s"), 0o755)
+	os.WriteFile(filepath.Join(dir, "s", "old_abc.json"), []byte(legacy), 0o644)
+	store := openStore(dir)
+	run, _ := store.Load("abc")
+	current := []Eval{{ID: "evals.py::f[a]", Function: "f[a]", Target: true}, {ID: "evals.py::f[b]", Function: "f[b]", Target: true}}
+
+	// Regrading an old run finds each result's eval by its function.
+	if jobs, _ := regradeJobs(run, current, nil); len(jobs) != 2 || jobs[0].Eval != "evals.py::f[a]" || jobs[1].Eval != "evals.py::f[b]" {
+		t.Fatalf("regrade jobs = %+v", jobs)
+	}
+	if e, ok := evalFinder(current)(run.Results[1].ID); !ok || e.ID != "evals.py::f[b]" {
+		t.Fatalf("rerun match = %+v", e)
+	}
+
+	// Rerunning one row writes today's eval list; the other old result carries over to it.
+	store.Append("abc", Event{Type: "evals", Evals: current}, Event{Type: "result", ID: "evals.py::f[a]", Results: []Result{{Output: "new a"}}})
+	run, _ = store.Load("abc")
+	if len(run.Results) != 2 || run.Results[0].Result.Output != "new a" || run.Results[1].Result.Output != "old b" || run.Results[1].ID != "evals.py::f[b]" {
+		t.Fatalf("rerun = %+v", run.Results)
+	}
+}
+
 func TestFilterEvals(t *testing.T) {
 	qa, other := "qa", "other"
 	evals := []Eval{

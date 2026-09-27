@@ -68,6 +68,31 @@ func (e Eval) sdkID() string {
 	return e.ID
 }
 
+// evalFinder looks evals up by id or SDK id. Rows of legacy runs (<function>#<n>) name no file, so they match
+// the eval with the same function, the way the UI lines runs up for comparison.
+func evalFinder(evals []Eval) func(id string) (Eval, bool) {
+	byID, byFunction := map[string]Eval{}, map[string]Eval{}
+	for _, e := range evals {
+		byID[e.ID] = e
+		if _, ok := byID[e.sdkID()]; !ok {
+			byID[e.sdkID()] = e
+		}
+		if _, ok := byFunction[e.Function]; !ok {
+			byFunction[e.Function] = e
+		}
+	}
+	return func(id string) (Eval, bool) {
+		if e, ok := byID[id]; ok {
+			return e, true
+		}
+		if i := strings.LastIndex(id, "#"); i >= 0 && !strings.Contains(id, "::") {
+			e, ok := byFunction[id[:i]]
+			return e, ok
+		}
+		return Eval{}, false
+	}
+}
+
 type Score struct {
 	Key    string  `json:"key"`
 	Value  any     `json:"value,omitempty"` // usually a number; SDKs and edits may also store strings or booleans
@@ -145,6 +170,17 @@ func materialize(events []Event) *Run {
 		case "renamed":
 			run.RunName = e.RunName
 		case "evals":
+			find := evalFinder(e.Evals)
+			for _, old := range manifest {
+				if ev, ok := find(old.ID); ok && ev.ID != old.ID && len(results[ev.ID]) == 0 { // a legacy row carries over
+					results[ev.ID] = results[old.ID]
+					for i := range edits {
+						if edits[i].ID == old.ID {
+							edits[i].ID = ev.ID
+						}
+					}
+				}
+			}
 			manifest = e.Evals
 		case "queued":
 			run.CreatedAt = e.At

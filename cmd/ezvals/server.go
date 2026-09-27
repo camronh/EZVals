@@ -328,10 +328,7 @@ func (s *Server) start(existing *Run, ids []string, all bool, overwrite bool) er
 		return err
 	}
 	s.discovered = evals
-	byID := map[string]Eval{}
-	for _, e := range evals {
-		byID[e.ID] = e
-	}
+	find := evalFinder(evals)
 	if all {
 		ids = ids[:0]
 		for _, e := range evals {
@@ -340,8 +337,8 @@ func (s *Server) start(existing *Run, ids []string, all bool, overwrite bool) er
 	}
 	var todo []Job
 	for _, id := range ids {
-		if e, ok := byID[id]; ok {
-			todo = append(todo, Job{ID: id, Eval: e.sdkID()})
+		if e, ok := find(id); ok {
+			todo = append(todo, Job{ID: e.ID, Eval: e.sdkID()})
 		}
 	}
 	if existing == nil {
@@ -725,7 +722,7 @@ func (s *Server) routes() http.Handler {
 	handle("GET /api/config", func(r *http.Request) (any, error) { return loadConfig(), nil })
 	handle("PUT /api/config", func(r *http.Request) (any, error) {
 		// The body replaces the settings the UI edits; a key that is null or missing goes back to its default.
-		// Other keys in ezvals.json (configs, port, overwrite, verbose) are kept.
+		// Only settings that change are written; every other key in ezvals.json is kept as it is.
 		var body struct {
 			Concurrency             int     `json:"concurrency"`
 			Timeout                 float64 `json:"timeout"`
@@ -737,9 +734,10 @@ func (s *Server) routes() http.Handler {
 			return nil, err
 		}
 		cfg, defaults := loadConfig(), defaultConfig()
+		before := cfg
 		cfg.Concurrency, cfg.Timeout, cfg.Trials = cmp.Or(body.Concurrency, defaults.Concurrency), body.Timeout, body.Trials
 		cfg.ResultsDir, cfg.CompletionNotifications = cmp.Or(body.ResultsDir, defaults.ResultsDir), body.CompletionNotifications
-		return map[string]any{"ok": true, "config": cfg}, cfg.save()
+		return map[string]any{"ok": true, "config": cfg}, cfg.save(before)
 	})
 	handle("GET /api/configs", func(r *http.Request) (any, error) {
 		names := []string{}

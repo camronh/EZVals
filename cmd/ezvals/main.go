@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -129,9 +131,69 @@ func loadConfig() Config {
 	return c
 }
 
-func (c Config) save() error {
-	data, _ := json.MarshalIndent(c, "", "  ")
-	return os.WriteFile("ezvals.json", data, 0o644)
+// save writes the settings that differ from before into ezvals.json. Every other key, the key order and
+// the formatting of values it doesn't change are kept, since projects keep their own settings there too.
+func (c Config) save(before Config) error {
+	var next, prev map[string]any
+	data, _ := json.Marshal(c)
+	json.Unmarshal(data, &next)
+	data, _ = json.Marshal(before)
+	json.Unmarshal(data, &prev)
+
+	data, err := os.ReadFile("ezvals.json")
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	var keys []string
+	values := map[string]json.RawMessage{}
+	if len(bytes.TrimSpace(data)) > 0 {
+		if err := json.Unmarshal(data, &values); err != nil {
+			return err
+		}
+		dec := json.NewDecoder(bytes.NewReader(data))
+		dec.Token()
+		for dec.More() {
+			key, _ := dec.Token()
+			keys = append(keys, key.(string))
+			var value json.RawMessage
+			dec.Decode(&value)
+		}
+	}
+	changed := []string{}
+	for key := range next {
+		if !reflect.DeepEqual(next[key], prev[key]) {
+			changed = append(changed, key)
+		}
+	}
+	for key := range prev {
+		if _, ok := next[key]; !ok {
+			changed = append(changed, key)
+		}
+	}
+	sort.Strings(changed)
+	for _, key := range changed {
+		if _, ok := values[key]; !ok {
+			keys = append(keys, key)
+		}
+		values[key], _ = json.Marshal(next[key])
+	}
+
+	var out bytes.Buffer
+	sep := "{"
+	for _, key := range keys {
+		if _, ok := next[key]; !ok && slices.Contains(changed, key) { // reset to a default that isn't written
+			continue
+		}
+		name, _ := json.Marshal(key)
+		fmt.Fprintf(&out, "%s\n  %s: ", sep, name)
+		json.Indent(&out, values[key], "  ", "  ")
+		sep = ","
+	}
+	if sep == "{" {
+		out.WriteString("{")
+	}
+	out.WriteString("\n}\n")
+	return os.WriteFile("ezvals.json", out.Bytes(), 0o644)
 }
 
 func (c Config) sessionsDir() string { return filepath.Join(c.ResultsDir, ".ezvals", "sessions") }
@@ -237,10 +299,7 @@ func expandTrials(evals []Eval, override int) []Eval {
 // regradeJobs re-scores stored results (rows nil = every row). Only finished results of evals with a target
 // qualify: the target produced the output, so the eval body and evaluators can score it again without it.
 func regradeJobs(run *Run, manifest []Eval, rows []int) (jobs []Job, noTarget int) {
-	current := map[string]Eval{} // by SDK id; the manifest may already be expanded into trials
-	for _, e := range manifest {
-		current[e.sdkID()] = e
-	}
+	find := evalFinder(manifest) // by SDK id: the manifest may already be expanded into trials
 	resultsPerEval := map[string]int{}
 	for _, row := range run.Results {
 		resultsPerEval[row.ID]++
@@ -252,7 +311,7 @@ func regradeJobs(run *Run, manifest []Eval, rows []int) (jobs []Job, noTarget in
 	}
 	for _, i := range rows {
 		row := run.Results[i]
-		eval, ok := current[Eval{ID: row.ID, TrialOf: row.TrialOf}.sdkID()]
+		eval, ok := find(Eval{ID: row.ID, TrialOf: row.TrialOf}.sdkID())
 		if row.Result.Status != "completed" || !ok || resultsPerEval[row.ID] > 1 {
 			continue
 		}
