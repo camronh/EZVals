@@ -356,7 +356,7 @@ Scenario: Query runs with SQL
 
 Scenario: See the tables
   When the user runs `ezvals query --schema`
-  Then the tables (runs, results, scores, spans) and example queries are printed
+  Then the tables (runs, results, scores) and example queries are printed
 ```
 
 ---

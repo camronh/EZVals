@@ -65,7 +65,7 @@ class Eval:
 
     async def run(self, run_info: Optional[dict] = None, grade: Optional[dict] = None) -> list:
         """Run the eval. With `grade` (a stored result), skip the target and score that result's output again."""
-        run_info = {k: v for k, v in (run_info or {}).items() if k != "traces_endpoint"}
+        run_info = run_info or {}
         p = self.params
         if self.error:
             return [EvalResult(input=None, output=None, error=self.error)]

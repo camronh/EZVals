@@ -1,7 +1,6 @@
 // Worker process the ezvals host spawns to run TypeScript/JavaScript evals.
 // Same protocol as every SDK: write {"type":"evals"} once discovery finishes, then answer each
 // {"id", "run", "grade"?} line on stdin with {"type":"result","id"}. User output goes to stderr.
-import { AsyncLocalStorage } from "node:async_hooks";
 import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { pathToFileURL } from "node:url";
@@ -13,7 +12,7 @@ process.stdout.write = process.stderr.write.bind(process.stderr) as typeof proce
 const send = (message: object) =>
   write(JSON.stringify(message, (_, v) => (typeof v === "bigint" ? v.toString() : v)) + "\n");
 
-const info: RunInfo & { traces_endpoint?: string } = JSON.parse(process.env.EZVALS_RUN || "{}");
+const runInfo: RunInfo = JSON.parse(process.env.EZVALS_RUN || "{}");
 let evals: Map<string, Eval>;
 try {
   const found = await discover(process.argv.slice(2), (file) => import(pathToFileURL(resolve(file)).href));
@@ -31,27 +30,11 @@ send({
   })),
 });
 
-const currentEval = new AsyncLocalStorage<string>();
-const tracing = info.traces_endpoint ? await traceTo(info.traces_endpoint) : undefined;
-const { run_id, session_name, run_name, eval_path, config, timeout } = info;
-const runInfo: RunInfo = { run_id, session_name, run_name, eval_path, config, timeout };
-
 interface Request { id: string; run: string; grade?: WireResult }
 
 async function run(request: Request) {
-  const e = evals.get(request.run)!;
   try {
-    const results = await currentEval.run(request.id, () =>
-      tracing
-        ? tracing.tracer.startActiveSpan(`${request.grade ? "grade" : "eval"} ${e.name}`, { attributes: { "ezvals.root": true } }, async (span: { end(): void }) => {
-            try {
-              return await runEval(e, runInfo, request.grade);
-            } finally {
-              span.end();
-            }
-          })
-        : runEval(e, runInfo, request.grade));
-    await tracing?.provider.forceFlush();
+    const results = await runEval(evals.get(request.run)!, runInfo, request.grade);
     send({ type: "result", id: request.id, results });
   } catch (err) {
     // The host waits for every result, so one that can't be reported (e.g. a circular output) becomes an error.
@@ -63,32 +46,3 @@ const running: Promise<void>[] = [];
 for await (const line of createInterface({ input: process.stdin })) running.push(run(JSON.parse(line)));
 await Promise.all(running);
 write("", () => process.exit(0));
-
-/**
- * Send OpenTelemetry spans recorded during each eval to the host, tagged with the eval's id. Only active when
- * the project has @opentelemetry/sdk-trace-node and @opentelemetry/exporter-trace-otlp-proto installed and
- * hasn't registered its own tracer provider.
- */
-async function traceTo(endpoint: string) {
-  let node, exporter;
-  try {
-    node = await import("@opentelemetry/sdk-trace-node");
-    exporter = await import("@opentelemetry/exporter-trace-otlp-proto");
-  } catch {
-    return undefined;
-  }
-  const tagWithEval = {
-    onStart(span: { setAttribute(key: string, value: string): void }) {
-      const id = currentEval.getStore();
-      if (id) span.setAttribute("ezvals.eval_id", id);
-    },
-    onEnd() {},
-    forceFlush: async () => {},
-    shutdown: async () => {},
-  };
-  const provider = new node.NodeTracerProvider({
-    spanProcessors: [tagWithEval, new node.BatchSpanProcessor(new exporter.OTLPTraceExporter({ url: endpoint }))],
-  });
-  provider.register();
-  return { provider, tracer: provider.getTracer("ezvals") };
-}

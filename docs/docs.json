@@ -29,8 +29,7 @@
               "writing-evals/scoring",
               "writing-evals/targets-and-regrading",
               "writing-evals/trials",
-              "writing-evals/file-defaults",
-              "writing-evals/tracing"
+              "writing-evals/file-defaults"
             ]
           },
           {
@@ -107,7 +106,6 @@
     { "source": "/guides/evaluators", "destination": "/writing-evals/scoring" },
     { "source": "/guides/trials", "destination": "/writing-evals/trials" },
     { "source": "/guides/regrading", "destination": "/writing-evals/targets-and-regrading" },
-    { "source": "/guides/tracing", "destination": "/writing-evals/tracing" },
     { "source": "/guides/querying", "destination": "/reviewing/querying" },
     { "source": "/guides/agent-skill", "destination": "/reviewing/coding-agents" },
     { "source": "/examples/rag-agent", "destination": "/recipes/rag-agent" },

@@ -112,7 +112,7 @@ def test_code_quality(ctx: EvalContext):
 
 ## Handling Non-Determinism
 
-Agent behavior varies between runs; one run can make a flaky agent look fine. Use EZVals trials instead of hand-rolled loops: each trial is its own result row (with its own output, scores, and spans), and the run reports pass@k and pass^k.
+Agent behavior varies between runs; one run can make a flaky agent look fine. Use EZVals trials instead of hand-rolled loops: each trial is its own result row (with its own output and scores), and the run reports pass@k and pass^k.
 
 ```python
 @eval(input="Solve this complex algorithm problem", dataset="hard_problems", target=run_coding_agent, trials=5)

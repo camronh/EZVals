@@ -99,9 +99,6 @@ export function IconSprite() {
       <symbol id="icon-message" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"></path>
       </symbol>
-      <symbol id="icon-trace" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M3 6h10M7 12h10M11 18h10"></path>
-      </symbol>
       <symbol id="icon-target" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <circle cx="12" cy="12" r="9"></circle>
         <circle cx="12" cy="12" r="5"></circle>
@@ -135,7 +132,7 @@ export function IconSprite() {
 
 export type IconName = 'search' | 'filter' | 'grid' | 'gear' | 'refresh' | 'play' | 'stop' | 'github' | 'doc' | 'close' | 'sun'
   | 'moon' | 'download' | 'chevron-up' | 'chevron-down' | 'chevron-right' | 'copy' | 'check' | 'pencil' | 'plus' | 'compare'
-  | 'pause' | 'message' | 'trace' | 'target' | 'rerun' | 'arrow-left' | 'external' | 'alert' | 'more' | 'trash'
+  | 'pause' | 'message' | 'target' | 'rerun' | 'arrow-left' | 'external' | 'alert' | 'more' | 'trash'
 
 export function Icon({ name, className = 'h-3.5 w-3.5' }: { name: IconName; className?: string }) {
   return (

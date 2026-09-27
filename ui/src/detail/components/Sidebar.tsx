@@ -124,11 +124,10 @@ type Props = {
   onSaveAnnotation: (annotation: string | null) => Promise<void>
   onSaveScores: (scores: Score[]) => Promise<void>
   onOpenMessages: () => void
-  onOpenTrace: () => void
   onEditingChange: (editing: boolean) => void
 }
 
-export function Sidebar({ row, runId, onSaveAnnotation, onSaveScores, onOpenMessages, onOpenTrace, onEditingChange }: Props) {
+export function Sidebar({ row, runId, onSaveAnnotation, onSaveScores, onOpenMessages, onEditingChange }: Props) {
   const r = row.result
   const [editing, setEditing] = useState<'annotation' | number | null>(null)
   useEffect(() => onEditingChange(editing !== null), [editing, onEditingChange])
@@ -173,7 +172,7 @@ export function Sidebar({ row, runId, onSaveAnnotation, onSaveScores, onOpenMess
         ) : null}
         {row.labels?.length ? <Row name="Labels"><div className="flex max-w-[70%] flex-wrap justify-end gap-1">{row.labels.map((l) => <span key={l} className={`${chip} max-w-[140px] truncate`} title={l}>{l}</span>)}</div></Row> : null}
         {traceUrl ? (
-          <Row name="External trace">
+          <Row name="Trace">
             <a href={traceUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[13px] text-accent-link hover:text-accent-link-hover">
               {String(traceUrl).replace(/^\w+:\/\/(www\.)?/, '').split('/')[0]}<Icon name="external" className="h-3 w-3" />
             </a>
@@ -183,7 +182,6 @@ export function Sidebar({ row, runId, onSaveAnnotation, onSaveScores, onOpenMess
       </div>
 
       {messages.length ? <DrawerButton title="Messages" count={messages.length} onClick={onOpenMessages} /> : null}
-      {row.spans?.length ? <DrawerButton title="Trace" count={row.spans.length} onClick={onOpenTrace} /> : null}
 
       {metadata.length ? (
         <Collapsible title="Metadata" defaultOpen>

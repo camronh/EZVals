@@ -7,8 +7,6 @@ import (
 	"flag"
 	"fmt"
 	mrand "math/rand/v2"
-	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -268,19 +266,6 @@ func regradeJobs(run *Run, manifest []Eval, rows []int) (jobs []Job, noTarget in
 	return jobs, noTarget
 }
 
-// listenForTraces starts a collector on a free local port for the lifetime of the command.
-func listenForTraces() (*Collector, string) {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		fatal("%v", err)
-	}
-	collector := &Collector{}
-	mux := http.NewServeMux()
-	mux.Handle("POST /otlp/{run}/v1/traces", collector)
-	go http.Serve(listener, mux)
-	return collector, "http://" + listener.Addr().String()
-}
-
 // runJobs executes jobs until they finish or the user interrupts, which cancels whatever hasn't finished.
 func runJobs(workers []*Worker, jobs []Job, concurrency int, emit func(...Event)) {
 	x := execute(workers, jobs, concurrency, emit)
@@ -380,9 +365,7 @@ func runCmd(args []string) {
 	}
 
 	path, selectors := splitSelector(positional[0])
-	collector, tracesBase := listenForTraces()
 	info := RunInfo{RunID: newRunID(), SessionName: *session, RunName: *runName, EvalPath: path, Config: profile, Timeout: *timeout}
-	info.TracesEndpoint = endpoint(tracesBase, info.RunID)
 	workers, manifest, err := startWorkers(path, info, *verbose)
 	if err != nil {
 		if *jsonOut || *noSave {
@@ -478,7 +461,6 @@ func runCmd(args []string) {
 			}
 		}
 	}
-	collector.Track(info.RunID, emit)
 	emit(Event{Type: "evals", Evals: evals}, Event{Type: "queued", IDs: ids(evals)})
 	start := time.Now()
 	runJobs(workers, jobs(evals), *concurrency, emit)
@@ -759,9 +741,8 @@ func regradeCmd(args []string) {
 		fatal("Eval path %s not found: regrading runs the eval code again", run.Path)
 	}
 	profile, _ := cfg.profile(run.ConfigName)
-	collector, tracesBase := listenForTraces()
 	info := RunInfo{RunID: run.RunID, SessionName: run.SessionName, RunName: run.RunName, EvalPath: run.Path, Config: profile,
-		Timeout: cfg.Timeout, TracesEndpoint: endpoint(tracesBase, run.RunID)}
+		Timeout: cfg.Timeout}
 	workers, manifest, err := startWorkers(run.Path, info, *verbose)
 	if err != nil {
 		fatal("%v", err)
@@ -783,9 +764,8 @@ func regradeCmd(args []string) {
 			printErrors(es)
 		}
 	}
-	collector.Track(run.RunID, emit)
 	fmt.Fprintf(os.Stderr, "Regrading %d result(s) of %s\n", len(jobs), run.RunName)
-	queued := Event{Type: "queued", Grade: true}
+	queued := Event{Type: "queued"}
 	for _, job := range jobs {
 		queued.IDs = append(queued.IDs, job.ID)
 	}

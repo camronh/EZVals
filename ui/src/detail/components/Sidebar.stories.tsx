@@ -13,21 +13,17 @@ const meta: Meta<typeof Sidebar> = {
     onSaveAnnotation: fn(async () => {}),
     onSaveScores: fn(async () => {}),
     onOpenMessages: fn(),
-    onOpenTrace: fn(),
     onEditingChange: fn(),
   },
 }
 export default meta
 type Story = StoryObj<typeof Sidebar>
 
-/** The recorded trace opens from "Trace"; a stored trace_url is a separate link named after its site. */
+/** A stored trace_url is a link named after its site. */
 export const Everything: Story = {
   args: { row: completedRows[0] },
-  play: async ({ canvasElement, args }) => {
-    const canvas = within(canvasElement)
-    await expect(canvas.getByRole('link', { name: /smith\.langchain\.com/ })).toHaveAttribute('href', 'https://smith.langchain.com/trace/abc')
-    await userEvent.click(canvas.getByRole('button', { name: /^Trace/ }))
-    await expect(args.onOpenTrace).toHaveBeenCalled()
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByRole('link', { name: /smith\.langchain\.com/ })).toHaveAttribute('href', 'https://smith.langchain.com/trace/abc')
   },
 }
 export const FailedScores: Story = { args: { row: completedRows[1] } }

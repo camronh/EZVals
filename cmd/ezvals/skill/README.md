@@ -54,7 +54,7 @@ Once installed, just ask Claude Code to help with evaluation tasks:
 | [targets.md](targets.md) | Target function patterns, data capture, reusability |
 | [datasets.md](datasets.md) | Error analysis, sizing, sourcing, avoiding saturation |
 | [GRADERS.md](GRADERS.md) | Code vs model graders, LLM-as-judge, calibration |
-| [running.md](running.md) | CLI usage, sessions, trials, regrading, tracing, SQL queries, serving and comparing runs |
+| [running.md](running.md) | CLI usage, sessions, trials, regrading, SQL queries, serving and comparing runs |
 | [synthetic-data.md](synthetic-data.md) | Dimension-based generation, validation, mixing with real data |
 
 ### Use Cases
@@ -75,7 +75,6 @@ Once installed, just ask Claude Code to help with evaluation tasks:
 | [scoring.mdx](ezvals-docs/scoring.mdx) | Scoring with assertions and `ctx.store()` |
 | [cases.mdx](ezvals-docs/cases.mdx) | Running one eval over many inputs |
 | [trials.mdx](ezvals-docs/trials.mdx) | Repeated trials, pass@k and pass^k |
-| [tracing.mdx](ezvals-docs/tracing.mdx) | OpenTelemetry span capture |
 | [sessions.mdx](ezvals-docs/sessions.mdx) | Sessions, runs, and run files |
 | [querying.mdx](ezvals-docs/querying.mdx) | SQL over results |
 | [cli.mdx](ezvals-docs/cli.mdx) | Command line interface |

@@ -72,7 +72,6 @@ EZVals is a **pytest-inspired, code-first evaluation framework** for LLM applica
 | Run/Stop in UI | Interactive execution | [WebUI](./EXPERIENCE_SPEC_WEBUI.md#running-evaluations) |
 | Trials | Measure reliability of nondeterministic agents (pass@k, pass^k) | [Python](./EXPERIENCE_SPEC_PYTHON.md#trials) |
 | Regrading | Iterate on graders without re-running agents | [Python](./EXPERIENCE_SPEC_PYTHON.md#regrading) |
-| Tracing | OpenTelemetry spans saved with each result | [Python](./EXPERIENCE_SPEC_PYTHON.md#tracing) |
 | `ezvals query` | SQL across all saved runs | [CLI](./EXPERIENCE_SPEC_CLI.md#ezvals-query) |
 
 ### Tier 3: Conveniences

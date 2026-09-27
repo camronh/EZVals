@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Icon, type IconName } from './Icon'
 
 const names: IconName[] = ['search', 'filter', 'grid', 'gear', 'refresh', 'play', 'pause', 'stop', 'download', 'close', 'sun', 'moon', 'chevron-up',
-  'chevron-down', 'chevron-right', 'copy', 'check', 'pencil', 'plus', 'compare', 'message', 'trace', 'target', 'rerun', 'arrow-left', 'external', 'alert', 'more', 'doc', 'github']
+  'chevron-down', 'chevron-right', 'copy', 'check', 'pencil', 'plus', 'compare', 'message', 'target', 'rerun', 'arrow-left', 'external', 'alert', 'more', 'doc', 'github']
 
 const meta: Meta<typeof Icon> = { title: 'Components/Icon', component: Icon }
 export default meta

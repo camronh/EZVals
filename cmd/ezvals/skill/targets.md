@@ -182,10 +182,6 @@ async def test_booking(ctx: EvalContext):
 
 `ezvals regrade RUN_ID` re-runs the eval body and evaluators on stored outputs but skips the `target`. So **put the agent call in `target=` and keep scoring in the eval body**; then you can change graders or LLM-judge prompts and re-score the last run for free instead of re-running the agent. Evals that call the agent inline in the body can't be regraded (they're skipped). See [running.md](running.md#regrading-iterate-on-graders-without-re-running-the-agent).
 
-## Tracing Instead of Manual Capture
-
-If the project has OpenTelemetry installed (`pip install "ezvals[otel]"`, or `@opentelemetry/sdk-trace-node` + `@opentelemetry/exporter-trace-otlp-proto` in TS), every span created during the eval (instrumented LLM calls, tool calls, custom spans) is recorded with the result automatically, including model names and token counts. You don't need to copy tool calls or token usage into `trace_data` by hand when the agent's SDK is instrumented. See [running.md](running.md#tracing-see-what-the-agent-did).
-
 ## Environment Setup
 
 For agents that modify state (databases, files, external systems), ensure clean state:

@@ -12,7 +12,7 @@ const meta: Meta<typeof DetailPage> = {
 export default meta
 type Story = StoryObj<typeof DetailPage>
 
-export const WithMessagesAndSpans: Story = {}
+export const WithMessages: Story = {}
 export const FailedScore: Story = { args: { index: 1 } }
 export const StructuredData: Story = { args: { index: 3 } }
 export const Errored: Story = { args: { index: 4 } }

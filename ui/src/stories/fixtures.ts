@@ -1,5 +1,5 @@
 import { http, HttpResponse } from 'msw'
-import type { ResultData, RunResultRow, RunSummary, Score, SessionRun, Span } from '../types'
+import type { ResultData, RunResultRow, RunSummary, Score, SessionRun } from '../types'
 import { statsFor } from '../lib/stats'
 
 export const messages = [
@@ -9,20 +9,6 @@ export const messages = [
   { role: 'tool', tool_call_id: 'call_1', content: '{"status": "refunded", "amount": 42.5, "date": "2026-09-20"}' },
   { role: 'assistant', content: 'Your refund of **$42.50** was issued on Sept 20. It usually shows up within 3-5 business days.' },
 ]
-
-const ms = 1e6
-export function agentSpans(start = 1_790_000_000_000 * ms, failed = false): Span[] {
-  const span = (id: string, parent: string | undefined, name: string, from: number, to: number, attributes: Record<string, unknown> = {}, status?: Span['status']): Span => ({
-    trace_id: 'a1b2c3', span_id: id, parent_span_id: parent, name, start: start + from * ms, end: start + to * ms, attributes, status,
-  })
-  return [
-    span('1', undefined, 'eval refund_status', 0, 412),
-    span('2', '1', 'agent.run', 2, 410),
-    span('3', '2', 'chat claude-sonnet-5', 4, 180, { 'gen_ai.request.model': 'claude-sonnet-5', 'gen_ai.usage.input_tokens': 812, 'gen_ai.usage.output_tokens': 64 }),
-    span('4', '2', 'tool lookup_order', 182, 214, { 'order.id': 'A-1001' }, failed ? 'error' : 'ok'),
-    span('5', '2', 'chat claude-sonnet-5', 216, 405, { 'gen_ai.request.model': 'claude-sonnet-5', 'gen_ai.usage.input_tokens': 1034, 'gen_ai.usage.output_tokens': 120 }),
-  ].map((s) => (failed && s.span_id === '4' ? { ...s, status_message: 'order service timed out' } : s))
-}
 
 const pass = (key = 'pass', notes?: string): Score => ({ key, passed: true, notes })
 const fail = (key = 'pass', notes?: string): Score => ({ key, passed: false, notes })
@@ -41,7 +27,7 @@ export const completedRows: RunResultRow[] = [
     metadata: { model: 'claude-sonnet-5', temperature: 0.2 },
     trace_data: { messages, trace_url: 'https://smith.langchain.com/trace/abc' },
     annotation: 'Great answer, mentions the timeline.',
-  }, { labels: ['production'], span_count: 5, spans: agentSpans(), regradable: true }),
+  }, { labels: ['production'], regradable: true }),
   row('refund_request[indirect]', 'support', {
     input: 'Money back please',
     reference: 'Acknowledge the refund and give a timeline',
@@ -126,7 +112,7 @@ const trialOutputs = ['Your refund was issued on Sept 20.', 'Please contact supp
 export const trialsRun = run('c9d0e1f2', 'three-trials', [
   ...trialOutputs.map((output, i) => row('refund_status', 'support', {
     input: 'Where is my refund?', output, scores: [output.includes('refund') ? pass() : fail('pass', "Didn't address the refund")], latency: 0.3 + i * 0.05,
-  }, { id: `evals/support.py::refund_status~${i + 1}`, trial: i + 1, trial_of: 'evals/support.py::refund_status', span_count: 5, regradable: true })),
+  }, { id: `evals/support.py::refund_status~${i + 1}`, trial: i + 1, trial_of: 'evals/support.py::refund_status', regradable: true })),
   ...[1, 2, 3].map((trial) => row('greeting', 'smalltalk', { input: 'Hello!', output: 'Hi there!', scores: [pass()], latency: 0.2 }, { trial, trial_of: 'evals/smalltalk.py::greeting' })),
 ], { trials: 3, pass_at_k: 1, pass_all_k: 0.5 })
 

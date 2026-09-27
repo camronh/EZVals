@@ -3,7 +3,6 @@
     "function": "graded",
     "dataset": "features",
     "labels": [],
-    "span_count": 1,
     "status": "completed",
     "input": "q",
     "output": "a",

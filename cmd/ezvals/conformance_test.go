@@ -87,19 +87,11 @@ func TestConformanceRegrade(t *testing.T) {
 			first := ezvals([]string{"TARGET_OUTPUT=a"}, "run", filepath.Join(root, "conformance", file+"::graded"), "--json")
 			regraded := ezvals([]string{"TARGET_OUTPUT=b", "EXPECTED=z"}, "regrade", first.RunID, "--json")
 			before, after := first.Results[0], regraded.Results[0]
-			if !*before.Result.Scores[0].Passed || before.SpanCount != 1 {
-				t.Fatalf("first run counts the target's span, not the SDK's root span: %+v", before)
+			if !*before.Result.Scores[0].Passed {
+				t.Fatalf("first run should pass: %+v", before)
 			}
-			if after.Result.Output != "a" || *after.Result.Scores[0].Passed || after.SpanCount != 1 || *after.Result.Latency != *before.Result.Latency {
-				t.Fatalf("regrade should keep the output, latency and target spans, and fail against EXPECTED=z: %+v", after)
-			}
-			stored, _ := openStore(filepath.Join(dir, ".ezvals", "sessions")).Load(first.RunID)
-			var names []string
-			for _, s := range stored.SpansFor(after.ID) {
-				names = append(names, s.Name)
-			}
-			if strings.Join(names, ",") != "chat,eval graded,grade graded" {
-				t.Fatalf("root spans stay stored for the waterfall: %v", names)
+			if after.Result.Output != "a" || *after.Result.Scores[0].Passed || *after.Result.Latency != *before.Result.Latency {
+				t.Fatalf("regrade should keep the output and latency, and fail against EXPECTED=z: %+v", after)
 			}
 		})
 	}
@@ -112,7 +104,6 @@ func normalize(rows []Row) string {
 		Dataset   *string  `json:"dataset"`
 		Labels    []string `json:"labels"`
 		Trial     int      `json:"trial,omitempty"`
-		SpanCount int      `json:"span_count,omitempty"`
 		Status    string   `json:"status"`
 		Input     any      `json:"input"`
 		Output    any      `json:"output"`
@@ -129,7 +120,7 @@ func normalize(rows []Row) string {
 		if r.Error != nil {
 			errLine, _, _ = strings.Cut(*r.Error, "\n")
 		}
-		out = append(out, result{row.Function, row.Dataset, row.Labels, row.Trial, row.SpanCount, r.Status, r.Input, r.Output, r.Reference, r.Scores, errLine, r.Metadata, r.TraceData})
+		out = append(out, result{row.Function, row.Dataset, row.Labels, row.Trial, r.Status, r.Input, r.Output, r.Reference, r.Scores, errLine, r.Metadata, r.TraceData})
 	}
 	data, _ := json.MarshalIndent(out, "", "  ")
 	return string(data) + "\n"

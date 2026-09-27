@@ -576,25 +576,6 @@ Scenario: Evals without a target
 
 ---
 
-## Tracing
-
-**Intent:** User wants to see what their agent did (LLM calls, tool calls, token usage) for each result without writing trace code.
-
-```gherkin
-Scenario: Spans are recorded per eval
-  Given the project has OpenTelemetry installed (`pip install "ezvals[otel]"`)
-  And the agent emits OpenTelemetry spans (an instrumentation library, or tracer.start_as_current_span)
-  When an eval runs
-  Then every span started during the eval is saved with its result
-  And spans keep going to any tracer provider the project configured itself
-
-Scenario: No OpenTelemetry
-  Given opentelemetry is not installed
-  Then evals run normally and no spans are recorded
-```
-
----
-
 ## Evaluators
 
 **Intent:** User wants reusable post-processing that adds scores.

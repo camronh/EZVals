@@ -34,19 +34,6 @@ export interface ResultData {
   correction_history?: Correction[]
 }
 
-/** An OpenTelemetry span recorded while the eval ran. */
-export interface Span {
-  trace_id: string
-  span_id: string
-  parent_span_id?: string
-  name: string
-  start: number // unix nanoseconds
-  end: number
-  attributes?: Record<string, unknown>
-  status?: 'ok' | 'error'
-  status_message?: string
-}
-
 export interface RunResultRow {
   id?: string
   function: string
@@ -54,10 +41,8 @@ export interface RunResultRow {
   labels?: string[] | null
   trial?: number
   trial_of?: string
-  span_count?: number
   /** The eval has a target, so a finished result can be regraded without re-running it. */
   regradable?: boolean
-  spans?: Span[]
   result: ResultData
 }
 

@@ -3,7 +3,6 @@ import type { CSSProperties } from 'react'
 import type { ResultDetail, Score } from '../types'
 import { api } from '../api'
 import { DataViewer } from '../components/DataViewer'
-import { TraceWaterfall } from '../components/TraceWaterfall'
 import { resultKey, withColors } from '../lib/comparison'
 import { ComparisonView, type ComparedRun } from './components/ComparisonView'
 import { DetailHeader } from './components/DetailHeader'
@@ -15,14 +14,14 @@ export type DetailRoute = { runId: string; index: number; compareRunIds: string[
 
 const finished = (detail: ResultDetail) => ['completed', 'error', 'cancelled'].includes(detail.result.result.status ?? 'completed')
 
-/** One result: input, reference and output panes, a sidebar of scores and metadata, and drawers for messages and the trace. */
+/** One result: input, reference and output panes, a sidebar of scores and metadata, and a drawer for messages. */
 export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
   const [detail, setDetail] = useState<ResultDetail | null>(null)
   const [error, setError] = useState<Error | null>(null)
   const [compared, setCompared] = useState<ComparedRun[] | null>(null)
   const [busy, setBusy] = useState<'rerun' | 'regrade' | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
-  const [drawer, setDrawer] = useState<'messages' | 'trace' | null>(null)
+  const [drawer, setDrawer] = useState<'messages' | null>(null)
   const [editing, setEditing] = useState(false)
   const { layout, container, start } = useResizableLayout()
   const comparing = compareRunIds.length > 1
@@ -134,7 +133,6 @@ export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
                 onSaveAnnotation={(annotation) => save({ annotation })}
                 onSaveScores={(scores) => save({ scores })}
                 onOpenMessages={() => setDrawer('messages')}
-                onOpenTrace={() => setDrawer('trace')}
                 onEditingChange={setEditing}
               />
             </div>
@@ -143,9 +141,6 @@ export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
       </div>
       <Drawer id="messages-pane" title="Messages" count={messages.length} open={drawer === 'messages'} onClose={() => setDrawer(null)}>
         <div className="p-4"><DataViewer content={messages} placeholder="—" /></div>
-      </Drawer>
-      <Drawer id="trace-pane" title="Trace" count={row.spans?.length ?? 0} open={drawer === 'trace'} onClose={() => setDrawer(null)}>
-        <TraceWaterfall spans={row.spans ?? []} />
       </Drawer>
     </div>
   )

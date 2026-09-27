@@ -47,7 +47,7 @@ If the user is migrating from Phoenix Arize, map old concepts to EZVals primitiv
 |------|------------|
 | Dataset in Phoenix | `cases=[...]`, `dataset=`, or `input_loader=` |
 | Task/experiment run | `@eval` function execution |
-| Span-level trace analysis | Automatic OpenTelemetry span capture (`pip install "ezvals[otel]"`), shown in `ezvals serve` and queryable with `ezvals query` |
+| Span-level trace analysis | Keep traces in the tracing tool; link each result with `ctx.store(trace_url=...)` and attach the transcript with `messages=` |
 | Evaluator templates / rubric prompts | Assertions, `ctx.store(scores=...)`, or LLM-as-judge graders in eval code |
 | Pass/fail evaluator output | Assertion success/failure or boolean score via `ctx.store(scores=[...])` |
 | Numeric evaluator score | Numeric `score.value` (0-1 or arbitrary scale) via `ctx.store(scores=[...])` |
@@ -272,7 +272,6 @@ You should have everything you need to plan a good eval from here.
 - Session and run naming best practices
 - Repeated trials, pass@k / pass^k (`--trials`)
 - Regrading stored outputs after changing graders (`ezvals regrade`)
-- Tracing setup (OpenTelemetry spans)
 - SQL analysis over all runs (`ezvals query`)
 - Serving results for user review
 - Comparing runs and exporting results
@@ -326,7 +325,6 @@ You should have everything you need to plan a good eval from here.
 - file-defaults.mdx - File-level defaults
 - trials.mdx - Repeated trials, pass@k and pass^k
 - targets-and-regrading.mdx - Targets and re-scoring stored outputs
-- tracing.mdx - OpenTelemetry span capture
 - web-ui.mdx - Running, reviewing, annotating and comparing in the browser
 - sessions.mdx - Sessions, runs, and run file layout
 - querying.mdx - `ezvals query` tables and example SQL
@@ -349,14 +347,13 @@ ezvals serve evals/ --session my-experiment
 ezvals serve evals/ --session my-experiment --no-open
 ```
 
-## Trials, Regrading, Tracing, and SQL (When to Use)
+## Trials, Regrading, and SQL (When to Use)
 
 | Situation | Use | Command |
 |-----------|-----|---------|
 | Agent is nondeterministic, results flip between runs, or the user asks "how reliable is it?" | Trials: report pass@k (any trial passed) and pass^k (all passed) | `@eval(trials=3)` or `ezvals run evals/ --trials 5 --json` → `pass_at_k`, `pass_all_k` |
 | You changed an assertion, evaluator, or LLM-judge prompt and only need new scores | Regrade: re-runs grading on stored outputs, skips `target` | `ezvals regrade RUN_ID` |
-| You need to see why the agent failed (LLM calls, tool calls, tokens) | Tracing: spans recorded automatically when OpenTelemetry is installed | `pip install "ezvals[otel]"` |
-| Analyzing results: across runs, per score, flaky trials, token usage | SQL over all saved runs | `ezvals query "SELECT ..." --json`, `ezvals query --schema` |
+| Analyzing results: across runs, per score, flaky trials | SQL over all saved runs | `ezvals query "SELECT ..." --json`, `ezvals query --schema` |
 
 **Write evals so they can be regraded:** put the agent call in `target=` and the scoring in the eval body or `evaluators=`. Evals that call the agent inline are skipped by regrade. Details and example queries: [running.md](running.md).
 

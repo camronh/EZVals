@@ -66,7 +66,7 @@ Scenario: No evals found
 
 ```gherkin
 Scenario: Eval cell
-  Then each row's eval cell shows the eval name, with dataset, labels, trial "#n" and span count on a quieter line beneath it
+  Then each row's eval cell shows the eval name, with dataset, labels and trial "#n" on a quieter line beneath it
   And a leading icon shows the row's outcome (see Result Status Indicators)
 
 Scenario: Scores cell with one metric
@@ -178,7 +178,7 @@ Scenario: Code changes are picked up
   Then the edited code runs (every run starts fresh eval processes)
 ```
 
-### Trials, Regrading and Traces
+### Trials and Regrading
 
 ```gherkin
 Scenario: Trials in the table
@@ -190,10 +190,6 @@ Scenario: Regrade from the dashboard
   When the user chooses "Regrade" in the header's "⋯" menu
   Then selected rows (or all rows when none are selected) are regraded without re-running targets
   And a toast reports how many results were regraded and how many were skipped for having no target
-
-Scenario: Trace step count
-  Given a result recorded an OpenTelemetry trace
-  Then its eval cell shows a trace icon with the number of steps (spans) in it
 ```
 
 ### Result Status Indicators
@@ -235,8 +231,7 @@ Scenario: Detail view contents
     - Extra data (collapsible JSON of trace_data fields other than messages and trace_url)
     - Annotations (editable)
     - Tools used (unique tool names from trace_data.messages tool calls, if present)
-    - Trace (step count; opens the trace timeline), if spans were recorded
-    - External trace (a link to trace_url, labeled with its site's host name), if set
+    - Trace (a link to trace_url, labeled with its site's host name), if set
     - Latency
     - Error message (if any; a long traceback is capped in height, scrollable and expandable)
 
@@ -251,14 +246,6 @@ Scenario: Message-format data rendering
   Then those sections default to a pretty chat-style rendering
   And each section provides a Pretty/Raw toggle
   And Raw shows the underlying JSON payload without transformation
-
-Scenario: Trace timeline
-  Given the result recorded spans
-  When the user opens "Trace" in the sidebar
-  Then a drawer shows each step (span) of the trace as a nested waterfall with durations
-  And LLM spans show their model and input→output token counts, with totals in the header
-  And failed spans are highlighted
-  And clicking a span shows its attributes
 
 Scenario: Regrade one result
   Given the result finished and its eval has a target
@@ -287,7 +274,7 @@ Scenario: Navigate between results
   Then the user returns to the main table
 
 Scenario: Escape closes an open drawer first
-  Given the Messages or Trace drawer is open
+  Given the Messages drawer is open
   When the user presses Escape
   Then the drawer closes and the user stays on the detail page
 
@@ -677,7 +664,6 @@ The UI is backed by these REST endpoints, also available programmatically.
 |----------|--------|-------------|
 | `/api/runs/rerun` | POST | Run active eval configuration (optionally selected indices) |
 | `/api/runs/regrade` | POST | Regrade the active run (optionally `{"indices": [...]}`); returns `regraded` and `skipped_without_target` |
-| `/otlp/{run_id}/v1/traces` | POST | OTLP/HTTP (protobuf) span export from SDK workers |
 | `/api/runs/pause` | POST | Pause queued execution after in-flight evals finish |
 | `/api/runs/resume` | POST | Resume pending evals on a paused run |
 | `/api/runs/stop` | POST | Cancel pending/running evals |
@@ -808,7 +794,6 @@ The API, `ezvals run --json` and `ezvals export -f json` present a run as:
       "labels": ["production"],
       "trial": 2,
       "trial_of": "evals/support.py::test_refund",
-      "span_count": 5,
       "regradable": true,
       "result": {
         "input": "I want a refund",
@@ -835,7 +820,7 @@ The API, `ezvals run --json` and `ezvals export -f json` present a run as:
 }
 ```
 
-`trial`, `trial_of`, `span_count` and `regradable` appear only when they apply; runs with trials also carry `trials`, `pass_at_k` and `pass_all_k`. The single-result endpoint (`/api/runs/{run_id}/results/{index}`) adds the row's `spans`. `created_at` is when the run last started running (unix seconds). `/results` and `/api/runs/{run_id}/data` add `score_chips`, `eval_path`, and for the active run `is_paused`, `selected_total`, and `discovery_error` (only when discovering the evals failed). `span_count` counts the spans the eval recorded, not the root span the SDK wraps each eval in.
+`trial`, `trial_of` and `regradable` appear only when they apply; runs with trials also carry `trials`, `pass_at_k` and `pass_all_k`. `created_at` is when the run last started running (unix seconds). `/results` and `/api/runs/{run_id}/data` add `score_chips`, `eval_path`, and for the active run `is_paused`, `selected_total`, and `discovery_error` (only when discovering the evals failed).
 
 ---
 

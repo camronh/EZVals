@@ -165,7 +165,7 @@ ezvals run evals/ --no-save
 ezvals run evals/ --output results.json
 ```
 
-**Prefer `--json` when you need to analyze results**: it gives you totals and every result in one document without reading the run file. For questions across runs (or over scores and spans), use [`ezvals query`](#querying-results-with-sql) instead.
+**Prefer `--json` when you need to analyze results**: it gives you totals and every result in one document without reading the run file. For questions across runs (or over scores), use [`ezvals query`](#querying-results-with-sql) instead.
 
 ## Repeated Trials (Flaky Agents)
 
@@ -208,37 +208,20 @@ ezvals regrade a1b2c3d4 --json                             # print the regraded 
 - Results of evals without a target are skipped (the CLI prints `Skipping N result(s)...`); so are errored/unfinished results and evals that return several results.
 - The run is updated in place with the current eval code; manual score edits are replaced, annotations are kept.
 - In the UI: "…" menu → **Regrade results** (only selected rows if any are checked), or **Regrade** on a result's detail page.
-- With tracing, original spans are kept and the grading gets its own `grade <name>` span.
 
 To compare old vs new grader side by side instead of overwriting, re-run into a new run name (`ezvals run ... --run-name judge-v2`); that re-runs the agent though.
 
-## Tracing: See What the Agent Did
-
-If the project has OpenTelemetry installed, every span created while an eval runs (LLM calls from instrumented SDKs, tool calls, custom spans) is recorded with that eval's result. No eval code changes. **Set it up when** you need to debug why an agent failed, see tool-call sequences, or compare token usage/latency between runs.
-
-```bash
-pip install "ezvals[otel]"      # Python: opentelemetry-sdk + opentelemetry-exporter-otlp-proto-http
-npm install @opentelemetry/sdk-trace-node @opentelemetry/exporter-trace-otlp-proto   # TypeScript
-```
-
-- Python: if the project already configured a tracer provider (Langfuse, LangSmith, ...), EZVals adds itself to it and spans still go there too. TypeScript: works when the project hasn't registered its own global tracer provider.
-- Spans come from anything that emits OpenTelemetry: OpenLLMetry/Traceloop instrumentations (e.g. `OpenAIInstrumentor().instrument()`), LangChain via OpenInference, the OpenAI Agents SDK (with an OpenTelemetry instrumentation such as OpenInference), the Vercel AI SDK with `experimental_telemetry: { isEnabled: true }`, or manual `tracer.start_as_current_span("tool_call")`.
-- Each eval has a root span `eval <name>`; regrading adds `grade <name>`.
-- UI: span count in the results table; detail page → **Spans** shows a waterfall with durations, model names, and token counts (`gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`).
-- Rows in `--json` output have `span_count`; spans themselves are in the `spans` table of `ezvals query`.
-
 ## Querying Results with SQL
 
-`ezvals query "SQL"` loads every saved run (from `.ezvals/sessions/`, run it from the project root) into in-memory SQLite. **Prefer it over parsing run JSON** for analysis across runs, per-score aggregates, flaky trials, and token usage. Add `--json` for machine-readable rows; `ezvals query --schema` prints the schema.
+`ezvals query "SQL"` loads every saved run (from `.ezvals/sessions/`, run it from the project root) into in-memory SQLite. **Prefer it over parsing run JSON** for analysis across runs, per-score aggregates, and flaky trials. Add `--json` for machine-readable rows; `ezvals query --schema` prints the schema.
 
 | Table | Columns |
 |-------|---------|
 | `runs` | `run_id, session_name, run_name, created_at, path, config_name, total_evaluations, total_passed, total_errors, average_latency, trials, pass_at_k, pass_all_k` |
 | `results` | `run_id, row, eval_id, function, dataset, labels JSON, trial, status, passed, input JSON, output JSON, reference JSON, error, latency, metadata JSON, trace_data JSON, annotation` |
 | `scores` | `run_id, row, eval_id, function, key, value, passed, notes` |
-| `spans` | `run_id, eval_id, trace_id, span_id, parent_span_id, name, start_ms, duration_ms, status, attributes JSON` |
 
-`results.passed` = finished without error and all pass/fail scores passed. `trial` is 0 for evals without trials. Read JSON columns with `json_extract(col, '$.key')`; dotted keys need quotes: `'$."gen_ai.usage.input_tokens"'`. Join results ↔ scores on `(run_id, row)`, results ↔ spans on `(run_id, eval_id)`.
+`results.passed` = finished without error and all pass/fail scores passed. `trial` is 0 for evals without trials. Read JSON columns with `json_extract(col, '$.key')`. Join results ↔ scores on `(run_id, row)`.
 
 ```bash
 # Pass rate per run in a session
@@ -252,9 +235,6 @@ ezvals query "SELECT r.run_name, avg(s.value) FROM scores s JOIN runs r USING (r
 
 # Flaky evals (some trials passed, some failed)
 ezvals query "SELECT substr(eval_id, 1, instr(eval_id, '~') - 1) AS eval, count(*) AS trials, sum(passed) AS passes FROM results WHERE run_id = 'a1b2c3d4' AND trial > 0 GROUP BY eval HAVING passes BETWEEN 1 AND trials - 1"
-
-# Token usage per run (needs tracing)
-ezvals query "SELECT r.run_name, sum(json_extract(s.attributes, '$.\"gen_ai.usage.input_tokens\"')) AS input_tokens, sum(json_extract(s.attributes, '$.\"gen_ai.usage.output_tokens\"')) AS output_tokens FROM spans s JOIN runs r USING (run_id) GROUP BY r.run_id"
 ```
 
 ## Temporary Ad-Hoc Runs (No Saved Files)
@@ -639,4 +619,4 @@ CLI flags always override config values.
 7. **Commit the session name** - Include it in PR descriptions for traceability
 8. **Use trials for flaky agents** - Report pass@k and pass^k, not a single run's pass rate
 9. **Regrade, don't re-run, when only grading changed** - `ezvals regrade RUN_ID`
-10. **Use `ezvals query` for cross-run analysis** - SQL over runs, results, scores, and spans
+10. **Use `ezvals query` for cross-run analysis** - SQL over runs, results, and scores

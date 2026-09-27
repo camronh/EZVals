@@ -42,7 +42,6 @@ type Server struct {
 	discoveryErr  string // why discovery found nothing: the worker's error, e.g. an eval file that fails to import
 	exec          *Execution
 	selectedTotal *int
-	tracesBase    string // this server's URL; SDKs export spans to its /otlp endpoint
 }
 
 type httpError struct {
@@ -170,7 +169,6 @@ func serveCmd(args []string) {
 		fatal("no available port in %d-%d: %v", *port, *port+9, err)
 	}
 	address := "http://" + listener.Addr().String()
-	s.tracesBase = address
 	if len(query) > 0 {
 		address += "/?" + query.Encode()
 	}
@@ -359,7 +357,7 @@ func (s *Server) start(existing *Run, ids []string, all bool, overwrite bool) er
 	if !all {
 		s.selectedTotal = ptr(len(todo))
 	}
-	s.launch(workers, todo, false)
+	s.launch(workers, todo)
 	return nil
 }
 
@@ -387,7 +385,7 @@ func (s *Server) regrade(rows []int) (int, int, error) {
 	}
 	todo, noTarget := regradeJobs(run, evals, rows)
 	s.selectedTotal = ptr(len(todo))
-	s.launch(workers, todo, true)
+	s.launch(workers, todo)
 	return len(todo), noTarget, nil
 }
 
@@ -402,7 +400,7 @@ func (s *Server) spawn(runName string) ([]*Worker, []Eval, error) {
 	cfg := loadConfig()
 	profile, _ := cfg.profile(s.configName)
 	info := RunInfo{RunID: s.activeID, SessionName: s.session, RunName: runName, EvalPath: s.path, Config: profile,
-		Timeout: cfg.Timeout, TracesEndpoint: endpoint(s.tracesBase, s.activeID)}
+		Timeout: cfg.Timeout}
 	workers, manifest, err := startWorkers(s.path, info, cfg.Verbose)
 	if err != nil {
 		return nil, nil, fail(400, "%v", err)
@@ -411,7 +409,7 @@ func (s *Server) spawn(runName string) ([]*Worker, []Eval, error) {
 }
 
 // launch queues jobs in the active run and executes them in the background.
-func (s *Server) launch(workers []*Worker, todo []Job, grade bool) {
+func (s *Server) launch(workers []*Worker, todo []Job) {
 	if len(todo) == 0 {
 		stopWorkers(workers)
 		return
@@ -423,7 +421,7 @@ func (s *Server) launch(workers []*Worker, todo []Job, grade bool) {
 			fmt.Fprintf(os.Stderr, "Error saving run: %v\n", err)
 		}
 	}
-	queued := Event{Type: "queued", Grade: grade}
+	queued := Event{Type: "queued"}
 	for _, job := range todo {
 		queued.IDs = append(queued.IDs, job.ID)
 	}
@@ -517,9 +515,7 @@ func (s *Server) routes() http.Handler {
 		if err != nil {
 			return nil, err
 		}
-		row := run.Results[i]
-		row.Spans = run.SpansFor(row.ID)
-		return map[string]any{"result": row, "index": i, "total": len(run.Results), "run_id": run.RunID,
+		return map[string]any{"result": run.Results[i], "index": i, "total": len(run.Results), "run_id": run.RunID,
 			"session_name": run.SessionName, "run_name": run.RunName, "eval_path": run.Path}, nil
 	})
 	handle("PATCH /api/runs/{id}/results/{index}", func(r *http.Request) (any, error) {
@@ -822,8 +818,6 @@ func (s *Server) routes() http.Handler {
 			download(w, run.RunID+".md", "text/markdown", []byte(renderMarkdown(body.RunName, body.SessionName, rows, body.VisibleColumns, body.Stats)))
 		}
 	})
-
-	mux.Handle("POST /otlp/{run}/v1/traces", &Collector{save: func(runID string, events ...Event) { s.store.Append(runID, events...) }})
 
 	web, _ := fs.Sub(webFiles, "web")
 	index := func(w http.ResponseWriter) {

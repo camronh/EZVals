@@ -50,8 +50,6 @@ ezvals regrade a1b2c3d4              # re-score a run's outputs after changing a
 ezvals query "SELECT run_name, total_passed FROM runs"   # SQL over every saved run (see: ezvals query --schema)
 ```
 
-If your project uses OpenTelemetry (`pip install "ezvals[otel]"`), every span your agent emits during an eval (LLM calls, tool calls, token usage) is saved with its result and shown as a waterfall in the UI.
-
 TypeScript projects run the same commands through `npx ezvals`. A directory with both languages runs as one.
 
 ## Agent skill

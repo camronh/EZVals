@@ -68,8 +68,6 @@ type RunInfo struct {
 	EvalPath    string         `json:"eval_path"`
 	Config      map[string]any `json:"config"`
 	Timeout     float64        `json:"timeout,omitempty"`
-	// Where the SDK sends OpenTelemetry spans, if the user's project has OpenTelemetry installed.
-	TracesEndpoint string `json:"traces_endpoint,omitempty"`
 }
 
 // Job asks a worker to run an eval, or to regrade a stored result without re-running the eval's target.

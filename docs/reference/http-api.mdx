@@ -33,7 +33,6 @@ Endpoints that return a run use the same shape as `ezvals run --json` and `ezval
       "labels": ["production"],
       "trial": 2,
       "trial_of": "evals/support.py::test_refund",
-      "span_count": 5,
       "regradable": true,
       "result": {
         "input": "I want a refund",
@@ -54,7 +53,7 @@ Endpoints that return a run use the same shape as `ezvals run --json` and `ezval
 ```
 
 - `created_at` is when the run last started (Unix seconds).
-- `trial`, `trial_of`, `span_count` and `regradable` appear only when they apply. Runs with trials also have `trials`, `pass_at_k` and `pass_all_k`.
+- `trial`, `trial_of` and `regradable` appear only when they apply. Runs with trials also have `trials`, `pass_at_k` and `pass_all_k`.
 - `status` is one of `not_started`, `pending`, `running`, `completed`, `error` or `cancelled`.
 - `correction_history` lists edits made in the UI or through this API: `field` (`annotation` or `scores`), `before`, `after` and `timestamp`.
 
@@ -64,7 +63,7 @@ Endpoints that return a run use the same shape as `ezvals run --json` and `ezval
 |----------|-------------|
 | `GET /results` | The active run, as run JSON |
 | `GET /api/runs/{run_id}/data` | Any run, as run JSON, without making it active |
-| `GET /api/runs/{run_id}/results/{index}` | One result, plus its `spans`, `index`, `total` and run ids |
+| `GET /api/runs/{run_id}/results/{index}` | One result, plus its `index`, `total` and run ids |
 | `PATCH /api/runs/{run_id}/results/{index}` | Update a result's `annotation` or `scores` |
 
 `run_id` can be `latest` for the active run. `index` is the result's 0-based position in `results`.
@@ -122,10 +121,9 @@ Starting a run or regrade while one is in progress returns `409`.
 | `GET /api/configs` | Run config names and the selected one: `{ "names": [...], "active": "..." }` |
 | `POST /api/configs/select` | Choose the run config for the next run: `{ "name": "..." }` |
 
-## Pages and tracing
+## Pages
 
 | Endpoint | Description |
 |----------|-------------|
 | `GET /` | The web UI |
 | `GET /runs/{run_id}/results/{index}` | The web UI's detail page for a result |
-| `POST /otlp/{run_id}/v1/traces` | Receives OpenTelemetry spans (OTLP over HTTP, protobuf) from eval workers. Used internally for [tracing](/writing-evals/tracing) |

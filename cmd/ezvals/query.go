@@ -24,10 +24,6 @@ CREATE TABLE results (
 );
 CREATE TABLE scores (
   run_id TEXT, row INTEGER, eval_id TEXT, function TEXT, key TEXT, value REAL, passed INTEGER, notes TEXT
-);
-CREATE TABLE spans (
-  run_id TEXT, eval_id TEXT, trace_id TEXT, span_id TEXT, parent_span_id TEXT, name TEXT,
-  start_ms REAL, duration_ms REAL, status TEXT, attributes JSON
 );`
 
 const queryHelp = `Every saved run is loaded into these tables (results.passed: the row finished and all its pass/fail scores passed;
@@ -39,7 +35,6 @@ Examples:
   ezvals query "SELECT run_name, total_passed, total_evaluations FROM runs ORDER BY created_at DESC"
   ezvals query "SELECT function, avg(passed) FROM results WHERE run_id = 'a1b2c3d4' GROUP BY function"
   ezvals query "SELECT key, avg(value) FROM scores GROUP BY key"
-  ezvals query "SELECT name, sum(json_extract(attributes, '$.\"gen_ai.usage.input_tokens\"')) FROM spans GROUP BY name"
 `
 
 func queryCmd(args []string) {
@@ -122,12 +117,6 @@ func loadRunsDB(store *Store) (*sql.DB, error) {
 					jsonString(r.Reference), r.Error, r.Latency, jsonString(r.Metadata), jsonString(r.TraceData), r.Annotation)
 				for _, s := range r.Scores {
 					tx.Exec(`INSERT INTO scores VALUES (?,?,?,?,?,?,?,?)`, run.RunID, i, row.ID, row.Function, s.Key, scoreValue(s.Value), s.Passed, s.Notes)
-				}
-			}
-			for id, spans := range run.spans {
-				for _, s := range spans {
-					tx.Exec(`INSERT INTO spans VALUES (?,?,?,?,?,?,?,?,?,?)`, run.RunID, id, s.TraceID, s.SpanID, s.ParentSpanID, s.Name,
-						float64(s.Start)/1e6, float64(s.End-s.Start)/1e6, s.Status, jsonString(s.Attributes))
 				}
 			}
 		}
