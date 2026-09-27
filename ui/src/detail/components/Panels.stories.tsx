@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, fn, userEvent, within } from 'storybook/test'
-import { completedRows, messages, multiMetricRun } from '../../stories/fixtures'
+import { completedRows, messages } from '../../stories/fixtures'
 import { DataViewer } from '../../components/DataViewer'
 import { DataPanel, Drawer, Verdict } from './Panels'
 
@@ -14,17 +14,13 @@ export const Reference: StoryObj = { render: () => frame(<DataPanel tone="refere
 export const Output: StoryObj = { render: () => frame(<DataPanel tone="output" value={completedRows[5].result.output} />) }
 export const OutputLoading: StoryObj = { render: () => frame(<DataPanel tone="output" value={null} loading />) }
 
-/** The verdict strip: why a result came out the way it did. */
-export const VerdictPassed: StoryObj = { render: () => <Verdict result={completedRows[0].result} /> }
-export const VerdictFailed: StoryObj = {
-  render: () => <Verdict result={completedRows[1].result} />,
+/** The verdict strip: an error with its traceback, or a result that hasn't finished. Passed and failed results have none. */
+export const NoVerdictWhenScored: StoryObj = {
+  render: () => <div id="verdicts"><Verdict result={completedRows[0].result} /><Verdict result={completedRows[1].result} /></div>,
   play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).getByText('Failed')).toBeVisible()
-    await expect(within(canvasElement).getByText(/Asked for the order number/)).toBeVisible()
+    await expect(canvasElement.querySelector('#verdicts')).toBeEmptyDOMElement()
   },
 }
-/** With several scores, the strip names the ones that failed and prefixes each note with its key. */
-export const VerdictFailedSeveralScores: StoryObj = { render: () => <Verdict result={multiMetricRun.results[5].result} /> }
 export const VerdictError: StoryObj = { render: () => <Verdict result={completedRows[4].result} /> }
 export const VerdictRunning: StoryObj = { render: () => <Verdict result={{ status: 'running' }} /> }
 

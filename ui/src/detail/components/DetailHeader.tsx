@@ -1,9 +1,13 @@
 import { CopyButton } from '../../components/CopyButton'
 import { Icon } from '../../components/Icon'
 import { Spinner } from '../../components/Spinner'
+import { StatusIcon } from '../../dashboard/components/ResultsTable'
+import type { Outcome } from '../../lib/stats'
 
 type Props = {
   name: string
+  /** Shown as an icon before the name; left out while comparing, where each run has its own. */
+  outcome?: Outcome
   trial?: number
   sessionName?: string | null
   run?: { id: string; name?: string | null }
@@ -18,7 +22,7 @@ type Props = {
 }
 
 /** Where this result sits (session / run / eval, and its position in the run) and what can be done with it. */
-export function DetailHeader({ name, trial, sessionName, run, back, runCommand, position, onNavigate, busy, onRerun, onRegrade }: Props) {
+export function DetailHeader({ name, outcome, trial, sessionName, run, back, runCommand, position, onNavigate, busy, onRerun, onRegrade }: Props) {
   return (
     <header className="flex h-12 flex-shrink-0 items-center justify-between gap-3 border-b border-line bg-surface px-3 sm:px-4">
       <div className="flex min-w-0 items-center gap-2">
@@ -28,7 +32,7 @@ export function DetailHeader({ name, trial, sessionName, run, back, runCommand, 
           {sessionName ? <span aria-hidden="true" className="hidden text-line-strong lg:inline">/</span> : null}
           {run ? <a href={`/?run_id=${encodeURIComponent(run.id)}`} className="hidden max-w-[200px] truncate text-fg-muted hover:text-fg hover:underline md:inline">{run.name ?? run.id}</a> : null}
           {run ? <span aria-hidden="true" className="hidden text-line-strong md:inline">/</span> : null}
-          <span aria-current="page" className="truncate font-mono text-sm font-semibold text-fg">{name}</span>
+          <span aria-current="page" className="flex min-w-0 items-center gap-1.5">{outcome ? <StatusIcon outcome={outcome} /> : null}<span className="truncate font-mono text-sm font-semibold text-fg">{name}</span></span>
           {trial ? <span className="chip flex-shrink-0">trial {trial}</span> : null}
         </nav>
         <CopyButton text={() => runCommand} title="Copy run command" className="btn btn-ghost btn-xs btn-icon flex-shrink-0" />

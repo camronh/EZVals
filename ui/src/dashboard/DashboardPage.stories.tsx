@@ -23,7 +23,7 @@ export const ReviewPanel: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     const panel = await canvas.findByRole('complementary', { name: /Result: refund_request\[indirect\]/ })
-    await expect(within(panel).getByRole('alert')).toHaveTextContent('Failed')
+    await expect(within(panel).getByRole('status', { name: 'failed' })).toBeVisible()
     await userEvent.keyboard('{ArrowDown}')
     await expect(await canvas.findByRole('complementary', { name: /Result: greeting/ })).toBeVisible()
     await userEvent.keyboard('{ArrowUp}')

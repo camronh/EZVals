@@ -4,6 +4,7 @@ import type { ResultDetail, Score } from '../types'
 import { api } from '../api'
 import { DataViewer } from '../components/DataViewer'
 import { resultKey, withColors } from '../lib/comparison'
+import { outcomeOf } from '../lib/stats'
 import { ComparisonView, type ComparedRun } from './components/ComparisonView'
 import { DetailHeader } from './components/DetailHeader'
 import { PageMessage } from '../components/Spinner'
@@ -100,6 +101,7 @@ export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-panel">
         <DetailHeader
           name={row.function}
+          outcome={comparing ? undefined : outcomeOf(r)}
           trial={row.trial}
           sessionName={detail.session_name}
           run={{ id: detail.run_id, name: detail.run_name }}

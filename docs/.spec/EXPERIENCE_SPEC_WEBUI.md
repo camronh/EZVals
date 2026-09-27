@@ -246,7 +246,7 @@ Scenario: Open a result beside the table
 
 Scenario: Review panel contents
   Then the panel's header shows the outcome icon, the eval name, its position among the rows in view ("2 of 6"), previous and next buttons, "Open" and close
-  And beneath it: the verdict strip, Output, Reference (if set), Input, then the same sidebar as the detail page (scores, details, messages, metadata, annotation)
+  And beneath it: the verdict strip (errors and unfinished results only), Output, Reference (if set), Input, then the same sidebar as the detail page (scores, details, messages, metadata, annotation)
   And scores and the annotation can be edited in place
 
 Scenario: Step through results
@@ -280,17 +280,15 @@ Scenario: Open detail view
   At URL: /runs/{run_id}/results/{index}
 
 Scenario: Detail header
-  Then the header shows where the result is: session / run / eval name (the run links back to its dashboard)
+  Then the header shows where the result is: session / run / eval name, with the result's outcome icon before the name (the run links back to its dashboard)
   And the result's position ("5 of 12") with previous and next buttons, then Regrade and Rerun
 
 Scenario: Verdict
   Given the detail view is open
-  Then a strip under the header says how the result came out, and why:
+  Then passed and failed show as the outcome icon before the eval name, with the reason in the Scores section; there is no strip for them
+  And a strip under the header appears only for:
     - error: the error's one-line summary, with the rest of the traceback below it (capped in height, with "Show all")
-    - failed: "Failed" (with several scores, the keys that failed) and the failing scores' notes
-    - passed: "Passed" and any notes the grader left
     - running, queued, cancelled or not run: that status
-  And a result with only numeric scores has no strip
 
 Scenario: Detail view contents
   Given the detail view is open

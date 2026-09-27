@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { useState } from 'react'
-import { fn } from 'storybook/test'
+import { expect, fn } from 'storybook/test'
 import type { RunSummary, SortRule } from '../../types'
 import { COLUMN_KEYS, DEFAULT_HIDDEN_COLUMNS, sortBy, sortValue, tableRows, toggleSort } from '../../lib/table'
 import { completedRun, emptyRun, notStartedRun, runningRun, trialsRun } from '../../stories/fixtures'
@@ -40,7 +40,31 @@ const meta: Meta<Args> = {
 export default meta
 type Story = StoryObj<Args>
 
-export const Completed: Story = { args: { run: completedRun } }
+/** Every cell's first line shares one line with the eval name: checkbox, outcome icon, text, JSON, notes and time. */
+export const Completed: Story = {
+  args: { run: completedRun },
+  play: async ({ canvasElement }) => {
+    const middle = (r: DOMRect) => r.top + r.height / 2
+    // The middle of an element's first line of text, or of the element itself when it has none.
+    const firstLine = (el: Element) => {
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (n.textContent!.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT) })
+      const text = walker.nextNode()
+      if (!text) return middle(el.getBoundingClientRect())
+      const range = document.createRange()
+      range.setStart(text, 0)
+      range.setEnd(text, 1)
+      return middle(range.getClientRects()[0])
+    }
+    for (const row of canvasElement.querySelectorAll('tr[data-row="main"]')) {
+      const line = firstLine(row.querySelector('[data-col="function"] a')!)
+      const marks = [row.querySelector('.row-checkbox')!, row.querySelector('[data-col="function"] [role="status"], [data-col="function"] [role="img"]')!]
+      for (const mark of marks.filter(Boolean)) await expect(Math.abs(middle(mark.getBoundingClientRect()) - line)).toBeLessThanOrEqual(1)
+      for (const cell of row.querySelectorAll('td[data-col]:not([data-col="function"])')) {
+        if (cell.getClientRects().length && cell.textContent!.trim()) await expect(Math.abs(firstLine(cell) - line)).toBeLessThanOrEqual(1)
+      }
+    }
+  },
+}
 export const NotStarted: Story = { args: { run: notStartedRun } }
 export const Running: Story = { args: { run: runningRun } }
 export const Trials: Story = { args: { run: trialsRun } }

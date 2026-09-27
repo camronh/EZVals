@@ -63,7 +63,7 @@ export function StatusIcon({ outcome }: { outcome: Outcome }) {
 /** A value in a table cell: three lines at most; structured data in mono, spaced so it wraps between fields. */
 export function Value({ value }: { value: unknown }) {
   return typeof value === 'object'
-    ? <div className="line-clamp-3 font-mono text-xs [overflow-wrap:anywhere]">{JSON.stringify(value, null, 1).replace(/\n\s*/g, ' ')}</div>
+    ? <div className="line-clamp-3 font-mono text-xs leading-5 [overflow-wrap:anywhere]">{JSON.stringify(value, null, 1).replace(/\n\s*/g, ' ')}</div>
     : <div className="line-clamp-3">{formatValue(value)}</div>
 }
 
@@ -252,14 +252,16 @@ export function ResultsTable({ runId, rows, hidden: chosen, sort, widths, select
                     if (e.target === e.currentTarget) toggleRow(row.index, !selected.has(row.index), e.shiftKey)
                   }}
                 >
-                  <input
-                    type="checkbox"
-                    className="row-checkbox mt-0.5"
-                    aria-label={`Select ${row.row.function}`}
-                    data-row-id={row.index}
-                    checked={selected.has(row.index)}
-                    onChange={(e) => toggleRow(row.index, e.target.checked, (e.nativeEvent as MouseEvent).shiftKey)}
-                  />
+                  <span className="flex h-5 items-center justify-center">
+                    <input
+                      type="checkbox"
+                      className="row-checkbox"
+                      aria-label={`Select ${row.row.function}`}
+                      data-row-id={row.index}
+                      checked={selected.has(row.index)}
+                      onChange={(e) => toggleRow(row.index, e.target.checked, (e.nativeEvent as MouseEvent).shiftKey)}
+                    />
+                  </span>
                 </td>
                 {cell('function', (
                   <div className="flex min-w-0 items-start gap-2">
@@ -281,7 +283,7 @@ export function ResultsTable({ runId, rows, hidden: chosen, sort, widths, select
                 {cell('output', (
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1" {...hover(row, 'output')}>
-                      {running ? <Skeleton widths={['w-3/4', 'w-1/2']} /> : done && r.output != null ? <Value value={r.output} /> : r.error && hidden.includes('error') ? <div className="line-clamp-3 font-mono text-xs text-danger">{errorSummary(r.error)}</div> : empty}
+                      {running ? <Skeleton widths={['w-3/4', 'w-1/2']} /> : done && r.output != null ? <Value value={r.output} /> : r.error && hidden.includes('error') ? <div className="line-clamp-3 font-mono text-xs leading-5 text-danger">{errorSummary(r.error)}</div> : empty}
                     </div>
                     {r.annotation?.trim() ? (
                       <AnnotationIndicator
@@ -292,9 +294,9 @@ export function ResultsTable({ runId, rows, hidden: chosen, sort, widths, select
                     ) : null}
                   </div>
                 ))}
-                {cell('error', r.error ? <div className="line-clamp-3 font-mono text-xs text-danger">{errorSummary(r.error)}</div> : empty, hover(row, 'error'))}
+                {cell('error', r.error ? <div className="line-clamp-3 font-mono text-xs leading-5 text-danger">{errorSummary(r.error)}</div> : empty, hover(row, 'error'))}
                 {cell('scores', running ? <Skeleton widths={['w-14', 'w-10']} /> : done && r.scores?.length ? <ScoreBadges scores={r.scores} passFail={oneMetric ? 'none' : 'failed'} /> : empty, hover(row, 'scores'))}
-                {cell('latency', r.latency != null ? <span className="latency-value text-xs tabular-nums text-fg-muted">{r.latency.toFixed(2)}s</span> : running ? <div className="latency-skeleton ml-auto h-3 w-8 animate-pulse rounded-sm bg-surface-muted" /> : empty)}
+                {cell('latency', r.latency != null ? <span className="latency-value text-xs leading-5 tabular-nums text-fg-muted">{r.latency.toFixed(2)}s</span> : running ? <div className="latency-skeleton ml-auto h-3 w-8 animate-pulse rounded-sm bg-surface-muted" /> : empty)}
               </tr>
             )
           })}

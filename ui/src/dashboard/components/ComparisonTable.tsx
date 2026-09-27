@@ -95,7 +95,7 @@ export function ComparisonTable({ runs, rows, onSort, onSaveAnnotation }: Props)
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <div {...hover(`${key}:output`, 'output', r, run.runId, match.index)}>{r.output != null ? <Value value={r.output} /> : r.error ? null : empty}</div>
-                          {r.error ? <div className="line-clamp-2 font-mono text-xs text-danger" {...hover(`${key}:error`, 'error', r, run.runId, match.index)}>{errorSummary(r.error)}</div> : null}
+                          {r.error ? <div className="line-clamp-2 font-mono text-xs leading-5 text-danger" {...hover(`${key}:error`, 'error', r, run.runId, match.index)}>{errorSummary(r.error)}</div> : null}
                         </div>
                         {r.annotation?.trim() ? (
                           <AnnotationIndicator

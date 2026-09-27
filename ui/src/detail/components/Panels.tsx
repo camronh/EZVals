@@ -90,13 +90,9 @@ export function Banner({ tone, icon, title, children, detail }: {
   )
 }
 
-/** How the result came out and why, from its error, its scores' notes or its status. Numeric-only results have none. */
+/** A strip for a result that errored (with its traceback) or hasn't finished. Passed and failed results have none: the outcome icon beside the name and the scores say that. */
 export function Verdict({ result }: { result: ResultData }) {
   const outcome = outcomeOf(result)
-  const scores = result.scores ?? []
-  const noted = (keep: (passed: boolean | null | undefined) => boolean) => scores.filter((s) => s.notes && keep(s.passed)).map((s, i) => (
-    <p key={i}>{scores.length > 1 ? <span className="font-medium text-fg">{s.key}: </span> : null}{s.notes}</p>
-  ))
   switch (outcome) {
     case 'error': {
       const summary = errorSummary(result.error!)
@@ -104,12 +100,6 @@ export function Verdict({ result }: { result: ResultData }) {
       const rest = lines.filter((_, i) => i !== lines.findIndex((l) => l.trim() === summary)).join('\n')
       return <Banner tone="danger" icon="alert" title={summary} detail={rest || undefined} />
     }
-    case 'failed': {
-      const failed = scores.filter((s) => s.passed === false)
-      return <Banner tone="danger" icon="close" title={scores.length > 1 ? `Failed ${failed.map((s) => s.key).join(', ')}` : 'Failed'}>{noted((p) => p === false)}</Banner>
-    }
-    case 'passed':
-      return <Banner tone="success" icon="check" title="Passed">{noted((p) => p !== false)}</Banner>
     case 'running':
     case 'queued':
       return <Banner tone="warning" icon="spinner" title={outcome === 'running' ? 'Running…' : 'Queued'} />

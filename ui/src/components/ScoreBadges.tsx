@@ -36,7 +36,7 @@ export function ScoreBadges({ scores, latency, annotation, passFail = 'all' }: P
         </span>
       ) : null}
       {notes.map((s, i) => (
-        <p key={`notes-${i}`} className="score-notes line-clamp-2 w-full text-xs text-danger">{s.notes}</p>
+        <p key={`notes-${i}`} className="score-notes line-clamp-2 w-full text-xs leading-5 text-danger">{s.notes}</p>
       ))}
     </div>
   )
