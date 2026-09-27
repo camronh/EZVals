@@ -65,10 +65,9 @@ export function Value({ value }: { value: unknown }) {
     : <div className="line-clamp-3">{formatValue(value)}</div>
 }
 
-/** An eval's name, allowed to wrap before its case (`refund_request` / `[direct]`) rather than mid-word. */
+/** An eval's name, allowed to wrap after an underscore or before its case (`refund_request` / `[direct]`) rather than mid-word. */
 export function EvalName({ name }: { name: string }) {
-  const bracket = name.indexOf('[')
-  return bracket > 0 ? <>{name.slice(0, bracket)}<wbr />{name.slice(bracket)}</> : <>{name}</>
+  return <>{name.split(/(?<=_)|(?=\[)/).map((part, i) => <span key={i}>{i ? <wbr /> : null}{part}</span>)}</>
 }
 
 function Skeleton({ widths }: { widths: string[] }) {
@@ -268,7 +267,7 @@ export function ResultsTable({ runId, rows, hidden, sort, widths, selected, onSe
                     </div>
                   </div>
                 ))}
-                {cell('input', <Value value={r.input} />, hover(row, 'input'))}
+                {cell('input', r.input != null ? <Value value={r.input} /> : empty, hover(row, 'input'))}
                 {cell('reference', r.reference != null ? <Value value={r.reference} /> : empty, hover(row, 'reference'))}
                 {cell('output', (
                   <div className="flex items-start justify-between gap-2">
