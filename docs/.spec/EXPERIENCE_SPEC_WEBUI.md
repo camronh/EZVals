@@ -16,17 +16,19 @@ Starts at `http://127.0.0.1:8000` (browser opens by default unless `--no-open` i
 
 ## Layout
 
-The dashboard is three stacked regions above the results table:
+The dashboard is a workbench: a runs sidebar on a tinted canvas, and the open run in an inset main panel.
 
-1. **Header**: the EZVals mark, the session and run name (the run picker), and the run actions on the right: Compare, New run, a "⋯" menu (Regrade, Reload evals, Settings) and the primary Run button.
-2. **Summary**: the run's headline numbers and outcome bar, plus each score key when there is more than one (see [Summary](#summary)).
-3. **Filter bar**: the outcome switch (All / Failed / Errors, each with a count), search, Filters, Columns and Export. When rows are selected, the bar shows how many.
+1. **Sidebar**: the EZVals mark, the session, the session's runs (see [Runs Sidebar](#runs-sidebar)) with "+" to start a new run, and at the bottom Reload evals and Settings. The button at the left of the header hides and shows it, and the choice is remembered in this browser; until the user makes one, the sidebar shows on screens 1024px and wider.
+2. **Header** (top of the main panel): the run's name with a rename pencil, its eval count and time, then Compare, Regrade and the primary Run button.
+3. **Summary**: the run's headline numbers, pass-rate trend and outcome bar, plus each score key when there is more than one (see [Summary](#summary)).
+4. **Filter bar**: the outcome switch (All / Failed / Errors, each with a count), search, Filters, Columns and Export. When rows are selected, the bar shows how many.
+5. **Results table**, with the [review panel](#review-panel) beside it when a result is open.
 
 Most runs are graded by a single pass/fail score, so the UI is built around one metric: the pass rate and each row's outcome icon carry it, and per-key detail appears only when a run has several keys (two or three is normal; more is unusual but supported).
 
-The UI uses one neutral palette with a single blue accent; green, red and amber only ever mean passed, failed and in progress, and always come with an icon or a word. Compared runs take blue, violet, teal and pink, never a status colour. Text uses the system font; prose (inputs, outputs, notes) is set in it too, and monospace is reserved for structured data, errors, commands and ids.
+The UI uses one cool neutral palette, a navy brand colour for primary actions and a blue accent for links, focus and the current row; green, red and amber only ever mean passed, failed and in progress, and always come with an icon or a word. Compared runs take blue, violet, teal and pink, never a status colour. Text is set in Geist, prose (inputs, outputs, notes) included. Geist Mono is used for eval names (they are code identifiers), headline numbers, structured data, errors, commands and ids.
 
-The visual language is the EZVals design system: semantic colour tokens for both themes, a type scale (11–32px), a 4/6/8/12px radius scale, one set of button, field, chip, menu and dialog styles, and a single focus ring. It is documented in Storybook under **Design System** (Foundations and Controls).
+The visual language is the EZVals design system: semantic colour tokens for both themes, a type scale (11–40px), a 4/6/8/12px radius scale, one set of button, field, chip, menu and dialog styles, and a single focus ring. It is documented in Storybook under **Design System** (Foundations and Controls).
 
 ### Accessibility
 
@@ -41,6 +43,7 @@ Scenario: Keyboard use
   And menus take focus when opened, arrow keys move between items, and Escape closes them and returns focus to their button
   And dialogs keep focus inside until closed with Escape, Close or a click outside, then return focus to where it was
   And option switches (All / Failed / Errors, Pretty / Raw, the theme) are radio groups: arrow keys move the choice
+  And the review panel and the detail page step through results with ↑ and ↓ (see [Keyboard Shortcuts](#keyboard-shortcuts))
 ```
 
 ### Theme
@@ -146,10 +149,11 @@ Scenario: Run behavior
   And the timestamp updates
   And annotations are kept
 
-Scenario: New run from the header
-  When the user clicks "New run" in the header
+Scenario: New run from the sidebar
+  When the user clicks "+" beside Runs in the sidebar
   Then a new run file is created with an auto-generated friendly name
-  And the new run has no completed results yet
+  And the new run has no completed results yet, and it opens
+  And "+" is disabled while a run is in progress
 ```
 
 ### Run Execution
@@ -185,7 +189,7 @@ Scenario: Pause and resume running evaluations
 
 Scenario: Reload evals from UI
   Given the UI is open
-  When the user chooses "Reload evals" in the header's "⋯" menu
+  When the user clicks "Reload evals" at the bottom of the sidebar
   Then evals are rediscovered and ezvals.json is reloaded
   And the page reloads
 
@@ -204,7 +208,7 @@ Scenario: Trials in the table
   And the summary shows pass@k and pass^k
 
 Scenario: Regrade from the dashboard
-  When the user chooses "Regrade" in the header's "⋯" menu
+  When the user clicks "Regrade" in the header ("Regrade 3" when 3 rows are selected)
   Then selected rows (or all rows when none are selected) are regraded without re-running targets
   And a toast reports how many results were regraded and how many were skipped for having no target
 ```
@@ -228,12 +232,50 @@ The row keeps `data-status` (the raw status) for tests and scripts.
 
 ---
 
+## Review Panel
+
+Results are reviewed beside the table, so the user keeps their place in the run while reading one result.
+
+```gherkin
+Scenario: Open a result beside the table
+  Given the run has results
+  When the user clicks a row anywhere but its checkbox, eval name link or annotation mark
+  Then the result opens in a review panel on the right, and its row is marked as the current one
+  And the URL gains ?result={index}, so reloading or sharing the link reopens it
+  And while the panel is open the table narrows to a list (eval, scores, time), since the panel shows the rest
+
+Scenario: Review panel contents
+  Then the panel's header shows the outcome icon, the eval name, its position among the rows in view ("2 of 6"), previous and next buttons, "Open" and close
+  And beneath it: the verdict strip, Output, Reference (if set), Input, then the same sidebar as the detail page (scores, details, messages, metadata, annotation)
+  And scores and the annotation can be edited in place
+
+Scenario: Step through results
+  Given the review panel is open and focus is not in a field, menu or dialog
+  When the user presses ↓ or ↑
+  Then the next or previous row in view opens, and the table scrolls to keep it visible
+  When the user presses Enter
+  Then the result opens on its detail page
+  When the user presses Escape
+  Then the panel closes
+
+Scenario: The panel follows the run
+  When the user opens another run or starts a new one
+  Then the review panel closes
+  And it is hidden while comparing runs
+
+Scenario: Review panel on a narrow screen
+  Given the viewport is narrower than 1024px
+  Then the review panel slides over the table from the right instead of sitting beside it
+```
+
+---
+
 ## Detail View
 
 ```gherkin
 Scenario: Open detail view
   Given an evaluation has completed
-  When the user clicks the function name
+  When the user clicks the function name, or presses Enter or clicks "Open" in the review panel
   Then a full-page detail view opens
   At URL: /runs/{run_id}/results/{index}
 
@@ -303,8 +345,8 @@ Scenario: Navigate between results
   When the user presses ↓ (down arrow)
   Then the next result loads
 
-  When the user presses Escape
-  Then the user returns to the main table
+  When the user presses Escape (or clicks Back)
+  Then the user returns to the dashboard with this result open in the review panel
 
 Scenario: Escape closes an open drawer first
   Given the Messages drawer is open
@@ -431,7 +473,7 @@ Scenario: Cancel score edit
 
 ## Export
 
-The export dropdown menu in the header provides 4 export formats (JSON, CSV, Markdown, PNG).
+The Export menu in the filter bar provides 4 export formats (JSON, CSV, Markdown, PNG).
 
 ### Raw Exports (All Data)
 
@@ -501,59 +543,56 @@ Scenario: Export as PNG in comparison mode
 
 | Key | Action | Context |
 |-----|--------|---------|
-| `↑` | Previous result | Detail view |
-| `↓` | Next result | Detail view |
-| `Esc` | Back to table | Detail view |
+| `↑` | Previous result | Review panel, detail view |
+| `↓` | Next result | Review panel, detail view |
+| `Enter` | Open the result's detail page | Review panel |
+| `Esc` | Close the panel | Review panel |
+| `Esc` | Back to the dashboard, with the result open | Detail view |
+
+Shortcuts are ignored while typing in a field or when a menu or dialog is open.
 
 ---
 
 ## Session & Run Navigation
 
 
-### Run Selector
+### Runs Sidebar
 
-The header shows `session / run`. The run name opens the run picker when the session has other runs, otherwise it copies the name.
+The sidebar shows the session and its runs; the open run's name heads the main panel.
 
 ```gherkin
-Scenario: Single run in session
-  Given only one run exists in the current session
-  When the user views the run name in the header
-  Then it displays as plain text (not a dropdown)
-  And the pencil edit icon is shown next to it
+Scenario: Runs in the sidebar
+  Then the sidebar lists the session's runs, newest first
+  And each shows its name, pass rate, time (or "Running…" with a spinner while it runs) and a small passed/failed/errored bar
+  And the open run is highlighted, and listed even before it has results ("Not run yet")
 
-Scenario: Multiple runs in session (dropdown)
-  Given two or more runs exist in the current session
-  When the user views the run name in the header
-  Then it displays as a dropdown selector
-  And each option shows: run_name and formatted timestamp (e.g., "run-one (Dec 17, 9:52 AM)")
-  And runs are sorted newest-first
-  And the pencil edit icon is shown next to the dropdown
+Scenario: Open another run
+  When the user clicks a run in the sidebar
+  Then that run becomes the active run and its results load
+  And comparison mode ends if it was on
 
-Scenario: Switch run via dropdown
-  Given the run dropdown is visible
-  When the user selects a different run
-  Then that run's results load in the table
-  And the dropdown updates to show the new selection
+Scenario: Run actions
+  When the user opens a run's "⋯" menu (always shown on the open run; on the others it shows on hover or keyboard focus)
+  Then it offers Compare with this run (not on the open run), Rename, Copy name and Delete run
 
 Scenario: Rename run via inline editing
-  When the user clicks the pencil icon next to the run name in the header
+  When the user clicks the pencil beside the run name in the header, or chooses Rename in a run's "⋯" menu
   Then the run name becomes an editable text field
-  And if a dropdown was shown, it hides and the input appears in its place
-  And pressing Enter or clicking the checkmark saves the new name
+  And pressing Enter (or clicking the checkmark, in the header) saves the new name
   And pressing Escape or clicking outside cancels the edit
   And the run's saved name updates on save (the run file, named by run id, stays put)
   And names keep spaces and punctuation; a blank name is rejected
 
 Scenario: Copy session/run name
-  When the user clicks on the session name (or the run name of a single-run session) in the header
+  When the user clicks the session name in the sidebar, or chooses Copy name in a run's "⋯" menu
   Then the name is copied to the clipboard
-  And a "Copied!" tooltip appears briefly
+  And clicking the session name shows a "Copied!" tooltip briefly
 
 Scenario: Delete run
-  When the user clicks delete on a run
+  When the user chooses Delete run in a run's "⋯" menu
   Then a confirmation appears
-  And on confirm, the run file is deleted
-  And the dropdown refreshes
+  And on confirm, the run file is deleted and the list refreshes
+  And the open run can't be deleted: the item is disabled until another run is open
 ```
 
 ---
@@ -578,6 +617,11 @@ Scenario: Change since the previous run
   And the current run is not running and no filter is active
   Then the pass rate shows the change in points since that run (e.g. "▲ 4 pts")
   And clicking it compares the two runs
+
+Scenario: Pass-rate trend
+  Given two or more of the session's runs have a pass rate
+  Then a small line chart beside the headline shows the pass rates of the last 12 of them, oldest to newest, with the open run's point filled
+  And hovering a point shows that run's name and pass rate
 
 Scenario: Outcome bar
   Then under the headline a bar splits the rows into passed (green), failed (red) and errored (faded red) shares
@@ -742,7 +786,7 @@ A request while a run is in progress returns 409.
 
 ```gherkin
 Scenario: Configure completion notifications from Settings
-  Given the user opens the Settings modal from the config menu
+  Given the user opens Settings from the sidebar
   When the user toggles "Completion notifications + sound" and clicks Save
   Then the value is persisted via `/api/config`
   And future run-complete events honor the toggle
@@ -776,7 +820,7 @@ Scenario: Discovery finds no evals or fails
   When GET /results (or /api/runs/latest/data)
   Then 200 with the active run's ids and names and no results
   And `discovery_error` holds the worker's error and traceback when discovery failed
-  And the UI shows "Couldn't load your evals" with the traceback and how to recover (fix the file, then Reload evals from the ⋯ menu), keeping the header so the user can Reload
+  And the UI shows "Couldn't load your evals" with the traceback and how to recover (fix the file, then Reload evals in the sidebar)
   And with no results, the table and the "No evals found" message are not shown
 
 Scenario: No results match the filters
@@ -877,6 +921,11 @@ Scenario: Start comparing runs
   When the user clicks "Compare" in the header
   Then a menu shows the other runs in the session
   And selecting a run enters comparison mode
+  And "Compare" is disabled when the session has no other run
+
+Scenario: Compare from the sidebar
+  When the user chooses "Compare with this run" in another run's "⋯" menu
+  Then comparison mode starts with the open run and that run
 
 Scenario: Compare with the previous run
   When the user clicks the pass-rate change in the summary
@@ -991,11 +1040,11 @@ Scenario: Remove runs to exit
 
 ### Color Assignment
 
-Runs are assigned colors from a fixed palette in order:
-1. First run: Blue (#3b82f6)
-2. Second run: Orange (#f97316)
-3. Third run: Green (#22c55e)
-4. Fourth run: Purple (#a855f7)
+Runs are assigned colors from a fixed palette in order (the `--run-1` to `--run-4` tokens, tuned for each theme):
+1. First run: Blue
+2. Second run: Violet
+3. Third run: Teal
+4. Fourth run: Pink
 
 Colors are reassigned when runs are removed to maintain palette order.
 

@@ -24,7 +24,7 @@ const W = 1200
 const H = 630
 const PAD = 56
 const SCALE = 2 * (1600 / 1200)
-const FONT = 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+const FONT = '"Geist Variable", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
 
 /** A colour as the canvas needs it: a `var(--token)` is resolved against the current theme. */
 export function cssColor(value: string) {

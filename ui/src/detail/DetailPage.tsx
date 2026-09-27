@@ -28,6 +28,8 @@ export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
   const comparing = compareRunIds.length > 1
   const query = comparing ? `?${new URLSearchParams(compareRunIds.map((id) => ['compare_run_id', id]))}` : ''
   const navigate = useCallback((i: number) => { window.location.href = `/runs/${runId}/results/${i}${query}` }, [query, runId])
+  // Back to the dashboard with this result open in its review panel (or to the comparison it came from).
+  const back = comparing ? `/${query}` : `/?run_id=${encodeURIComponent(runId)}&result=${index}`
 
   useEffect(() => {
     api.result(runId, index).then((d) => {
@@ -53,13 +55,13 @@ export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
       if (editing || !detail || e.defaultPrevented) return
       if (e.key === 'Escape') {
         if (drawer) setDrawer(null)
-        else window.location.href = '/'
+        else window.location.href = back
       } else if (e.key === 'ArrowUp' && detail.index > 0) navigate(detail.index - 1)
       else if (e.key === 'ArrowDown' && detail.index < detail.total - 1) navigate(detail.index + 1)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [detail, drawer, editing, navigate])
+  }, [back, detail, drawer, editing, navigate])
 
   const runAgain = async (kind: 'rerun' | 'regrade') => {
     setBusy(kind)
@@ -94,56 +96,59 @@ export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
   const messages = Array.isArray(r.trace_data?.messages) ? r.trace_data.messages : []
 
   return (
-    <div className="flex h-screen flex-col bg-surface font-sans text-fg">
-      <DetailHeader
-        name={row.function}
-        trial={row.trial}
-        sessionName={detail.session_name}
-        run={{ id: detail.run_id, name: detail.run_name }}
-        runCommand={detail.eval_path ? `ezvals run ${detail.eval_path}::${row.function}` : `ezvals run ${row.function}`}
-        position={detail}
-        onNavigate={navigate}
-        busy={busy}
-        onRerun={comparing ? undefined : () => runAgain('rerun')}
-        onRegrade={comparing || !row.regradable || r.status !== 'completed' ? undefined : () => runAgain('regrade')}
-      />
-      {actionError ? <Banner tone="danger" icon="alert" title={actionError} /> : null}
-      {comparing ? null : <Verdict result={r} />}
-      <div ref={container} id="detail-body" className="flex min-h-0 flex-1 flex-col overflow-auto md:flex-row md:overflow-hidden">
-        <div id="main-panel" className="flex min-w-0 flex-col max-md:flex-none md:flex-1">
-          {comparing ? (
-            compared ? <ComparisonView runs={compared} base={row} layout={layout} onResize={start} /> : null
-          ) : (
-            <div id="io-row" className="flex min-h-0 flex-1 flex-col md:flex-row">
-              <DataPanel id="input-panel" tone="input" value={r.input} className="max-md:min-h-[8rem] max-md:flex-none md:w-[var(--input-width)]" style={{ '--input-width': `${layout.inputWidth}%` } as CSSProperties} />
-              <ResizeHandle direction="col" onMouseDown={start('inputWidth')} />
-              <div id="output-column" className="flex min-w-0 flex-1 flex-col max-md:border-t max-md:border-line">
-                <DataPanel id="output-panel" tone="output" value={r.output} loading={loading} className="flex-1 max-md:min-h-[12rem] max-md:flex-none" />
-                {r.reference != null ? (
-                  <>
-                    <ResizeHandle direction="row" onMouseDown={start('refHeight')} />
-                    <DataPanel id="ref-panel" tone="reference" value={r.reference} className="flex-shrink-0 max-md:min-h-[6rem] max-md:border-t max-md:border-line md:h-[var(--ref-height)] md:min-h-[60px]" style={{ '--ref-height': `${layout.refHeight}px` } as CSSProperties} />
-                  </>
-                ) : null}
+    <div className="flex h-screen flex-col bg-canvas p-2 font-sans text-fg">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-panel">
+        <DetailHeader
+          name={row.function}
+          trial={row.trial}
+          sessionName={detail.session_name}
+          run={{ id: detail.run_id, name: detail.run_name }}
+          back={back}
+          runCommand={detail.eval_path ? `ezvals run ${detail.eval_path}::${row.function}` : `ezvals run ${row.function}`}
+          position={detail}
+          onNavigate={navigate}
+          busy={busy}
+          onRerun={comparing ? undefined : () => runAgain('rerun')}
+          onRegrade={comparing || !row.regradable || r.status !== 'completed' ? undefined : () => runAgain('regrade')}
+        />
+        {actionError ? <Banner tone="danger" icon="alert" title={actionError} /> : null}
+        {comparing ? null : <Verdict result={r} />}
+        <div ref={container} id="detail-body" className="flex min-h-0 flex-1 flex-col overflow-auto md:flex-row md:overflow-hidden">
+          <div id="main-panel" className="flex min-w-0 flex-col max-md:flex-none md:flex-1">
+            {comparing ? (
+              compared ? <ComparisonView runs={compared} base={row} layout={layout} onResize={start} /> : null
+            ) : (
+              <div id="io-row" className="flex min-h-0 flex-1 flex-col md:flex-row">
+                <DataPanel id="input-panel" tone="input" value={r.input} className="max-md:min-h-[8rem] max-md:flex-none md:w-[var(--input-width)]" style={{ '--input-width': `${layout.inputWidth}%` } as CSSProperties} />
+                <ResizeHandle direction="col" onMouseDown={start('inputWidth')} />
+                <div id="output-column" className="flex min-w-0 flex-1 flex-col max-md:border-t max-md:border-line">
+                  <DataPanel id="output-panel" tone="output" value={r.output} loading={loading} className="flex-1 max-md:min-h-[12rem] max-md:flex-none" />
+                  {r.reference != null ? (
+                    <>
+                      <ResizeHandle direction="row" onMouseDown={start('refHeight')} />
+                      <DataPanel id="ref-panel" tone="reference" value={r.reference} className="flex-shrink-0 max-md:min-h-[6rem] max-md:border-t max-md:border-line md:h-[var(--ref-height)] md:min-h-[60px]" style={{ '--ref-height': `${layout.refHeight}px` } as CSSProperties} />
+                    </>
+                  ) : null}
+                </div>
               </div>
-            </div>
+            )}
+          </div>
+          {comparing ? null : (
+            <>
+              <ResizeHandle direction="col" onMouseDown={start('sidebarWidth')} />
+              <div id="sidebar-column" style={{ '--sidebar-width': `${layout.sidebarWidth}px` } as CSSProperties} className="flex min-h-0 flex-col max-md:flex-none max-md:border-t max-md:border-line md:w-[var(--sidebar-width)] md:min-w-[200px]">
+                <Sidebar
+                  row={row}
+                  runId={detail.run_id}
+                  onSaveAnnotation={(annotation) => save({ annotation })}
+                  onSaveScores={(scores) => save({ scores })}
+                  onOpenMessages={() => setDrawer('messages')}
+                  onEditingChange={setEditing}
+                />
+              </div>
+            </>
           )}
         </div>
-        {comparing ? null : (
-          <>
-            <ResizeHandle direction="col" onMouseDown={start('sidebarWidth')} />
-            <div id="sidebar-column" style={{ '--sidebar-width': `${layout.sidebarWidth}px` } as CSSProperties} className="flex min-h-0 flex-col max-md:flex-none max-md:border-t max-md:border-line md:w-[var(--sidebar-width)] md:min-w-[200px]">
-              <Sidebar
-                row={row}
-                runId={detail.run_id}
-                onSaveAnnotation={(annotation) => save({ annotation })}
-                onSaveScores={(scores) => save({ scores })}
-                onOpenMessages={() => setDrawer('messages')}
-                onEditingChange={setEditing}
-              />
-            </div>
-          </>
-        )}
       </div>
       <Drawer id="messages-pane" title="Messages" count={messages.length} open={drawer === 'messages'} onClose={() => setDrawer(null)}>
         <div className="p-4"><DataViewer content={messages} placeholder="—" /></div>

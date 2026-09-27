@@ -10,6 +10,8 @@ export type DashboardQuery = {
   filters: FilterState | null
   sort: SortRule[]
   searchColumns: string[] | null
+  /** The result open in the review panel (its index in the run). */
+  result: number | null
 }
 
 const OPS: Record<string, ValueRule['op']> = { gt: '>', gte: '>=', lt: '<', lte: '<=', eq: '==', neq: '!=' }
@@ -55,13 +57,14 @@ export function readQuery(params: URLSearchParams): DashboardQuery {
       return col && (dir === 'asc' || dir === 'desc') && (type === 'string' || type === 'number') ? [{ col, dir, type }] : []
     }),
     searchColumns: searchColumns.length ? searchColumns : null,
+    result: /^\d+$/.test(params.get('result') ?? '') ? Number(params.get('result')) : null,
   }
 }
 
-const OWNED = ['run_id', 'compare_run_id', 'search', 'search_col', 'sort', ...FILTER_PARAMS]
+const OWNED = ['run_id', 'compare_run_id', 'search', 'search_col', 'sort', 'result', ...FILTER_PARAMS]
 
 /** Updates the dashboard's keys in `current`, leaving any other query parameters alone. */
-export function writeQuery(current: URLSearchParams, state: { runId?: string; compareRunIds: string[]; search: string; searchColumns: string[]; filters: FilterState; sort: SortRule[] }) {
+export function writeQuery(current: URLSearchParams, state: { runId?: string; compareRunIds: string[]; search: string; searchColumns: string[]; filters: FilterState; sort: SortRule[]; result?: number | null }) {
   const params = new URLSearchParams(current)
   OWNED.forEach((key) => params.delete(key))
   const f = state.filters
@@ -81,5 +84,6 @@ export function writeQuery(current: URLSearchParams, state: { runId?: string; co
   f.valueRules.forEach((r) => params.append('score_value', `${r.key},${OP_NAMES[r.op]},${r.value}`))
   f.passedRules.forEach((r) => params.append('score_passed', `${r.key},${r.value}`))
   state.sort.forEach((r) => params.append('sort', `${r.col},${r.dir},${r.type}`))
+  if (state.result != null && state.compareRunIds.length < 2) params.set('result', String(state.result))
   return params
 }

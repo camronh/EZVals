@@ -22,6 +22,8 @@ type Props = {
   delta?: { points: number; previous: string; onCompare: () => void } | null
   sessionRuns: SessionRun[]
   comparison?: Comparison
+  /** Pass rate of each of the session's runs, oldest first; the current one is marked. */
+  trend?: { name: string; rate: number; current: boolean }[]
 }
 
 const pct = (v: number) => `${Math.round(v * 100)}%`
@@ -48,12 +50,32 @@ function Metrics({ chips }: { chips: ScoreChip[] }) {
   )
 }
 
-function Headline({ stats, total, progress, trials, delta }: Props) {
+/** Pass rate across the session's runs as a sparkline; the current run is the filled dot. */
+function Trend({ points }: { points: NonNullable<Props['trend']> }) {
+  const [w, h, pad] = [168, 40, 5]
+  const at = (i: number, rate: number) => [pad + (i / (points.length - 1)) * (w - 2 * pad), pad + (1 - rate) * (h - 2 * pad)]
+  const label = points.map((p) => `${p.name} ${Math.round(p.rate * 100)}%`).join(', ')
+  return (
+    <figure className="m-0 shrink-0" id="pass-rate-trend">
+      <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} role="img" aria-label={`Pass rate by run: ${label}`} className="block overflow-visible">
+        <line x1={pad} x2={w - pad} y1={h / 2} y2={h / 2} className="stroke-line" strokeDasharray="2 3" />
+        <polyline fill="none" className="stroke-accent" strokeWidth="1.5" strokeLinejoin="round" points={points.map((p, i) => at(i, p.rate).join(',')).join(' ')} />
+        {points.map((p, i) => {
+          const [x, y] = at(i, p.rate)
+          return <circle key={i} cx={x} cy={y} r={p.current ? 4 : 2.5} className={p.current ? 'fill-accent stroke-surface' : 'fill-surface stroke-accent'} strokeWidth="1.5"><title>{`${p.name}: ${Math.round(p.rate * 100)}%`}</title></circle>
+        })}
+      </svg>
+      <figcaption className="mt-1 text-right text-2xs text-fg-muted">Pass rate, last {points.length} runs</figcaption>
+    </figure>
+  )
+}
+
+function Headline({ stats, total, progress, trials, delta, trend }: Props) {
   const evals = stats.count < total ? `${stats.count} of ${plural(total, 'eval')}` : plural(total, 'eval')
   if (!stats.finished && !progress.running && stats.notRun === stats.count) {
     return (
       <div className="flex items-baseline gap-2.5">
-        <span className="text-3xl font-semibold tabular-nums tracking-tight text-fg">{stats.count}</span>
+        <span className="font-mono text-4xl font-semibold tracking-tight tabular-nums text-fg">{stats.count}</span>
         <span className="text-sm text-fg-muted">{stats.count < total ? `of ${plural(total, 'eval')} ready to run` : `${stats.count === 1 ? 'eval' : 'evals'} ready to run`}</span>
       </div>
     )
@@ -69,25 +91,28 @@ function Headline({ stats, total, progress, trials, delta }: Props) {
   ].filter(Boolean)
   return (
     <div className="min-w-[260px] flex-1">
-      <div className="flex items-baseline gap-2.5">
-        {stats.rate != null ? (
-          <span id="pass-rate" className="text-3xl font-semibold tabular-nums tracking-tight text-fg">{pct(stats.rate)}</span>
-        ) : (
-          <span className="text-3xl font-semibold tabular-nums tracking-tight text-fg">{stats.finished}</span>
-        )}
-        <span className="text-sm text-fg-muted">{stats.rate != null ? 'pass rate' : 'scored'}</span>
-        {delta ? (
-          <button
-            id="pass-rate-delta"
-            className={`btn btn-ghost btn-xs tabular-nums ${delta.points > 0 ? '!text-success' : delta.points < 0 ? '!text-danger' : ''}`}
-            title={`vs ${delta.previous}. Click to compare`}
-            onClick={delta.onCompare}
-          >
-            {delta.points > 0 ? '▲' : delta.points < 0 ? '▼' : '±'} {Math.abs(delta.points)} pts
-          </button>
-        ) : null}
+      <div className="flex items-end justify-between gap-6">
+        <div className="flex items-baseline gap-2.5">
+          {stats.rate != null ? (
+            <span id="pass-rate" className="font-mono text-4xl font-semibold tracking-tight tabular-nums text-fg">{pct(stats.rate)}</span>
+          ) : (
+            <span className="font-mono text-4xl font-semibold tracking-tight tabular-nums text-fg">{stats.finished}</span>
+          )}
+          <span className="text-sm text-fg-muted">{stats.rate != null ? 'pass rate' : 'scored'}</span>
+          {delta ? (
+            <button
+              id="pass-rate-delta"
+              className={`btn btn-ghost btn-xs tabular-nums ${delta.points > 0 ? '!text-success' : delta.points < 0 ? '!text-danger' : ''}`}
+              title={`vs ${delta.previous}. Click to compare`}
+              onClick={delta.onCompare}
+            >
+              {delta.points > 0 ? '▲' : delta.points < 0 ? '▼' : '±'} {Math.abs(delta.points)} pts
+            </button>
+          ) : null}
+        </div>
+        {trend && trend.length > 1 ? <Trend points={trend} /> : null}
       </div>
-      <div className="mt-3 flex items-center gap-3">
+      <div className="mt-4 flex items-center gap-3">
         <div id="outcome-bar" className="flex h-1.5 min-w-0 flex-1 gap-0.5 overflow-hidden rounded-full bg-surface-muted">
           {([
             [stats.passed, 'bg-success'],

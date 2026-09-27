@@ -11,6 +11,8 @@ ezvals serve evals/
 
 This opens `http://127.0.0.1:8000` with your evals listed but not yet run. Add `--run` to start running them straight away, or pass a saved run file to reopen it. See [`ezvals serve`](/reference/cli#ezvals-serve) for all flags.
 
+The sidebar lists the [session](/reviewing/sessions)'s runs, newest first, each with its pass rate. Click one to open it; its **⋯** menu compares it with the open run, renames, copies or deletes it.
+
 <Frame>
   <img className="block dark:hidden" src="/assets/ui-screenshot-light.png" alt="EZVals results table" />
   <img className="hidden dark:block" src="/assets/ui-screenshot-dark.png" alt="EZVals results table" />
@@ -20,16 +22,16 @@ This opens `http://127.0.0.1:8000` with your evals listed but not yet run. Add `
 
 - **Run** runs every eval, or only the rows you've selected. Results stream in as each eval finishes.
 - While a run is going, you can **pause** it (running evals finish, queued ones wait) or **stop** it (everything unfinished is cancelled).
-- Running again replaces those rows' results in the current run and keeps your annotations. To keep the old results, start a **new run** instead. It gets a fresh name in the same [session](/reviewing/sessions).
-- Every run uses your latest code, so edit an eval and run it again without restarting the server. To pick up new eval files or `ezvals.json` changes, use **Reload evals**.
+- Running again replaces those rows' results in the current run and keeps your annotations. To keep the old results, start a **new run** with **+** in the sidebar. It gets a fresh name in the same session.
+- Every run uses your latest code, so edit an eval and run it again without restarting the server. To pick up new eval files or `ezvals.json` changes, use **Reload evals** at the bottom of the sidebar.
 - **Regrade** scores the stored outputs again without calling your agent. See [Regrading](/writing-evals/targets-and-regrading#regrading).
-- **Settings** sets concurrency, timeout, trials, where runs are stored, completion notifications and the theme. Saving writes them to `ezvals.json`.
+- **Settings**, also in the sidebar, sets concurrency, timeout, trials, where runs are stored, completion notifications and the theme. Saving writes them to `ezvals.json`.
 
 Each row's icon shows its outcome: not run, queued, running, passed, failed, error, scored (numeric scores only) or cancelled. A failed row also shows why, from the failing score's notes or the assertion that failed.
 
 ## Review failures
 
-The summary above the table shows the pass rate, counts, average latency and a bar of passed, failed and errored rows, plus pass@k and pass^k for [trials](/writing-evals/trials). If your evals store more than one score, each score key gets its own stat beside the pass rate, and the table shows which checks failed. When the session has an earlier run, it also shows how much the pass rate changed since then.
+The summary above the table shows the pass rate, counts, average latency and a bar of passed, failed and errored rows, plus pass@k and pass^k for [trials](/writing-evals/trials). If your evals store more than one score, each score key gets its own stat beside the pass rate, and the table shows which checks failed. When the session has an earlier run, it also shows how much the pass rate changed since then, and a small chart of the pass rate across the session's runs.
 
 To narrow the table:
 
@@ -42,19 +44,21 @@ The summary always describes the rows you can see, so filtering answers question
 
 ## Open a result
 
-Click an eval to open its detail page. A strip at the top says how it came out and why: the error, the grader's notes on a failure, or "Passed". Below it:
+Click a row to read the result in a panel beside the table, so you keep your place in the run. Use <kbd>↑</kbd> and <kbd>↓</kbd> to step through the results, and <kbd>Esc</kbd> to close the panel. Press <kbd>Enter</kbd>, click **Open** or click the eval's name for its full page.
 
-- the input on the left, and the output with the reference beneath it, so you can compare them; chat transcripts render as conversations (you can switch to raw JSON)
+Both show a strip at the top that says how the result came out and why: the error, the grader's notes on a failure, or "Passed". Below it:
+
+- the output, the reference and the input (side by side on the full page, so you can compare them); chat transcripts render as conversations (you can switch to raw JSON)
 - scores with their notes, which you can correct
 - metadata, the tools the agent used, latency and extra trace data
 - a link to the trace, if you stored a `trace_url`
 
 <Frame>
-  <img className="block dark:hidden" src="/assets/detail-light.png" alt="A result's detail page" />
-  <img className="hidden dark:block" src="/assets/detail-dark.png" alt="A result's detail page" />
+  <img className="block dark:hidden" src="/assets/review-panel-light.png" alt="A failed result open in the review panel beside the results" />
+  <img className="hidden dark:block" src="/assets/review-panel-dark.png" alt="A failed result open in the review panel beside the results" />
 </Frame>
 
-Use <kbd>↑</kbd> and <kbd>↓</kbd> to move between results and <kbd>Esc</kbd> to go back to the table.
+On the full page, <kbd>↑</kbd> and <kbd>↓</kbd> also move between results, and <kbd>Esc</kbd> goes back to the table with the result still open.
 
 ## Annotate and correct scores
 
@@ -67,7 +71,7 @@ Every edit is recorded in the result's `correction_history` with the before and 
 
 ## Compare runs
 
-Compare shows up to four runs from the same session side by side. Start it from the header, from the pass-rate change in the summary, or with `ezvals serve --compare-runs baseline,improved`.
+Compare shows up to four runs from the same session side by side. Start it from **Compare** in the header, a run's **⋯** menu in the sidebar, the pass-rate change in the summary, or with `ezvals serve --compare-runs baseline,improved`.
 
 <Frame>
   <img className="block dark:hidden" src="/assets/comparison-light.png" alt="Comparing two runs" />

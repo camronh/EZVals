@@ -2,12 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Config, FilterState, OutcomeFilter, SortRule } from '../types'
 import { api } from '../api'
 import { Icon } from '../components/Icon'
+import { Drawer } from '../detail/components/Panels'
+import { DataViewer } from '../components/DataViewer'
 import { PageMessage } from '../components/Spinner'
 import { Toasts, useToasts } from '../components/Toasts'
 import { useDebouncedValue, useLocalState, useSessionState } from '../hooks/storage'
 import { buildComparison } from '../lib/comparison'
 import { defaultFilters, matchesFilters, type FilterableRow } from '../lib/filters'
 import { passRate, runProgress, statsFor, trialStats, extraChips } from '../lib/stats'
+import { formatRunTimestamp } from '../lib/format'
 import { COLUMNS, COLUMN_KEYS, DEFAULT_HIDDEN_COLUMNS, comparisonSearchText, filterable, sortBy, sortValue, tableRows, toggleSort } from '../lib/table'
 import { writeQuery, type DashboardQuery } from '../lib/urlState'
 import { ComparisonTable, type ComparisonRow } from './components/ComparisonTable'
@@ -15,6 +18,8 @@ import { PngExportModal } from './components/PngExportModal'
 import { ResultsTable } from './components/ResultsTable'
 import { FilterBar, type ExportFormat } from './components/FilterBar'
 import { Header, type RunState } from './components/Header'
+import { ResultPanel } from './components/ResultPanel'
+import { RunsSidebar } from './components/RunsSidebar'
 import { SettingsModal } from './components/SettingsModal'
 import { StatsPanel } from './components/StatsPanel'
 import { isActive, useActiveRun, useComparison } from './useRunData'
@@ -39,7 +44,7 @@ function notifyCompletion(runName: string, count: number) {
   else if (Notification.permission === 'default') Notification.requestPermission().then((p) => p === 'granted' && show())
 }
 
-/** The results dashboard: toolbar, stats and the results (or comparison) table for the active run. */
+/** The results dashboard: the runs sidebar, then the active run's header, summary, filter bar and table, with a review panel for the open result. */
 export function DashboardPage({ query }: { query: DashboardQuery }) {
   const { toasts, notify } = useToasts()
   const [filters, setFilters] = useSessionState<FilterState>('ezvals:filters', defaultFilters, query.filters)
@@ -52,6 +57,12 @@ export function DashboardPage({ query }: { query: DashboardQuery }) {
   const [modal, setModal] = useState<{ kind: 'settings'; config: Config } | { kind: 'png' } | null>(null)
   const [configs, setConfigs] = useState<{ names: string[]; active: string | null }>({ names: [], active: null })
   const [reloading, setReloading] = useState(false)
+  const [openIndex, setOpenIndex] = useState<number | null>(query.result)
+  const [panelEditing, setPanelEditing] = useState(false)
+  const [messagesOpen, setMessagesOpen] = useState(false)
+  // Only a click on the toggle is remembered; until then the sidebar shows on wide screens.
+  const [sidebarChoice, setSidebarChoice] = useLocalState<boolean | null>('ezvals:sidebar', null)
+  const sidebarOpen = sidebarChoice ?? matchMedia('(min-width: 1024px)').matches
 
   const comparisonIds = useRef(query.compareRunIds)
   const { data, sessionRuns, error, reload, patchResult } = useActiveRun(true)
@@ -75,9 +86,9 @@ export function DashboardPage({ query }: { query: DashboardQuery }) {
 
   useEffect(() => {
     if (!data) return
-    const params = writeQuery(new URLSearchParams(window.location.search), { runId: data.run_id, compareRunIds: comparison.runs.map((r) => r.runId), search, searchColumns, filters, sort })
+    const params = writeQuery(new URLSearchParams(window.location.search), { runId: data.run_id, compareRunIds: comparison.runs.map((r) => r.runId), search, searchColumns, filters, sort, result: openIndex })
     history.replaceState(null, '', params.size ? `?${params}` : window.location.pathname)
-  }, [comparison.runs, data, filters, search, searchColumns, sort])
+  }, [comparison.runs, data, filters, search, searchColumns, sort, openIndex])
 
   const wasActive = useRef<boolean | null>(null)
   useEffect(() => {
@@ -98,6 +109,23 @@ export function DashboardPage({ query }: { query: DashboardQuery }) {
       outcomeCounts: countOutcomes(matching.map((r) => [r])),
     }
   }, [data, debouncedSearch, filters, searchColumns, sort])
+
+  useEffect(() => {
+    if (openIndex == null || comparison.comparing || !data) return
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement
+      if (e.defaultPrevented || panelEditing || messagesOpen || modal || target.closest('input, textarea, select, [role="menu"], [role="dialog"]')) return
+      const at = rows.findIndex((r) => r.index === openIndex)
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        const next = rows[at + (e.key === 'ArrowDown' ? 1 : -1)]
+        if (next) setOpenIndex(next.index)
+      } else if (e.key === 'Escape') setOpenIndex(null)
+      else if (e.key === 'Enter' && target === document.body) window.location.href = `/runs/${data.run_id}/results/${openIndex}`
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [comparison.comparing, data, messagesOpen, modal, openIndex, panelEditing, rows])
 
   const comparisonView = useMemo(() => {
     if (!comparison.comparing) return null
@@ -161,6 +189,15 @@ export function DashboardPage({ query }: { query: DashboardQuery }) {
     ? { points: Math.round(stats.rate * 100) - Math.round(previousRate * 100), previous: previous.run_name, onCompare: () => comparison.start([data.run_id, previous.run_id]) }
     : null
   const selectedIndices = [...selected].sort((a, b) => a - b)
+  const trend = [...sessionRuns].reverse().slice(-12).flatMap((run) => {
+    const current = run.run_id === data.run_id
+    const rate = current ? statsFor(data.results).rate : passRate(run.total_passed ?? 0, run.total_failed ?? 0, run.total_errors ?? 0)
+    return rate == null ? [] : [{ name: run.run_name, rate, current }]
+  })
+  // A run that hasn't started has no run file yet, so the session's runs don't include it.
+  const runs = sessionRuns.some((r) => r.run_id === data.run_id) ? sessionRuns : [{ run_id: data.run_id, run_name: data.run_name ?? '' }, ...sessionRuns]
+  const openRow = openIndex != null && !comparison.comparing ? data.results[openIndex] : undefined
+  const openAt = rows.findIndex((r) => r.index === openIndex)
   const runState: RunState = comparison.comparing ? 'compare' : data.is_paused && isActive(data) ? 'paused' : isActive(data) ? 'running' : 'idle'
 
   const exportAs = async (format: ExportFormat) => {
@@ -192,107 +229,152 @@ export function DashboardPage({ query }: { query: DashboardQuery }) {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-surface font-sans text-fg">
-      <Header
-        sessionName={data.session_name}
-        runName={data.run_name}
-        runId={data.run_id}
-        sessionRuns={sessionRuns}
-        onRename={(name) => act(() => (data.results.some((r) => r.result.status !== 'not_started') ? api.rename(data.run_id, name) : api.setPendingRunName(name)), "Couldn't rename the run")}
-        onRenameRun={(runId, name) => act(() => api.rename(runId, name), "Couldn't rename the run")}
-        onDeleteRun={(runId) => act(() => api.deleteRun(runId), "Couldn't delete the run")}
-        onSelectRun={(runId) => runId !== data.run_id && act(() => api.activate(runId), "Couldn't open the run")}
-        onNewRun={() => act(async () => {
-          await api.newRun()
-          setSelected(new Set())
-        }, "Couldn't start a new run")}
-        onCompare={(runId) => comparison.start([data.run_id, runId])}
-        comparingCount={comparison.comparing ? comparison.runs.length : undefined}
-        onExitCompare={() => {
-          const first = comparison.runs[0].runId
-          comparison.start([])
-          if (first !== data.run_id) act(() => api.activate(first), "Couldn't open the run")
-        }}
-        onOpenSettings={() => api.config().then((config) => setModal({ kind: 'settings', config }), (err) => notify(err.message))}
-        onRegrade={() => act(async () => {
-          const { regraded, skipped_without_target: skipped } = await api.regrade(selectedIndices.length ? selectedIndices : undefined)
-          notify(`Regrading ${regraded} result${regraded === 1 ? '' : 's'}${skipped ? ` (${skipped} skipped: no target)` : ''}`, 'success')
-        }, "Couldn't regrade")}
-        onReloadServer={async () => {
-          setReloading(true)
-          await act(api.reloadServer, "Couldn't reload evals")
-          setTimeout(() => window.location.reload(), 700)
-        }}
-        reloading={reloading}
-        runState={runState}
-        selectedCount={selected.size}
-        onRun={() => act(() => api.run(selectedIndices.length ? selectedIndices : undefined, configs.active), "Couldn't start the run")}
-        onStop={() => act(api.stop, "Couldn't stop the run")}
-        onPauseToggle={() => act(data.is_paused ? api.resume : api.pause, "Couldn't pause or resume the run")}
-      />
-      <main className="flex-1 overflow-auto px-5 pb-6 pt-5">
-        {data.discovery_error ? (
-          <div id="discovery-error" role="alert" className="mb-5 rounded-lg bg-danger-subtle">
-            <div className="flex items-center gap-2 px-4 pt-3 text-sm font-semibold text-danger"><Icon name="alert" />Couldn't load your evals</div>
-            <p className="px-4 pt-0.5 text-sm text-fg-secondary">Fix the error below, then choose <span className="font-medium text-fg">Reload evals</span> from the ⋯ menu.</p>
-            <pre className="m-3 mt-2.5 max-h-60 overflow-auto whitespace-pre-wrap rounded-md bg-surface p-3 font-mono text-xs leading-5 text-fg">{data.discovery_error}</pre>
-          </div>
-        ) : null}
-        {data.results.length ? (
-          <StatsPanel
-            stats={stats}
-            total={data.results.length}
-            progress={progress}
-            trials={trialStats(statsRows)}
-            delta={delta}
-            sessionRuns={sessionRuns}
-            comparison={comparison.comparing ? { runs: comparison.runs, stats: comparisonStats, onMove: comparison.move, onRemove: comparison.remove, onAdd: comparison.add } : undefined}
-          />
-        ) : null}
-        {data.results.length ? (
-          <FilterBar
-            outcomeCounts={comparisonView?.outcomeCounts ?? outcomeCounts}
-            search={search}
-            onSearch={setSearch}
-            filters={filters}
-            onFilters={setFilters}
-            scoreKeys={facets.scoreKeys}
-            datasets={facets.datasets}
-            labels={facets.labels}
-            hiddenColumns={hidden}
-            searchColumns={searchColumns}
-            onHiddenColumns={setHidden}
-            onSearchColumns={setSearchColumns}
-            onResetSort={() => setSort([])}
-            onResetWidths={() => setWidths({})}
-            onExport={exportAs}
-            selectedCount={selected.size}
-            onClearSelection={() => setSelected(new Set())}
-          />
-        ) : null}
-        {comparison.comparing ? (
-          <ComparisonTable runs={comparison.runs} rows={comparisonRows} onSort={(col, type, multi) => setSort(toggleSort(sort, col, type, multi))} onSaveAnnotation={saveAnnotation} />
-        ) : data.discovery_error && !data.results.length ? null : (
-          <ResultsTable
-            runId={data.run_id}
-            rows={rows}
-            hidden={hidden}
-            sort={sort}
-            widths={widths}
-            selected={selected}
-            onSelect={setSelected}
-            onSort={(col, type, multi) => setSort(toggleSort(sort, col, type, multi))}
-            onWidths={setWidths}
-            onOpen={(index) => { window.location.href = `/runs/${data.run_id}/results/${index}` }}
-            onSaveAnnotation={saveAnnotation}
-            oneMetric={!extraChips(data.score_chips ?? []).length}
-            emptyText={filtering && data.results.length ? (
-              <>No results match the current filters. <button className="link font-medium" onClick={() => { setFilters(defaultFilters()); setSearch('') }}>Clear filters</button></>
-            ) : undefined}
-            evalPath={data.eval_path ?? data.path ?? undefined}
-          />
-        )}
-      </main>
+    <div className="flex h-screen bg-canvas font-sans text-fg">
+      {sidebarOpen ? (
+        <RunsSidebar
+          sessionName={data.session_name}
+          runs={runs}
+          activeRunId={data.run_id}
+          running={isActive(data)}
+          comparing={comparison.comparing}
+          reloading={reloading}
+          onSelectRun={(runId) => {
+            if (runId === data.run_id) return
+            setOpenIndex(null)
+            if (comparison.comparing) comparison.start([])
+            act(() => api.activate(runId), "Couldn't open the run")
+          }}
+          onNewRun={() => act(async () => {
+            await api.newRun()
+            setSelected(new Set())
+            setOpenIndex(null)
+          }, "Couldn't start a new run")}
+          onCompare={(runId) => comparison.start([data.run_id, runId])}
+          onRenameRun={(runId, name) => act(() => (runId === data.run_id && !data.results.some((r) => r.result.status !== 'not_started') ? api.setPendingRunName(name) : api.rename(runId, name)), "Couldn't rename the run")}
+          onDeleteRun={(runId) => act(() => api.deleteRun(runId), "Couldn't delete the run")}
+          onReload={async () => {
+            setReloading(true)
+            await act(api.reloadServer, "Couldn't reload evals")
+            setTimeout(() => window.location.reload(), 700)
+          }}
+          onOpenSettings={() => api.config().then((config) => setModal({ kind: 'settings', config }), (err) => notify(err.message))}
+        />
+      ) : null}
+      <div className={`relative my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-panel ${sidebarOpen ? '' : 'ml-2'}`}>
+        <Header
+          runName={data.run_name}
+          runId={data.run_id}
+          meta={[`${data.results.length} eval${data.results.length === 1 ? '' : 's'}`, formatRunTimestamp(data.created_at)].filter(Boolean).join(' · ')}
+          sessionRuns={sessionRuns}
+          sidebarOpen={sidebarOpen}
+          onToggleSidebar={() => setSidebarChoice(!sidebarOpen)}
+          onRename={(name) => act(() => (data.results.some((r) => r.result.status !== 'not_started') ? api.rename(data.run_id, name) : api.setPendingRunName(name)), "Couldn't rename the run")}
+          onCompare={(runId) => comparison.start([data.run_id, runId])}
+          comparingCount={comparison.comparing ? comparison.runs.length : undefined}
+          onExitCompare={() => {
+            const first = comparison.runs[0].runId
+            comparison.start([])
+            if (first !== data.run_id) act(() => api.activate(first), "Couldn't open the run")
+          }}
+          onRegrade={() => act(async () => {
+            const { regraded, skipped_without_target: skipped } = await api.regrade(selectedIndices.length ? selectedIndices : undefined)
+            notify(`Regrading ${regraded} result${regraded === 1 ? '' : 's'}${skipped ? ` (${skipped} skipped: no target)` : ''}`, 'success')
+          }, "Couldn't regrade")}
+          runState={runState}
+          selectedCount={selected.size}
+          onRun={() => act(() => api.run(selectedIndices.length ? selectedIndices : undefined, configs.active), "Couldn't start the run")}
+          onStop={() => act(api.stop, "Couldn't stop the run")}
+          onPauseToggle={() => act(data.is_paused ? api.resume : api.pause, "Couldn't pause or resume the run")}
+        />
+        <div className="flex min-h-0 flex-1">
+          <main className="min-w-0 flex-1 overflow-auto px-5 pb-6 pt-5">
+            {data.discovery_error ? (
+              <div id="discovery-error" role="alert" className="mb-5 rounded-lg bg-danger-subtle">
+                <div className="flex items-center gap-2 px-4 pt-3 text-sm font-semibold text-danger"><Icon name="alert" />Couldn't load your evals</div>
+                <p className="px-4 pt-0.5 text-sm text-fg-secondary">Fix the error below, then choose <span className="font-medium text-fg">Reload evals</span> in the sidebar.</p>
+                <pre className="m-3 mt-2.5 max-h-60 overflow-auto whitespace-pre-wrap rounded-md bg-surface p-3 font-mono text-xs leading-5 text-fg">{data.discovery_error}</pre>
+              </div>
+            ) : null}
+            {data.results.length ? (
+              <StatsPanel
+                stats={stats}
+                total={data.results.length}
+                progress={progress}
+                trials={trialStats(statsRows)}
+                delta={delta}
+                trend={trend}
+                sessionRuns={sessionRuns}
+                comparison={comparison.comparing ? { runs: comparison.runs, stats: comparisonStats, onMove: comparison.move, onRemove: comparison.remove, onAdd: comparison.add } : undefined}
+              />
+            ) : null}
+            {data.results.length ? (
+              <FilterBar
+                outcomeCounts={comparisonView?.outcomeCounts ?? outcomeCounts}
+                search={search}
+                onSearch={setSearch}
+                filters={filters}
+                onFilters={setFilters}
+                scoreKeys={facets.scoreKeys}
+                datasets={facets.datasets}
+                labels={facets.labels}
+                hiddenColumns={hidden}
+                searchColumns={searchColumns}
+                onHiddenColumns={setHidden}
+                onSearchColumns={setSearchColumns}
+                onResetSort={() => setSort([])}
+                onResetWidths={() => setWidths({})}
+                onExport={exportAs}
+                selectedCount={selected.size}
+                onClearSelection={() => setSelected(new Set())}
+              />
+            ) : null}
+            {comparison.comparing ? (
+              <ComparisonTable runs={comparison.runs} rows={comparisonRows} onSort={(col, type, multi) => setSort(toggleSort(sort, col, type, multi))} onSaveAnnotation={saveAnnotation} />
+            ) : data.discovery_error && !data.results.length ? null : (
+              <ResultsTable
+                runId={data.run_id}
+                rows={rows}
+                hidden={hidden}
+                sort={sort}
+                widths={widths}
+                selected={selected}
+                onSelect={setSelected}
+                onSort={(col, type, multi) => setSort(toggleSort(sort, col, type, multi))}
+                onWidths={setWidths}
+                onOpen={setOpenIndex}
+                current={openRow ? openIndex : null}
+                onSaveAnnotation={saveAnnotation}
+                oneMetric={!extraChips(data.score_chips ?? []).length}
+                emptyText={filtering && data.results.length ? (
+                  <>No results match the current filters. <button className="link font-medium" onClick={() => { setFilters(defaultFilters()); setSearch('') }}>Clear filters</button></>
+                ) : undefined}
+                evalPath={data.eval_path ?? data.path ?? undefined}
+              />
+            )}
+          </main>
+          {openRow ? (
+            <ResultPanel
+              key={openIndex}
+              row={openRow}
+              index={openIndex!}
+              runId={data.run_id}
+              position={{ index: Math.max(openAt, 0), total: rows.length }}
+              onMove={(step) => { const next = rows[openAt + step]; if (next) setOpenIndex(next.index) }}
+              onClose={() => setOpenIndex(null)}
+              onSaveAnnotation={(annotation) => saveAnnotation(data.run_id, openIndex!, annotation)}
+              onSaveScores={async (scores) => {
+                await api.updateResult(data.run_id, openIndex!, { scores })
+                patchResult(openIndex!, { scores })
+              }}
+              onOpenMessages={() => setMessagesOpen(true)}
+              onEditingChange={setPanelEditing}
+            />
+          ) : null}
+        </div>
+      </div>
+      <Drawer id="messages-pane" title="Messages" count={openRow?.result.trace_data?.messages?.length ?? 0} open={messagesOpen && !!openRow} onClose={() => setMessagesOpen(false)}>
+        <div className="p-4"><DataViewer content={openRow?.result.trace_data?.messages ?? []} placeholder="—" /></div>
+      </Drawer>
       {modal?.kind === 'settings' ? (
         <SettingsModal
           config={modal.config}
@@ -310,13 +392,13 @@ export function DashboardPage({ query }: { query: DashboardQuery }) {
         />
       ) : null}
       {modal?.kind === 'png' ? (
-      <PngExportModal
-        onClose={() => setModal(null)}
-        stats={stats}
-        total={data.results.length}
-        comparison={comparison.comparing ? { runs: comparison.runs, stats: comparisonStats } : undefined}
-        sessionName={data.session_name ?? ''}
-      />
+        <PngExportModal
+          onClose={() => setModal(null)}
+          stats={stats}
+          total={data.results.length}
+          comparison={comparison.comparing ? { runs: comparison.runs, stats: comparisonStats } : undefined}
+          sessionName={data.session_name ?? ''}
+        />
       ) : null}
       <Toasts toasts={toasts} />
     </div>

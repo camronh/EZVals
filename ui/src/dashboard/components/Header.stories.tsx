@@ -7,17 +7,16 @@ const meta: Meta<typeof Header> = {
   title: 'Dashboard/Header',
   component: Header,
   parameters: { layout: 'fullscreen' },
-  decorators: [(Story) => <div className="min-h-[360px] bg-surface"><Story /></div>],
+  decorators: [(Story) => <div className="min-h-[240px] bg-surface"><Story /></div>],
   args: {
-    sessionName: 'support-agent',
     runName: 'baseline',
     runId: 'a1b2c3d4',
+    meta: '6 evals · Sep 24, 4:00 PM',
     sessionRuns,
-    reloading: false,
+    sidebarOpen: true,
     runState: 'idle',
     selectedCount: 0,
-    onRename: fn(), onRenameRun: fn(), onDeleteRun: fn(), onSelectRun: fn(), onNewRun: fn(), onCompare: fn(), onExitCompare: fn(),
-    onOpenSettings: fn(), onRegrade: fn(), onReloadServer: fn(), onRun: fn(), onStop: fn(), onPauseToggle: fn(),
+    onToggleSidebar: fn(), onRename: fn(), onCompare: fn(), onExitCompare: fn(), onRegrade: fn(), onRun: fn(), onStop: fn(), onPauseToggle: fn(),
   },
 }
 export default meta
@@ -29,6 +28,7 @@ export const Running: Story = { args: { runState: 'running' } }
 export const Paused: Story = { args: { runState: 'paused' } }
 export const OnlyRun: Story = { args: { sessionRuns: [sessionRuns[1]] } }
 export const Comparing: Story = { args: { comparingCount: 3 } }
+export const SidebarHidden: Story = { args: { sidebarOpen: false } }
 
 export const CompareMenu: Story = {
   play: async ({ canvasElement, args }) => {
@@ -39,10 +39,14 @@ export const CompareMenu: Story = {
   },
 }
 
-export const MoreActions: Story = {
-  args: { selectedCount: 3 },
-  play: async ({ canvasElement }) => {
-    await userEvent.click(within(canvasElement).getByLabelText('More actions'))
-    await expect(await within(canvasElement).findByText('Regrade 3 selected')).toBeVisible()
+/** Rename in place: Enter saves, and the title shows the new name's field until then. */
+export const Rename: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByLabelText('Rename run'))
+    const field = canvas.getByLabelText('Run name')
+    await userEvent.clear(field)
+    await userEvent.type(field, 'baseline-v2{Enter}')
+    await expect(args.onRename).toHaveBeenCalledWith('baseline-v2')
   },
 }

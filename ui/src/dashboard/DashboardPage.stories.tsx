@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { http, HttpResponse } from 'msw'
+import { expect, userEvent, waitFor, within } from 'storybook/test'
 import { readQuery } from '../lib/urlState'
 import { apiHandlers, completedRun, emptyRun, improvedRun, multiMetricRun, notStartedRun, pausedRun, runningRun, trialsRun } from '../stories/fixtures'
 import { DashboardPage } from './DashboardPage'
@@ -14,6 +15,30 @@ export default meta
 type Story = StoryObj<typeof DashboardPage>
 
 export const Completed: Story = { parameters: { msw: { handlers: apiHandlers(completedRun) } } }
+
+/** A result open in the review panel beside the table (?result=1); ↓ steps to the next row, Esc closes it. */
+export const ReviewPanel: Story = {
+  args: { query: readQuery(new URLSearchParams('result=1')) },
+  parameters: { msw: { handlers: apiHandlers(completedRun) } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const panel = await canvas.findByRole('complementary', { name: /Result: refund_request\[indirect\]/ })
+    await expect(within(panel).getByRole('alert')).toHaveTextContent('Failed')
+    await userEvent.keyboard('{ArrowDown}')
+    await expect(await canvas.findByRole('complementary', { name: /Result: greeting/ })).toBeVisible()
+    await userEvent.keyboard('{ArrowUp}')
+    await expect(await canvas.findByRole('complementary', { name: /Result: refund_request\[indirect\]/ })).toBeVisible()
+  },
+}
+
+export const SidebarHidden: Story = {
+  parameters: { msw: { handlers: apiHandlers(completedRun) } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(await canvas.findByRole('button', { name: 'Hide runs' }))
+    await waitFor(() => expect(canvas.queryByRole('complementary', { name: 'Session' })).toBeNull())
+  },
+}
 export const SeveralMetrics: Story = { parameters: { msw: { handlers: apiHandlers(multiMetricRun) } } }
 export const NotStarted: Story = { parameters: { msw: { handlers: apiHandlers(notStartedRun) } } }
 export const Running: Story = { parameters: { msw: { handlers: apiHandlers(runningRun) } } }

@@ -72,7 +72,7 @@ export function ComparisonTable({ runs, rows, onSort, onSaveAnnotation }: Props)
                 }}
               >
                 <td data-col="function" className="px-3 py-2.5 align-top">
-                  {link ? <a href={link} title={row.function} className="line-clamp-2 font-medium text-fg [overflow-wrap:anywhere] hover:underline"><EvalName name={row.function} /></a> : <span className="line-clamp-2 font-medium [overflow-wrap:anywhere]"><EvalName name={row.function} /></span>}
+                  {link ? <a href={link} title={row.function} className="line-clamp-2 font-mono text-sm font-medium text-fg [overflow-wrap:anywhere] hover:underline"><EvalName name={row.function} /></a> : <span className="line-clamp-2 font-mono text-sm font-medium [overflow-wrap:anywhere]"><EvalName name={row.function} /></span>}
                   <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1 text-xs text-fg-muted">
                     {row.dataset ? <span className="dataset-chip mr-0.5 max-w-[160px] truncate">{row.dataset}</span> : null}
                     {row.labels?.map((l) => <span key={l} className="label-chip chip max-w-[140px] truncate">{l}</span>)}

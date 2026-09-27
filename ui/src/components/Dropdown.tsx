@@ -45,9 +45,9 @@ export function Segmented<T extends string>({ id, options, value, onChange, size
 
 /**
  * Keyboard support for an open menu: the first item takes focus, arrow keys and Home/End move between items,
- * and Tab closes the menu (focus moves on naturally).
+ * Escape closes it and returns focus to `trigger`, and Tab closes it (focus moves on naturally).
  */
-export function useMenuKeys(open: boolean, panel: RefObject<HTMLElement | null>, onClose: () => void) {
+export function useMenuKeys(open: boolean, panel: RefObject<HTMLElement | null>, onClose: () => void, trigger?: RefObject<HTMLElement | null>) {
   useEffect(() => {
     const el = panel.current
     if (!open || !el) return
@@ -60,11 +60,15 @@ export function useMenuKeys(open: boolean, panel: RefObject<HTMLElement | null>,
       if (target != null && list.length) {
         e.preventDefault()
         list[(target + list.length) % list.length].focus()
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+        trigger?.current?.focus()
       } else if (e.key === 'Tab') onClose()
     }
     el.addEventListener('keydown', onKey)
     return () => el.removeEventListener('keydown', onKey)
-  }, [open, panel, onClose])
+  }, [open, panel, onClose, trigger])
 }
 
 type TriggerProps = { 'aria-expanded': boolean; 'aria-haspopup': 'menu' | 'dialog'; 'aria-controls': string }

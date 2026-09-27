@@ -25,6 +25,8 @@ type Props = {
   emptyText?: ReactNode
   /** The run's only score key is pass/fail, so the outcome icon says it all and rows show just its notes. */
   oneMetric?: boolean
+  /** The row open in the review panel. */
+  current?: number | null
   evalPath?: string
 }
 
@@ -130,7 +132,10 @@ function useColumnResize(widths: Record<string, number>, onWidths: (w: Record<st
   return { headers, start, recentlyResized }
 }
 
-export function ResultsTable({ runId, rows, hidden, sort, widths, selected, onSelect, onSort, onWidths, onOpen, onSaveAnnotation, emptyText, evalPath, oneMetric }: Props) {
+export function ResultsTable({ runId, rows, hidden: chosen, sort, widths, selected, onSelect, onSort, onWidths, onOpen, onSaveAnnotation, emptyText, evalPath, oneMetric, current }: Props) {
+  // Beside the review panel the table narrows to a list of evals, and the panel shows the rest.
+  const list = current != null
+  const hidden = list ? [...chosen, 'input', 'reference', 'output', 'error'] : chosen
   const preview = useHoverPreview<PreviewTarget>()
   const lastChecked = useRef<number | null>(null)
   const selectAll = useRef<HTMLInputElement | null>(null)
@@ -143,6 +148,9 @@ export function ResultsTable({ runId, rows, hidden, sort, widths, selected, onSe
   useEffect(() => {
     if (selectAll.current) selectAll.current.indeterminate = selectedVisible > 0 && selectedVisible < visible.length
   }, [selectedVisible, visible.length])
+  useEffect(() => {
+    if (current != null) document.querySelector(`#results-table tr[data-row-id="${current}"]`)?.scrollIntoView({ block: 'nearest' })
+  }, [current])
 
   const toggleRow = (index: number, checked: boolean, shift: boolean) => {
     const next = new Set(selected)
@@ -166,7 +174,7 @@ export function ResultsTable({ runId, rows, hidden, sort, widths, selected, onSe
 
   return (
     <>
-      <table id="results-table" data-run-id={runId} className="w-full min-w-[760px] table-fixed border-collapse text-sm text-fg">
+      <table id="results-table" data-run-id={runId} className={`w-full table-fixed border-collapse text-sm text-fg ${list ? '' : 'min-w-[760px]'}`}>
         <thead className={rows.length || emptyText ? '' : 'hidden'}>
           <tr className="border-b border-line">
             <th style={{ width: 36 }} className="bg-surface px-2 py-2 text-center align-middle">
@@ -191,7 +199,7 @@ export function ResultsTable({ runId, rows, hidden, sort, widths, selected, onSe
                   ref={(el) => { resize.headers.current[col.key] = el }}
                   data-col={col.key}
                   title={col.key === 'latency' && avgLatency != null ? `(Avg: ${avgLatency.toFixed(2)}s)` : undefined}
-                  style={{ width: widths[col.key] ? `${widths[col.key]}px` : col.width, textAlign: col.align }}
+                  style={{ width: list && col.key === 'function' ? undefined : widths[col.key] ? `${widths[col.key]}px` : col.width, textAlign: col.align }}
                   className={`relative cursor-pointer select-none bg-surface px-3 py-2 text-xs font-medium text-fg-muted hover:text-fg ${hidden.includes(col.key) ? 'hidden' : ''}`}
                   aria-sort={rule ? (rule.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
                   onClick={(e) => !resize.recentlyResized() && onSort(col.key, col.type, e.shiftKey)}
@@ -210,7 +218,7 @@ export function ResultsTable({ runId, rows, hidden, sort, widths, selected, onSe
                 {emptyText ?? (
                   <div id="no-evals" className="mx-auto max-w-md">
                     <div className="text-base font-semibold text-fg">No evals found{evalPath ? <> in <code className="font-mono text-sm">{evalPath}</code></> : null}</div>
-                    <p className="mt-1">Add a function decorated with <code className="font-mono text-xs">@eval</code> (or an <code className="font-mono text-xs">.eval.ts</code> file), then choose Reload evals from the ⋯ menu.</p>
+                    <p className="mt-1">Add a function decorated with <code className="font-mono text-xs">@eval</code> (or an <code className="font-mono text-xs">.eval.ts</code> file), then choose Reload evals in the sidebar.</p>
                     <pre className="mt-4 overflow-x-auto rounded-lg border border-line bg-surface-subtle p-3 text-left font-mono text-xs leading-5 text-fg">{EXAMPLE_EVAL}</pre>
                   </div>
                 )}
@@ -231,7 +239,8 @@ export function ResultsTable({ runId, rows, hidden, sort, widths, selected, onSe
                 data-row-id={row.index}
                 data-status={status}
                 data-dataset={row.dataset ?? ''}
-                className={`group cursor-pointer transition-colors ${selected.has(row.index) ? 'bg-accent-subtle' : 'hover:bg-surface-subtle'} ${notStarted ? 'text-fg-secondary' : ''}`}
+                aria-current={current === row.index ? 'true' : undefined}
+                className={`group cursor-pointer transition-colors ${current === row.index ? 'bg-surface-muted shadow-[inset_2px_0_0_var(--accent)]' : selected.has(row.index) ? 'bg-accent-subtle' : 'hover:bg-surface-subtle'} ${notStarted ? 'text-fg-secondary' : ''}`}
                 onClick={(e) => {
                   if (!(e.target as HTMLElement).closest('input, a, [data-annotation-indicator]')) onOpen(row.index)
                 }}
@@ -256,7 +265,7 @@ export function ResultsTable({ runId, rows, hidden, sort, widths, selected, onSe
                   <div className="flex min-w-0 items-start gap-2">
                     <span className="mt-0.5"><StatusIcon outcome={outcome} /></span>
                     <div className="min-w-0 flex-1">
-                      <a href={`/runs/${runId}/results/${row.index}`} title={row.row.function} className="line-clamp-2 font-medium text-fg [overflow-wrap:anywhere] hover:underline">
+                      <a href={`/runs/${runId}/results/${row.index}`} title={row.row.function} className="line-clamp-2 font-mono text-sm font-medium text-fg [overflow-wrap:anywhere] hover:underline">
                         <EvalName name={row.row.function} />
                       </a>
                       <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1 text-xs text-fg-muted">

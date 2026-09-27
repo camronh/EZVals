@@ -10,10 +10,8 @@ module.exports = {
       xs: ['12px', { lineHeight: '16px' }],
       sm: ['13px', { lineHeight: '20px' }],
       base: ['14px', { lineHeight: '22px' }],
-      lg: ['16px', { lineHeight: '24px' }],
       xl: ['20px', { lineHeight: '28px' }],
-      '2xl': ['24px', { lineHeight: '32px' }],
-      '3xl': ['32px', { lineHeight: '36px' }],
+      '4xl': ['40px', { lineHeight: '40px' }],
     },
     borderRadius: {
       none: '0',
@@ -27,15 +25,17 @@ module.exports = {
     boxShadow: {
       none: 'none',
       sm: 'var(--shadow-sm)',
+      panel: 'var(--shadow-panel)',
       popover: 'var(--shadow-popover)',
       dialog: 'var(--shadow-dialog)',
     },
     extend: {
       fontFamily: {
-        sans: ['ui-sans-serif', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'sans-serif'],
-        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
+        sans: ['"Geist Variable"', 'ui-sans-serif', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'sans-serif'],
+        mono: ['"Geist Mono Variable"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
       },
       colors: {
+        canvas: 'var(--canvas)',
         surface: {
           DEFAULT: 'var(--surface)',
           subtle: 'var(--surface-subtle)',

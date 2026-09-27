@@ -9,7 +9,8 @@ export default meta
 /** Every colour token, the grounds it is used on and what it means. Values are read live from the theme. */
 const COLORS: [group: string, tokens: [name: string, usage: string][]][] = [
   ['Surfaces', [
-    ['surface', 'Page and table background.'],
+    ['canvas', 'The app background: the runs sidebar sits on it, and panels are inset on it.'],
+    ['surface', 'Panels: the main panel, the detail page, tables and the review panel.'],
     ['surface-subtle', 'Quiet regions: the detail sidebar, code wells, hovered table rows.'],
     ['surface-muted', 'Fills inside controls: segmented tracks, chips, hovered menu items and buttons.'],
     ['surface-raised', 'Floating layers: menus, popovers, dialogs, the messages drawer.'],
@@ -26,8 +27,8 @@ const COLORS: [group: string, tokens: [name: string, usage: string][]][] = [
     ['line-strong', 'Edges of fields and checkboxes: 3:1 so a control reads as a control.'],
   ]],
   ['Accent', [
-    ['accent', 'Links, selection, the focus colour on dark: text-safe blue.'],
-    ['accent-emphasis', 'The one primary action per view (Run, Rerun, Save).'],
+    ['accent', 'Links, selection, the current row and the focus ring: text-safe blue.'],
+    ['accent-emphasis', 'The one primary action per view (Run, Rerun, Save): navy in light, blue in dark.'],
     ['accent-emphasis-hover', 'Hover state of accent-emphasis.'],
     ['accent-subtle', 'Selected rows, pressed toggles, active-filter chips.'],
     ['focus', 'The 2px focus ring on every control.'],
@@ -97,11 +98,11 @@ export const Colors: StoryObj = {
 }
 
 const TYPE: [cls: string, px: string, usage: string, sample: string][] = [
-  ['text-3xl font-semibold tracking-tight', '32/36 semibold', 'The pass-rate headline.', '67%'],
+  ['font-mono text-4xl font-semibold tracking-tight', '40/40 mono semibold', 'The pass-rate headline.', '67%'],
   ['text-xl font-semibold', '20/28 semibold', 'Per-metric values in the summary.', '0.73'],
-  ['text-lg font-semibold', '16/24 semibold', 'Dialog titles.', 'Settings'],
-  ['text-base', '14/22', 'Header text, prose outputs and markdown.', 'Your refund of $42.50 was issued on Sept 20.'],
-  ['text-sm', '13/20', 'The UI default: table cells, buttons, menus.', 'refund_request[direct]'],
+  ['text-base', '14/22', 'Run and dialog titles, prose outputs and markdown.', 'Your refund of $42.50 was issued on Sept 20.'],
+  ['text-sm', '13/20', 'The UI default: table cells, buttons, menus.', 'Compare with this run'],
+  ['font-mono text-sm font-medium', '13 mono medium', 'Eval names: they are code identifiers.', 'refund_request[direct]'],
   ['text-xs', '12/16', 'Labels, hints, meta lines, table headers.', 'support · production'],
   ['text-2xs', '11/16', 'Chips and keyboard keys.', '✓ pass'],
   ['font-mono text-xs', '12 mono', 'Structured data, errors, commands, ids.', '{"status": "shipped"}'],
@@ -126,14 +127,14 @@ export const Typography: StoryObj = {
 export const RadiiAndShadows: StoryObj = {
   render: () => (
     <div className="flex max-w-4xl flex-wrap gap-6 bg-surface p-2 text-fg">
-      {[['rounded-sm', '4px · chips, checkboxes, keys'], ['rounded-md', '6px · buttons, fields, menu items'], ['rounded-lg', '8px · cards, popovers, callouts'], ['rounded-xl', '12px · dialogs']].map(([cls, usage]) => (
+      {[['rounded-sm', '4px · chips, checkboxes, keys'], ['rounded-md', '6px · buttons, fields, menu items'], ['rounded-lg', '8px · cards, popovers, sidebar runs'], ['rounded-xl', '12px · the main panel, dialogs']].map(([cls, usage]) => (
         <div key={cls} className="w-40">
           <div className={`h-16 border border-line-strong bg-surface-muted ${cls}`} />
           <code className="mt-2 block font-mono text-xs">{cls}</code>
           <div className="text-2xs text-fg-muted">{usage}</div>
         </div>
       ))}
-      {[['shadow-sm', 'the raised segment'], ['shadow-popover', 'menus, popovers, toasts'], ['shadow-dialog', 'dialogs, the drawer']].map(([cls, usage]) => (
+      {[['shadow-sm', 'the raised segment'], ['shadow-panel', 'the main panel, the open run'], ['shadow-popover', 'menus, popovers, toasts'], ['shadow-dialog', 'dialogs, the drawer']].map(([cls, usage]) => (
         <div key={cls} className="w-40">
           <div className={`h-16 rounded-lg border border-line bg-surface-raised ${cls}`} />
           <code className="mt-2 block font-mono text-xs">{cls}</code>

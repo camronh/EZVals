@@ -7,6 +7,8 @@ type Props = {
   trial?: number
   sessionName?: string | null
   run?: { id: string; name?: string | null }
+  /** Where Back (and Esc) go: the dashboard with this result open. */
+  back: string
   runCommand: string
   position: { index: number; total: number }
   onNavigate: (index: number) => void
@@ -16,17 +18,17 @@ type Props = {
 }
 
 /** Where this result sits (session / run / eval, and its position in the run) and what can be done with it. */
-export function DetailHeader({ name, trial, sessionName, run, runCommand, position, onNavigate, busy, onRerun, onRegrade }: Props) {
+export function DetailHeader({ name, trial, sessionName, run, back, runCommand, position, onNavigate, busy, onRerun, onRegrade }: Props) {
   return (
     <header className="flex h-12 flex-shrink-0 items-center justify-between gap-3 border-b border-line bg-surface px-3 sm:px-4">
       <div className="flex min-w-0 items-center gap-2">
-        <a href="/" className="btn btn-ghost btn-sm btn-icon" title="Back to results (Esc)" aria-label="Back to results"><Icon name="arrow-left" /></a>
+        <a href={back} className="btn btn-ghost btn-sm btn-icon" title="Back to results (Esc)" aria-label="Back to results"><Icon name="arrow-left" /></a>
         <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-base">
           {sessionName ? <span className="hidden truncate text-fg-muted lg:inline">{sessionName}</span> : null}
           {sessionName ? <span aria-hidden="true" className="hidden text-line-strong lg:inline">/</span> : null}
           {run ? <a href={`/?run_id=${encodeURIComponent(run.id)}`} className="hidden max-w-[200px] truncate text-fg-muted hover:text-fg hover:underline md:inline">{run.name ?? run.id}</a> : null}
           {run ? <span aria-hidden="true" className="hidden text-line-strong md:inline">/</span> : null}
-          <span aria-current="page" className="truncate font-semibold text-fg">{name}</span>
+          <span aria-current="page" className="truncate font-mono text-sm font-semibold text-fg">{name}</span>
           {trial ? <span className="chip flex-shrink-0">trial {trial}</span> : null}
         </nav>
         <CopyButton text={() => runCommand} title="Copy run command" className="btn btn-ghost btn-xs btn-icon flex-shrink-0" />

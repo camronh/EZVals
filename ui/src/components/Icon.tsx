@@ -33,6 +33,10 @@ export function IconSprite() {
       <symbol id="icon-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"></path>
       </symbol>
+      <symbol id="icon-sidebar" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+        <path d="M9 4v16"></path>
+      </symbol>
       <symbol id="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <line x1="18" y1="6" x2="6" y2="18"></line>
         <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -109,7 +113,7 @@ export function IconSprite() {
   )
 }
 
-export type IconName = 'search' | 'filter' | 'grid' | 'gear' | 'refresh' | 'play' | 'stop' | 'close'
+export type IconName = 'search' | 'filter' | 'grid' | 'gear' | 'refresh' | 'play' | 'stop' | 'close' | 'sidebar'
   | 'download' | 'chevron-up' | 'chevron-down' | 'chevron-right' | 'copy' | 'check' | 'pencil' | 'plus' | 'compare'
   | 'pause' | 'message' | 'target' | 'rerun' | 'arrow-left' | 'external' | 'alert' | 'more' | 'trash'
 

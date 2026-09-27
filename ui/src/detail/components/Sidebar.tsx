@@ -123,9 +123,11 @@ type Props = {
   onSaveScores: (scores: Score[]) => Promise<void>
   onOpenMessages: () => void
   onEditingChange: (editing: boolean) => void
+  /** Shown in the dashboard's review panel, where Esc closes the panel. */
+  inPanel?: boolean
 }
 
-export function Sidebar({ row, runId, onSaveAnnotation, onSaveScores, onOpenMessages, onEditingChange }: Props) {
+export function Sidebar({ row, runId, onSaveAnnotation, onSaveScores, onOpenMessages, onEditingChange, inPanel }: Props) {
   const r = row.result
   const [editing, setEditing] = useState<'annotation' | number | null>(null)
   useEffect(() => onEditingChange(editing !== null), [editing, onEditingChange])
@@ -232,7 +234,7 @@ export function Sidebar({ row, runId, onSaveAnnotation, onSaveScores, onOpenMess
 
       <div className="flex flex-shrink-0 items-center gap-4 border-t border-line px-4 py-2 text-xs text-fg-muted">
         <span className="flex items-center gap-1.5"><kbd className="kbd">↑</kbd><kbd className="kbd">↓</kbd>next result</span>
-        <span className="flex items-center gap-1.5"><kbd className="kbd">Esc</kbd>{editing !== null ? 'cancel' : 'back'}</span>
+        <span className="flex items-center gap-1.5"><kbd className="kbd">Esc</kbd>{editing !== null ? 'cancel' : inPanel ? 'close' : 'back'}</span>
       </div>
     </div>
   )

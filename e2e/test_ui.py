@@ -86,7 +86,7 @@ def test_stop_cancels_remaining_evals(app: Page):
 def test_detail_view_navigation_and_annotation(app: Page):
     run_selected(app, 0, 1)
     expect(row(app, 1)).to_have_attribute("data-status", "completed")
-    row(app, 0).locator("td").nth(1).click()
+    row(app, 0).get_by_role("link").click()
     expect(app).to_have_url(re.compile(r"/results/0$"))
     expect(app.locator("#output-panel")).to_contain_text("0")
     app.keyboard.press("ArrowDown")
@@ -100,6 +100,19 @@ def test_detail_view_navigation_and_annotation(app: Page):
 
     app.keyboard.press("Escape")
     expect(app.locator("#results-table")).to_be_visible()
+
+
+def test_review_panel_steps_through_results(app: Page):
+    run_selected(app, 0, 1)
+    expect(row(app, 1)).to_have_attribute("data-status", "completed")
+    row(app, 0).locator("td").nth(3).click()
+    panel = app.locator("#result-panel")
+    expect(panel).to_contain_text("square[0]")
+    expect(app).to_have_url(re.compile(r"result=0"))
+    app.keyboard.press("ArrowDown")
+    expect(panel).to_contain_text("square[1]")
+    app.keyboard.press("Escape")
+    expect(panel).to_have_count(0)
 
 
 def test_dataset_filter_only_and_hide(app: Page):
@@ -131,16 +144,17 @@ def test_compare_two_runs(app: Page):
     run_selected(app, 0)
     expect(row(app, 0)).to_have_attribute("data-status", "completed")
     app.get_by_label("Create new run").click()
+    expect(row(app, 0)).to_have_attribute("data-status", "not_started")
     run_selected(app, 0)
     expect(row(app, 0)).to_have_attribute("data-status", "completed")
-    current = app.locator("#run-dropdown-expanded").inner_text()
+    current = app.locator("#run-name").inner_text()
     app.get_by_label("Compare runs").click()
     app.locator(".compare-option", has_text="first").click()
     expect(app.locator("#compare-mode-label")).to_be_visible()
     expect(app.locator("#stats-expanded")).to_contain_text("first")
     app.locator("#exit-compare-btn").click()
     expect(app.locator("#compare-mode-label")).to_have_count(0)
-    expect(app.locator("#run-dropdown-expanded")).to_have_text(current)
+    expect(app.locator("#run-name")).to_have_text(current)
 
 
 def test_export_json(app: Page):
