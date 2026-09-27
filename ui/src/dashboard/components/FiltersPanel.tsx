@@ -31,7 +31,7 @@ function Values({ id, title, values, selection, onChange }: {
   return (
     <section className="border-t border-line px-3 py-2.5">
       <div className={heading}>{title}</div>
-      <div id={id} className="max-h-44 overflow-y-auto">
+      <div id={id} className="-mx-1 max-h-44 overflow-y-auto p-1">
         {values.map((value) => {
           const only = selection.include.includes(value)
           const hide = selection.exclude.includes(value)

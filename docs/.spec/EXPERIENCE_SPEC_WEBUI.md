@@ -625,7 +625,9 @@ Scenario: Pass-rate trend
 
 Scenario: Outcome bar
   Then under the headline a bar splits the rows into passed (green), failed (red) and errored (faded red) shares
+  And rows that finished without a pass/fail score (numeric scores only, or none) take a grey share, counted in the facts as "N without pass/fail"
   And rows not yet finished leave the rest of the bar empty
+  And hovering a share shows its count ("10 failed")
 
 Scenario: One metric
   Given the run's only score key is pass/fail

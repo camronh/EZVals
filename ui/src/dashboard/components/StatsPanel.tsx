@@ -80,10 +80,13 @@ function Headline({ stats, total, progress, trials, delta, trend }: Props) {
       </div>
     )
   }
+  // Finished rows with no pass/fail score (numeric scores only, or none) take the grey share of the bar.
+  const unjudged = stats.finished - stats.passed - stats.failed - stats.errors
   const facts = [
     stats.passed ? <span key="p" className="text-success">{stats.passed} passed</span> : null,
     stats.failed ? <span key="f" className="text-danger">{stats.failed} failed</span> : null,
     <span key="e" id="stats-errors" className={stats.errors ? 'text-danger' : undefined}>{plural(stats.errors, 'error')}</span>,
+    unjudged ? <span key="u" id="stats-unjudged" className="flex items-center gap-1.5"><span aria-hidden="true" className="h-2 w-2 rounded-full bg-fg-muted opacity-40" />{unjudged} without pass/fail</span> : null,
     <span key="n">{evals}</span>,
     stats.avgLatency ? <span key="l">{stats.avgLatency.toFixed(2)}s avg</span> : null,
     trials && trials.k > 1 ? <span key="k" id="stats-pass-at-k" title={`Evals where at least one of ${trials.k} trials passed`}>pass@{trials.k} {pct(trials.passAtK)}</span> : null,
@@ -115,11 +118,11 @@ function Headline({ stats, total, progress, trials, delta, trend }: Props) {
       <div className="mt-4 flex items-center gap-3">
         <div id="outcome-bar" className="flex h-1.5 min-w-0 flex-1 gap-0.5 overflow-hidden rounded-full bg-surface-muted">
           {([
-            [stats.passed, 'bg-success'],
-            [stats.failed, 'bg-danger'],
-            [stats.errors, 'bg-danger opacity-50'],
-            [stats.finished - stats.passed - stats.failed - stats.errors, 'bg-fg-muted opacity-40'],
-          ] as const).map(([n, tone]) => (n ? <div key={tone} className={`${tone} rounded-full transition-[width] duration-500`} style={{ width: `${(n / stats.count) * 100}%` }} /> : null))}
+            [stats.passed, 'bg-success', 'passed'],
+            [stats.failed, 'bg-danger', 'failed'],
+            [stats.errors, 'bg-danger opacity-50', 'errored'],
+            [unjudged, 'bg-fg-muted opacity-40', 'without pass/fail'],
+          ] as const).map(([n, tone, what]) => (n ? <div key={tone} title={`${n} ${what}`} className={`${tone} rounded-full transition-[width] duration-500`} style={{ width: `${(n / stats.count) * 100}%` }} /> : null))}
         </div>
         {progress.running ? <span id="run-progress" className="font-mono text-xs tabular-nums text-fg-muted">{progress.completed}/{progress.total}</span> : null}
       </div>

@@ -7,7 +7,7 @@ import { Icon } from '../../components/Icon'
 import { ScoreCard } from '../../components/ScoreCard'
 import { getRawText } from '../../lib/format'
 
-const sectionHeader = 'flex h-10 w-full items-center justify-between px-4 text-left'
+const sectionHeader = 'flex h-10 w-full items-center justify-between px-4 text-left outline-offset-[-2px]'
 
 function formatMetadataLabel(key: string) {
   return key.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').trim().replace(/\b\w/g, (c) => c.toUpperCase())

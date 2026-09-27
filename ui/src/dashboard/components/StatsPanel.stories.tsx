@@ -29,6 +29,18 @@ export const Completed: Story = {
     await expect(canvasElement.querySelector('#score-metrics')).toBeNull()
   },
 }
+/** Rows that finished without a pass/fail score (numeric scores only, or none) are named beside the grey share of the bar. */
+export const SomeWithoutPassFail: Story = {
+  args: props({
+    ...completedRun,
+    results: completedRun.results.map((row, i) => (i < 2 ? { ...row, result: { ...row.result, error: null, scores: [{ key: 'helpfulness', value: 0.8 }] } } : row)),
+  }),
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelector('#stats-unjudged')).toHaveTextContent('2 without pass/fail')
+    await expect(canvasElement.querySelector('#outcome-bar [title="2 without pass/fail"]')).not.toBeNull()
+  },
+}
+
 export const SeveralMetrics: Story = {
   args: props(multiMetricRun),
   play: async ({ canvasElement }) => {

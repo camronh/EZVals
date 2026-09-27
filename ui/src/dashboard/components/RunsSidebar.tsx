@@ -159,7 +159,7 @@ export function RunsSidebar(props: Props) {
           <Icon name="plus" />
         </button>
       </div>
-      <ul className="mt-1 flex-1 space-y-0.5 overflow-y-auto px-2 pb-3">
+      <ul className="flex-1 space-y-0.5 overflow-y-auto px-2 pb-3 pt-1">
         {props.runs.map((run) => (
           <RunItem key={run.run_id} run={run} active={run.run_id === props.activeRunId} running={props.running} comparing={props.comparing} onSelectRun={props.onSelectRun} onCompare={props.onCompare} onRenameRun={props.onRenameRun} onDeleteRun={props.onDeleteRun} />
         ))}
