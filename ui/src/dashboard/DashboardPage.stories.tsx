@@ -31,6 +31,19 @@ export const ReviewPanel: Story = {
   },
 }
 
+/** On a phone the review panel covers the table, and fits the screen. */
+export const ReviewPanelOnPhone: Story = {
+  args: { query: readQuery(new URLSearchParams('result=1')) },
+  parameters: { msw: { handlers: apiHandlers(completedRun) } },
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+  play: async ({ canvasElement }) => {
+    const panel = await within(canvasElement).findByRole('complementary', { name: /Result: refund_request\[indirect\]/ })
+    const { left, right } = panel.getBoundingClientRect()
+    await expect(left).toBeGreaterThanOrEqual(0)
+    await expect(right).toBeLessThanOrEqual(canvasElement.ownerDocument.documentElement.clientWidth)
+  },
+}
+
 export const SidebarHidden: Story = {
   parameters: { msw: { handlers: apiHandlers(completedRun) } },
   play: async ({ canvasElement }) => {

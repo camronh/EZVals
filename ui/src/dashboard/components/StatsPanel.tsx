@@ -91,7 +91,7 @@ function Headline({ stats, total, progress, trials, delta, trend }: Props) {
   ].filter(Boolean)
   return (
     <div className="min-w-[260px] flex-1">
-      <div className="flex items-end justify-between gap-6">
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
         <div className="flex items-baseline gap-2.5">
           {stats.rate != null ? (
             <span id="pass-rate" className="font-mono text-4xl font-semibold tracking-tight tabular-nums text-fg">{pct(stats.rate)}</span>

@@ -3,7 +3,7 @@ import { Icon } from '../../components/Icon'
 import { DataPanel, Verdict } from '../../detail/components/Panels'
 import { Sidebar } from '../../detail/components/Sidebar'
 import { outcomeOf } from '../../lib/stats'
-import { EvalName, StatusIcon } from './ResultsTable'
+import { StatusIcon } from './ResultsTable'
 
 type Props = {
   row: RunResultRow
@@ -27,10 +27,10 @@ export function ResultPanel({ row, index, runId, position, onMove, onClose, ...p
   const r = row.result
   const loading = r.status === 'pending' || r.status === 'running'
   return (
-    <aside id="result-panel" aria-label={`Result: ${row.function}`} className="flex w-[min(560px,46%)] min-w-[380px] shrink-0 flex-col border-l border-line bg-surface max-lg:absolute max-lg:inset-y-0 max-lg:right-0 max-lg:z-30 max-lg:w-[min(560px,100%)] max-lg:shadow-dialog">
+    <aside id="result-panel" aria-label={`Result: ${row.function}`} className="flex w-[min(560px,46%)] lg:min-w-[380px] shrink-0 flex-col border-l border-line bg-surface max-lg:absolute max-lg:inset-y-0 max-lg:right-0 max-lg:z-30 max-lg:w-[min(560px,100%)] max-lg:shadow-dialog">
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-line pl-4 pr-2">
         <StatusIcon outcome={outcomeOf(r)} />
-        <span className="min-w-0 flex-1 truncate font-mono text-sm font-medium text-fg" title={row.function}><EvalName name={row.function} /></span>
+        <span className="min-w-0 flex-1 truncate font-mono text-sm font-medium text-fg" title={row.function}>{row.function}</span>
         <span className="shrink-0 pr-1 text-xs tabular-nums text-fg-muted">{position.index + 1} of {position.total}</span>
         <button className="btn btn-ghost btn-xs btn-icon" aria-label="Previous result" title="Previous result (↑)" disabled={position.index <= 0} onClick={() => onMove(-1)}><Icon name="chevron-up" /></button>
         <button className="btn btn-ghost btn-xs btn-icon" aria-label="Next result" title="Next result (↓)" disabled={position.index >= position.total - 1} onClick={() => onMove(1)}><Icon name="chevron-down" /></button>
