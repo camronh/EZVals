@@ -351,7 +351,8 @@ func scoreChips(rows []Row) []ScoreChip {
 	return chips
 }
 
-// Store keeps runs under <dir>/<session>/<run_id>.jsonl.
+// Store keeps runs under <dir>/<session>/<run_id>.jsonl. Legacy <run_name>_<run_id>.json runs are read
+// in place and never rewritten; the first change to one starts its .jsonl beside it, which then wins.
 type Store struct {
 	dir string
 	mu  sync.Mutex
@@ -375,30 +376,27 @@ func cleanRunName(name string) string {
 	return name
 }
 
-func openStore(dir string) *Store {
-	s := &Store{dir: dir}
-	legacy, _ := filepath.Glob(filepath.Join(dir, "*", "*.json"))
-	for _, path := range legacy {
-		events, err := legacyEvents(path)
-		if err == nil {
-			err = writeEvents(filepath.Join(filepath.Dir(path), events[0].RunID+".jsonl"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, events...)
-		}
-		if err == nil {
-			err = os.Remove(path)
-		}
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Could not migrate %s: %v\n", path, err)
+func openStore(dir string) *Store { return &Store{dir: dir} }
+
+// file finds a run's event log, or else its legacy .json.
+func (s *Store) file(id string) (string, error) {
+	id = sanitize(id)
+	for _, pattern := range []string{id + ".jsonl", "*_" + id + ".json"} {
+		if matches, _ := filepath.Glob(filepath.Join(s.dir, "*", pattern)); len(matches) > 0 {
+			return matches[0], nil
 		}
 	}
-	return s
+	return "", fmt.Errorf("run %s not found", id)
 }
 
-func (s *Store) file(id string) (string, error) {
-	matches, _ := filepath.Glob(filepath.Join(s.dir, "*", sanitize(id)+".jsonl"))
-	if len(matches) == 0 {
-		return "", fmt.Errorf("run %s not found", id)
+// runID reads the run id from a run file name: <run_id>.jsonl or legacy <run_name>_<run_id>.json.
+func runID(path string) string {
+	name := filepath.Base(path)
+	if id, ok := strings.CutSuffix(name, ".jsonl"); ok {
+		return id
 	}
-	return matches[0], nil
+	name = strings.TrimSuffix(name, ".json")
+	return name[strings.LastIndex(name, "_")+1:]
 }
 
 // Create starts a run file with its header. With overwrite, other runs in the session with the same name are deleted.
@@ -423,6 +421,16 @@ func (s *Store) Append(id string, events ...Event) error {
 	path, err := s.file(id)
 	if err != nil {
 		return err
+	}
+	if strings.HasSuffix(path, ".json") { // first change to a legacy run: start its log beside it
+		legacy, err := legacyEvents(path)
+		if err != nil {
+			return err
+		}
+		path = filepath.Join(filepath.Dir(path), sanitize(id)+".jsonl")
+		if err := writeEvents(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, legacy...); err != nil {
+			return err
+		}
 	}
 	return writeEvents(path, os.O_APPEND|os.O_WRONLY, events...)
 }
@@ -474,15 +482,13 @@ func (s *Store) Load(id string) (*Run, error) {
 	if err != nil {
 		return nil, err
 	}
-	events, err := readEvents(path)
-	if err != nil {
-		return nil, err
-	}
-	return materialize(events), nil
+	return loadRunFile(path)
 }
 
 func (s *Store) Sessions() []string {
 	dirs, _ := filepath.Glob(filepath.Join(s.dir, "*", "*.jsonl"))
+	legacy, _ := filepath.Glob(filepath.Join(s.dir, "*", "*.json"))
+	dirs = append(dirs, legacy...)
 	seen := map[string]bool{}
 	sessions := []string{}
 	for _, d := range dirs {
@@ -499,9 +505,16 @@ func (s *Store) Sessions() []string {
 // Runs returns a session's runs, newest first.
 func (s *Store) Runs(session string) []*Run {
 	paths, _ := filepath.Glob(filepath.Join(s.dir, sanitize(session), "*.jsonl"))
+	legacy, _ := filepath.Glob(filepath.Join(s.dir, sanitize(session), "*.json"))
 	runs := []*Run{}
-	for _, p := range paths {
-		if run, err := s.Load(strings.TrimSuffix(filepath.Base(p), ".jsonl")); err == nil {
+	seen := map[string]bool{}
+	for _, p := range append(paths, legacy...) {
+		id := runID(p)
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		if run, err := s.Load(id); err == nil {
 			runs = append(runs, run)
 		}
 	}
@@ -526,12 +539,21 @@ func (s *Store) FindByName(session, name string) (*Run, error) {
 	return found[0], nil
 }
 
+// Delete removes a run's event log and its legacy .json, if it has one.
 func (s *Store) Delete(id string) error {
-	path, err := s.file(id)
-	if err != nil {
-		return err
+	id = sanitize(id)
+	paths, _ := filepath.Glob(filepath.Join(s.dir, "*", id+".jsonl"))
+	legacy, _ := filepath.Glob(filepath.Join(s.dir, "*", "*_"+id+".json"))
+	paths = append(paths, legacy...)
+	if len(paths) == 0 {
+		return fmt.Errorf("run %s not found", id)
 	}
-	return os.Remove(path)
+	for _, p := range paths {
+		if err := os.Remove(p); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Store) DeleteSession(name string) error {
@@ -589,6 +611,13 @@ func legacyEvents(path string) ([]Event, error) {
 		id := fmt.Sprintf("%s#%d", r.Function, i)
 		manifest.Evals = append(manifest.Evals, Eval{ID: id, Function: r.Function, Dataset: r.Dataset, Labels: r.Labels,
 			Input: r.Result.Input, Reference: r.Result.Reference, Metadata: r.Result.Metadata})
+		// Runs saved by `ezvals run` before 0.2 have no status; every result in them finished.
+		if r.Result.Status == "" {
+			r.Result.Status = "completed"
+			if r.Result.Error != nil {
+				r.Result.Status = "error"
+			}
+		}
 		if r.Result.Status == "completed" || r.Result.Status == "error" {
 			rest = append(rest, Event{Type: "result", ID: id, Results: []Result{r.Result}})
 		}

@@ -135,13 +135,14 @@ func TestStoreLifecycle(t *testing.T) {
 	}
 }
 
-func TestLegacyRunsAreMigrated(t *testing.T) {
+func TestLegacyRunsAreReadInPlace(t *testing.T) {
 	dir := t.TempDir()
 	legacy := `{"session_name": "s", "run_name": "old", "run_id": "abc", "created_at": 5, "path": "evals.py",
 		"results": [{"function": "f", "dataset": "d", "labels": [], "result": {"input": 1, "output": 2, "status": "completed",
 		"scores": [{"key": "pass", "passed": true}], "annotation": "nice"}}]}`
+	legacyPath := filepath.Join(dir, "s", "old_abc.json")
 	os.MkdirAll(filepath.Join(dir, "s"), 0o755)
-	os.WriteFile(filepath.Join(dir, "s", "old_abc.json"), []byte(legacy), 0o644)
+	os.WriteFile(legacyPath, []byte(legacy), 0o644)
 	store := openStore(dir)
 	run, err := store.Load("abc")
 	if err != nil {
@@ -149,10 +150,50 @@ func TestLegacyRunsAreMigrated(t *testing.T) {
 	}
 	r := run.Results[0].Result
 	if run.RunName != "old" || run.Path != "evals.py" || r.Output != float64(2) || *r.Annotation != "nice" || r.Status != "completed" {
-		t.Fatalf("migrated run = %+v", run)
+		t.Fatalf("legacy run = %+v", run)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "s", "old_abc.json")); err == nil {
-		t.Fatal("legacy file should be replaced")
+	if got := store.Sessions(); len(got) != 1 || got[0] != "s" {
+		t.Fatalf("sessions = %v", got)
+	}
+
+	// The first change starts an event log beside the .json, which is left untouched and shadowed.
+	note, _ := json.Marshal("better")
+	if err := store.Append("abc", Event{Type: "edit", ID: run.Results[0].ID, Field: "annotation", Value: note}); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(legacyPath); string(data) != legacy {
+		t.Fatal("legacy file should not change")
+	}
+	runs := store.Runs("s")
+	if len(runs) != 1 || *runs[0].Results[0].Result.Annotation != "better" {
+		t.Fatalf("runs = %+v", runs)
+	}
+	if path, _ := store.file("abc"); filepath.Base(path) != "abc.jsonl" {
+		t.Fatalf("file = %s", path)
+	}
+
+	if err := store.Delete("abc"); err != nil {
+		t.Fatal(err)
+	}
+	if files, _ := filepath.Glob(filepath.Join(dir, "s", "*")); len(files) != 0 {
+		t.Fatalf("delete left %v", files)
+	}
+}
+
+func TestLegacyCLIRunsWithoutStatusKeepResults(t *testing.T) {
+	dir := t.TempDir()
+	legacy := `{"session_name": "s", "run_name": "cli", "run_id": "def", "created_at": 5, "path": "evals.py",
+		"results": [{"function": "f", "result": {"input": 1, "output": 2, "scores": [{"key": "pass", "passed": true}]}},
+		{"function": "g", "result": {"input": 1, "output": null, "error": "boom"}}]}`
+	os.MkdirAll(filepath.Join(dir, "s"), 0o755)
+	os.WriteFile(filepath.Join(dir, "s", "cli_def.json"), []byte(legacy), 0o644)
+	run, err := openStore(dir).Load("def")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ok, failed := run.Results[0].Result, run.Results[1].Result
+	if ok.Status != "completed" || ok.Output != float64(2) || len(ok.Scores) != 1 || failed.Status != "error" {
+		t.Fatalf("migrated run = %+v", run)
 	}
 }
 
