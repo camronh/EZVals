@@ -44,6 +44,18 @@ export const ReviewPanelOnPhone: Story = {
   },
 }
 
+/** Scrolled, the column headers pin flush to the top of the results area, with no rows showing above them. */
+export const StickyHeader: Story = {
+  parameters: { msw: { handlers: apiHandlers(completedRun) } },
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+  play: async ({ canvasElement }) => {
+    const head = (await within(canvasElement).findByRole('columnheader', { name: 'Eval' })).closest('thead')!
+    const main = head.closest('main')!
+    main.scrollTop = main.scrollHeight
+    await waitFor(() => expect(Math.abs(head.getBoundingClientRect().top - main.getBoundingClientRect().top)).toBeLessThanOrEqual(1))
+  },
+}
+
 export const SidebarHidden: Story = {
   parameters: { msw: { handlers: apiHandlers(completedRun) } },
   play: async ({ canvasElement }) => {

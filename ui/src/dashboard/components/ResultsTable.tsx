@@ -169,14 +169,14 @@ export function ResultsTable({ runId, rows, hidden: chosen, sort, widths, select
     onMouseLeave: preview.leave,
   })
   const cell = (key: string, content: ReactNode, extra: React.TdHTMLAttributes<HTMLTableCellElement> = {}) => (
-    <td data-col={key} className={`px-3 py-2.5 align-top ${key === 'latency' ? 'text-right' : ''} ${hidden.includes(key) ? 'hidden' : ''}`} {...extra}>{content}</td>
+    <td data-col={key} className={`px-3 py-2.5 align-middle ${key === 'latency' ? 'text-right' : ''} ${hidden.includes(key) ? 'hidden' : ''}`} {...extra}>{content}</td>
   )
 
   return (
     <>
       <table id="results-table" data-run-id={runId} className={`w-full table-fixed border-collapse text-sm text-fg ${list ? '' : 'min-w-[760px]'}`}>
         <thead className={rows.length || emptyText ? '' : 'hidden'}>
-          <tr className="border-b border-line">
+          <tr>
             <th style={{ width: 36 }} className="bg-surface px-2 py-2 text-center align-middle">
               <input
                 ref={selectAll}
@@ -246,7 +246,7 @@ export function ResultsTable({ runId, rows, hidden: chosen, sort, widths, select
                 }}
               >
                 <td
-                  className="px-2 py-2.5 text-center align-top"
+                  className="px-2 py-2.5 text-center align-middle"
                   onClick={(e) => {
                     e.stopPropagation()
                     if (e.target === e.currentTarget) toggleRow(row.index, !selected.has(row.index), e.shiftKey)

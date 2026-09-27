@@ -241,7 +241,10 @@
 }
 
 /* ── Results table ─────────────────────────────────────────── */
-#results-table thead { position: sticky; top: 0; z-index: 10; }
+/* Pinned flush to the top of the scrolling main area: -1.25rem undoes its pt-5, which sticky positioning would otherwise keep as a gap. */
+#results-table thead { position: sticky; top: -1.25rem; z-index: 10; }
+/* The divider is drawn on the cells: a collapsed row border stays behind when the header is stuck. */
+#results-table thead th { box-shadow: inset 0 -1px 0 var(--line); }
 #results-table thead th[aria-sort="ascending"]::after { content: " ↑"; color: var(--accent); }
 #results-table thead th[aria-sort="descending"]::after { content: " ↓"; color: var(--accent); }
 #results-table td { overflow: hidden; text-overflow: ellipsis; max-width: 0; }

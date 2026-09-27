@@ -40,27 +40,18 @@ const meta: Meta<Args> = {
 export default meta
 type Story = StoryObj<Args>
 
-/** Every cell's first line shares one line with the eval name: checkbox, outcome icon, text, JSON, notes and time. */
+/** Every cell's content is centred on its row: checkbox, eval, text, JSON, scores and time. */
 export const Completed: Story = {
   args: { run: completedRun },
   play: async ({ canvasElement }) => {
     const middle = (r: DOMRect) => r.top + r.height / 2
-    // The middle of an element's first line of text, or of the element itself when it has none.
-    const firstLine = (el: Element) => {
-      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (n.textContent!.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT) })
-      const text = walker.nextNode()
-      if (!text) return middle(el.getBoundingClientRect())
-      const range = document.createRange()
-      range.setStart(text, 0)
-      range.setEnd(text, 1)
-      return middle(range.getClientRects()[0])
-    }
     for (const row of canvasElement.querySelectorAll('tr[data-row="main"]')) {
-      const line = firstLine(row.querySelector('[data-col="function"] a')!)
-      const marks = [row.querySelector('.row-checkbox')!, row.querySelector('[data-col="function"] [role="status"], [data-col="function"] [role="img"]')!]
-      for (const mark of marks.filter(Boolean)) await expect(Math.abs(middle(mark.getBoundingClientRect()) - line)).toBeLessThanOrEqual(1)
-      for (const cell of row.querySelectorAll('td[data-col]:not([data-col="function"])')) {
-        if (cell.getClientRects().length && cell.textContent!.trim()) await expect(Math.abs(firstLine(cell) - line)).toBeLessThanOrEqual(1)
+      const center = middle(row.getBoundingClientRect())
+      for (const cell of row.querySelectorAll('td')) {
+        if (!cell.getClientRects().length || !cell.firstElementChild) continue
+        const boxes = [...cell.children].map((el) => el.getBoundingClientRect())
+        const content = middle(new DOMRect(0, Math.min(...boxes.map((b) => b.top)), 0, Math.max(...boxes.map((b) => b.bottom)) - Math.min(...boxes.map((b) => b.top))))
+        await expect(Math.abs(content - center), cell.dataset.col ?? 'checkbox').toBeLessThanOrEqual(1.5)
       }
     }
   },
