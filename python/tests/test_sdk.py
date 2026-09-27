@@ -227,6 +227,6 @@ def test_error_tracebacks_show_only_user_frames():
 
     for result in (crashes(), crashes_async()):
         lines = result.error.splitlines()
-        assert lines[0] == lines[-1] == "RuntimeError: upstream 500"
+        assert lines[0] == "RuntimeError: upstream 500" and lines.count(lines[0]) == 1
         assert "test_sdk.py" in result.error and "helper()" in result.error
         assert "ezvals" not in result.error.replace("test_sdk.py", "") and "asyncio" not in result.error and "threading" not in result.error

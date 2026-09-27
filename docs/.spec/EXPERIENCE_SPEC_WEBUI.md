@@ -178,7 +178,7 @@ Scenario: Code changes are picked up
   Then the edited code runs (every run starts fresh eval processes)
 ```
 
-### Trials, Regrading and Spans
+### Trials, Regrading and Traces
 
 ```gherkin
 Scenario: Trials in the table
@@ -191,9 +191,9 @@ Scenario: Regrade from the dashboard
   Then selected rows (or all rows when none are selected) are regraded without re-running targets
   And a toast reports how many results were regraded and how many were skipped for having no target
 
-Scenario: Span count
-  Given a result recorded OpenTelemetry spans
-  Then its eval cell shows a trace icon with the span count
+Scenario: Trace step count
+  Given a result recorded an OpenTelemetry trace
+  Then its eval cell shows a trace icon with the number of steps (spans) in it
 ```
 
 ### Result Status Indicators
@@ -232,10 +232,11 @@ Scenario: Detail view contents
     - Reference (if set)
     - Scores (with key, value/passed, notes)
     - Metadata (expandable key-value list with formatted labels and clickable links)
-    - Trace Data (collapsible JSON of trace_data fields other than messages and trace_url)
+    - Extra data (collapsible JSON of trace_data fields other than messages and trace_url)
     - Annotations (editable)
     - Tools used (unique tool names from trace_data.messages tool calls, if present)
-    - Spans (count; opens the span waterfall), if any were recorded
+    - Trace (step count; opens the trace timeline), if spans were recorded
+    - External trace (a link to trace_url, labeled with its site's host name), if set
     - Latency
     - Error message (if any; a long traceback is capped in height, scrollable and expandable)
 
@@ -251,10 +252,10 @@ Scenario: Message-format data rendering
   And each section provides a Pretty/Raw toggle
   And Raw shows the underlying JSON payload without transformation
 
-Scenario: Span waterfall
+Scenario: Trace timeline
   Given the result recorded spans
-  When the user opens "Spans" in the sidebar
-  Then a drawer shows the spans as a nested waterfall with durations
+  When the user opens "Trace" in the sidebar
+  Then a drawer shows each step (span) of the trace as a nested waterfall with durations
   And LLM spans show their model and input→output token counts, with totals in the header
   And failed spans are highlighted
   And clicking a span shows its attributes
@@ -286,7 +287,7 @@ Scenario: Navigate between results
   Then the user returns to the main table
 
 Scenario: Escape closes an open drawer first
-  Given the Messages or Spans drawer is open
+  Given the Messages or Trace drawer is open
   When the user presses Escape
   Then the drawer closes and the user stays on the detail page
 
@@ -370,7 +371,7 @@ Scenario: Keyboard navigation disabled while editing
 - Dataset
 - Labels
 - Metadata
-- Trace Data
+- Extra data
 - Latency
 - Error
 

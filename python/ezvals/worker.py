@@ -54,7 +54,7 @@ def main():
                 results = await e.run(run_info, request.get("grade"))
             send({"type": "result", "id": request["id"], "results": [vars(r) for r in results]})
         except Exception as error:  # the host waits for every result, so one that can't be reported becomes an error
-            send({"type": "result", "id": request["id"], "results": [{"error": f"{type(error).__name__}: {error}\n{describe(error)}"}]})
+            send({"type": "result", "id": request["id"], "results": [{"error": describe(error)}]})
 
     async def serve():
         loop = asyncio.get_running_loop()

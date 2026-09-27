@@ -15,7 +15,7 @@ export type DetailRoute = { runId: string; index: number; compareRunIds: string[
 
 const finished = (detail: ResultDetail) => ['completed', 'error', 'cancelled'].includes(detail.result.result.status ?? 'completed')
 
-/** One result: input, reference and output panes, a sidebar of scores and metadata, and drawers for messages and spans. */
+/** One result: input, reference and output panes, a sidebar of scores and metadata, and drawers for messages and the trace. */
 export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
   const [detail, setDetail] = useState<ResultDetail | null>(null)
   const [error, setError] = useState<Error | null>(null)
@@ -144,7 +144,7 @@ export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
       <Drawer id="messages-pane" title="Messages" count={messages.length} open={drawer === 'messages'} onClose={() => setDrawer(null)}>
         <div className="p-4"><DataViewer content={messages} placeholder="—" /></div>
       </Drawer>
-      <Drawer id="trace-pane" title="Spans" count={row.spans?.length ?? 0} open={drawer === 'trace'} onClose={() => setDrawer(null)}>
+      <Drawer id="trace-pane" title="Trace" count={row.spans?.length ?? 0} open={drawer === 'trace'} onClose={() => setDrawer(null)}>
         <TraceWaterfall spans={row.spans ?? []} />
       </Drawer>
     </div>

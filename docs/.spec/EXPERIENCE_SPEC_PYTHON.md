@@ -712,6 +712,7 @@ Scenario: Exception during evaluation
   Given eval function raises ValueError("broke")
   Then result.error = "ValueError: broke" followed by the traceback
   And the traceback shows only the user's frames (not ezvals', asyncio's or threading's)
+  And the error line is not repeated after the traceback, and files under the working directory show relative paths
   And result.input/output preserved (if set before error)
   And a score is not added
 

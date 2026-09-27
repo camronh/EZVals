@@ -91,13 +91,13 @@ class Eval:
             results = [_errored(ctx, f"TimeoutError: Evaluation timed out after {float(timeout)}s")]
         except AssertionError as e:
             if ctx is None:
-                results = [_errored(None, f"AssertionError: {e}\n{describe(e)}")]
+                results = [_errored(None, describe(e))]
             else:  # a bare `assert` has no message, so its source line explains the failure
                 notes = str(e) or traceback.extract_tb(e.__traceback__)[-1].line or "Assertion failed"
                 ctx.store(scores={"passed": False, "notes": notes})
                 results = [ctx.build()]
         except Exception as e:
-            results = [_errored(ctx, f"{type(e).__name__}: {e}\n{describe(e)}")]
+            results = [_errored(ctx, describe(e))]
         if ctx is not None and inspect.iscoroutine(ctx.output):
             ctx.output.close()
             ctx.output = None
@@ -111,7 +111,7 @@ class Eval:
                     elif scored is not None:
                         results[i].scores += normalize_scores(scored, "pass")
         except Exception as e:
-            results = [_errored(ctx, f"{type(e).__name__}: {e}\n{describe(e)}")]
+            results = [_errored(ctx, describe(e))]
         for result in results:
             if not result.scores and not result.error:
                 result.scores = [{"key": p["default_score_key"], "passed": True}]
@@ -147,7 +147,7 @@ def expand(fn: EvalFunction, file_defaults: Optional[dict] = None, file: Optiona
         try:
             examples = _run_sync(_call(fn.params["input_loader"]))
         except Exception as e:
-            return [make(name, base, f"Input loader failed: {e}\n{describe(e)}")]
+            return [make(name, base, describe(e, f"Input loader failed: {e}"))]
         cases = [ex if isinstance(ex, dict) else {k: getattr(ex, k) for k in PARAMS | {"id"} if hasattr(ex, k)} for ex in examples]
     elif "cases" in fn.params:
         cases = fn.params["cases"]
@@ -223,11 +223,14 @@ def _layer(base: dict, over: dict, merge_labels: bool) -> dict:
 _INTERNAL = (os.path.dirname(__file__), os.path.dirname(asyncio.__file__), threading.__file__, "<frozen")
 
 
-def describe(error: BaseException) -> str:
-    """The error's traceback through the user's own code only (not ezvals', asyncio's or threading's)."""
+def describe(error: BaseException, headline: Optional[str] = None) -> str:
+    """The error, then its traceback through the user's own code only (not ezvals', asyncio's or threading's)."""
     frames = [f for f in traceback.extract_tb(error.__traceback__) if not f.filename.startswith(_INTERNAL)]
+    for f in frames:
+        if f.filename.startswith(os.getcwd() + os.sep):
+            f.filename = os.path.relpath(f.filename)
     where = "Traceback (most recent call last):\n" + "".join(traceback.format_list(frames)) if frames else ""
-    return where + "".join(traceback.format_exception_only(error))
+    return (headline + "\n" if headline else "".join(traceback.format_exception_only(error))) + where
 
 
 def _errored(ctx: Optional[EvalContext], error: str) -> EvalResult:

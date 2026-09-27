@@ -3,7 +3,9 @@ title: Tracing
 description: Record every LLM call, tool call and span your agent made during an eval
 ---
 
-A score tells you *that* an eval failed. A trace tells you *why*. If your project has OpenTelemetry installed, EZVals records every span created while an eval runs and saves the spans with that eval's result, with no code changes.
+A score tells you *that* an eval failed. A trace tells you *why*. If your project has OpenTelemetry installed, EZVals records a trace of each eval as it runs and saves it with that eval's result, with no code changes.
+
+A **trace** is everything that happened during one eval. It's made of **spans**, one per step: a model call, a tool call, or any block of your own code you wrap in a span. Spans nest, so a trace reads as a tree: the eval, the agent loop inside it, and the calls inside that.
 
 ## Set up
 
@@ -65,11 +67,11 @@ Each eval gets a root span named `eval <name>`, and everything your agent does n
 
 ## Where to see it
 
-- **Web UI.** Results with spans show a span count. A result's detail page opens a waterfall with nesting, durations, and the model and token counts for each LLM call. Select a span to see all of its attributes.
+- **Web UI.** Results with a trace show a trace icon and the number of steps. On a result's detail page, **Trace** opens a timeline of every step with nesting, durations, and the model and token counts for each LLM call. Select a step to see all of its attributes. If you also stored a `trace_url`, the sidebar links to it under **External trace**.
 
   <Frame>
-    <img className="block dark:hidden" src="/assets/spans-light.png" alt="Span waterfall for one eval" />
-    <img className="hidden dark:block" src="/assets/spans-dark.png" alt="Span waterfall for one eval" />
+    <img className="block dark:hidden" src="/assets/spans-light.png" alt="The trace timeline for one eval" />
+    <img className="hidden dark:block" src="/assets/spans-dark.png" alt="The trace timeline for one eval" />
   </Frame>
 
 - **SQL.** The `spans` table answers questions like "how many tokens did each run use?" and "which tool is slowest?". See [Querying results](/reviewing/querying#token-usage-per-run).

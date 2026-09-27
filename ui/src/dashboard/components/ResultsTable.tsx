@@ -243,7 +243,7 @@ export function ResultsTable({ runId, rows, hidden, sort, widths, selected, onSe
                         {row.labels?.map((l) => <span key={l} className="label-chip max-w-[140px] truncate rounded bg-theme-bg-elevated px-1.5 text-[11px] text-theme-text-secondary" title={l}>{l}</span>)}
                         {row.row.trial ? <span className="trial-chip font-mono text-[11px]" title={`Trial ${row.row.trial}`}>#{row.row.trial}</span> : null}
                         {row.row.span_count ? (
-                          <span className="span-count flex items-center gap-0.5" title={`${row.row.span_count} spans recorded`}>
+                          <span className="span-count flex items-center gap-0.5" title={`Trace with ${row.row.span_count} steps`}>
                             <Icon name="trace" className="h-3 w-3" />{row.row.span_count}
                           </span>
                         ) : null}

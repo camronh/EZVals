@@ -38,7 +38,7 @@ function llmInfo(span: Span) {
 export function TraceWaterfall({ spans }: { spans: Span[] }) {
   const rows = useMemo(() => flatten(spans), [spans])
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  if (!rows.length) return <div className="p-4 text-[13px] text-theme-text-muted">No spans recorded</div>
+  if (!rows.length) return <div className="p-4 text-[13px] text-theme-text-muted">No steps recorded</div>
 
   const start = Math.min(...spans.map((s) => s.start))
   const total = Math.max(1, Math.max(...spans.map((s) => s.end)) - start)
@@ -51,7 +51,7 @@ export function TraceWaterfall({ spans }: { spans: Span[] }) {
   return (
     <div className="trace-waterfall text-[12px]">
       <div className="flex items-center gap-4 border-b border-theme-border px-4 py-2.5 text-[12px] text-theme-text-muted">
-        <span>{spans.length} spans</span>
+        <span>{spans.length} steps</span>
         <span className="font-mono tabular-nums">{formatDuration(total / 1e6)}</span>
         {tokens.input + tokens.output > 0 ? <span><span className="font-mono tabular-nums">{tokens.input.toLocaleString()}</span> in · <span className="font-mono tabular-nums">{tokens.output.toLocaleString()}</span> out tokens</span> : null}
       </div>
