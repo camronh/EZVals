@@ -1,8 +1,5 @@
 import { useState } from 'react'
-import { button, primaryButton } from './Dropdown'
 import { Spinner } from './Spinner'
-
-export const inputClass = 'w-full rounded-md border border-theme-border bg-theme-bg px-2.5 py-1.5 text-[13px] text-theme-text placeholder:text-theme-text-muted focus:border-accent-link focus:outline-none disabled:opacity-60'
 
 /** Save/Cancel buttons for inline edit forms; Save shows a spinner while `saving`. */
 export function EditActions({ saving, onSave, onCancel }: { saving: boolean; onSave: () => void; onCancel: () => void }) {
@@ -10,7 +7,7 @@ export function EditActions({ saving, onSave, onCancel }: { saving: boolean; onS
     <div className="flex justify-end gap-2">
       <button
         type="button"
-        className={`${button} !h-7`}
+        className="btn btn-sm"
         onClick={onCancel}
         disabled={saving}
       >
@@ -19,7 +16,7 @@ export function EditActions({ saving, onSave, onCancel }: { saving: boolean; onS
       <button
         type="button"
         data-annotation-save="true"
-        className={`${primaryButton} !h-7 disabled:opacity-60`}
+        className="btn btn-primary btn-sm"
         onClick={onSave}
         disabled={saving}
       >
@@ -46,7 +43,7 @@ export function AnnotationEditor({ initial, onSave, onCancel, rows = 4 }: {
     try {
       await onSave(draft.trim() || null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save annotation')
+      setError(`Couldn't save: ${(err as Error).message}`)
       setSaving(false)
     }
   }
@@ -54,16 +51,17 @@ export function AnnotationEditor({ initial, onSave, onCancel, rows = 4 }: {
     <div className="space-y-2">
       <textarea
         data-annotation-editor="true"
-        className={inputClass}
+        className="input w-full"
+        aria-label="Annotation"
         rows={rows}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => e.key === 'Escape' && onCancel()}
-        placeholder="Add annotation..."
+        placeholder="What did you notice?"
         autoFocus
         disabled={saving}
       />
-      {error ? <div className="text-[12px] text-accent-error">{error}</div> : null}
+      {error ? <div className="text-xs text-danger">{error}</div> : null}
       <EditActions saving={saving} onSave={save} onCancel={onCancel} />
     </div>
   )

@@ -12,7 +12,7 @@ const meta: Meta<typeof RunPicker> = {
     const anchor = useRef<HTMLButtonElement | null>(null)
     return (
       <div className="h-64">
-        <button ref={anchor} className="font-mono text-sm text-theme-text">baseline v</button>
+        <button ref={anchor} className="btn">baseline</button>
         <RunPicker {...args} anchorRef={anchor} />
       </div>
     )
@@ -22,15 +22,16 @@ export default meta
 
 export const Default: StoryObj<typeof RunPicker> = {}
 
-/** Moving through runs (hover and arrow keys) must not break the page — a scrollIntoView effect once did. */
+/** Arrow keys and hover move between runs (a scrollIntoView effect once broke the page); clicking a run opens it. */
 export const KeyboardAndHover: StoryObj<typeof RunPicker> = {
   play: async ({ canvasElement, args }) => {
     const page = within(canvasElement.ownerDocument.body)
-    const options = await page.findAllByRole('option')
-    await userEvent.hover(options[1])
+    const rows = await page.findAllByRole('listitem')
+    await userEvent.hover(rows[1])
     await userEvent.keyboard('{ArrowDown}{ArrowUp}')
-    await userEvent.click(options[1])
-    await expect(args.onSelectRun).toHaveBeenCalledWith(options[1].dataset.runId)
+    await expect(within(rows[1]).getAllByRole('button')[0]).toHaveFocus()
+    await userEvent.click(within(rows[1]).getAllByRole('button')[0])
+    await expect(args.onSelectRun).toHaveBeenCalledWith(rows[1].dataset.runId)
   },
 }
 

@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 type FloatingMenuProps = HTMLAttributes<HTMLDivElement> & {
+  ref?: RefObject<HTMLDivElement | null>
   anchorRef: RefObject<HTMLElement | null>
   open: boolean
   onClose?: () => void
@@ -10,8 +11,9 @@ type FloatingMenuProps = HTMLAttributes<HTMLDivElement> & {
 }
 
 /** A menu portaled to <body>, positioned under its anchor and kept on screen. */
-export function FloatingMenu({ anchorRef, open, onClose, children, className = 'menu-popover', ...props }: FloatingMenuProps) {
-  const menuRef = useRef<HTMLDivElement | null>(null)
+export function FloatingMenu({ ref, anchorRef, open, onClose, children, className = 'menu-popover', ...props }: FloatingMenuProps) {
+  const own = useRef<HTMLDivElement | null>(null)
+  const menuRef = ref ?? own
   const [style, setStyle] = useState<CSSProperties | null>(null)
 
   useLayoutEffect(() => {
@@ -25,7 +27,7 @@ export function FloatingMenu({ anchorRef, open, onClose, children, className = '
       left: Math.max(8, Math.min(anchor.left, window.innerWidth - menu.width - 8)),
       zIndex: 100,
     })
-  }, [open, anchorRef])
+  }, [open, anchorRef, menuRef])
 
   useEffect(() => {
     if (!open) return
@@ -37,12 +39,12 @@ export function FloatingMenu({ anchorRef, open, onClose, children, className = '
     }
     document.addEventListener('click', handleClick)
     return () => document.removeEventListener('click', handleClick)
-  }, [open, anchorRef, onClose])
+  }, [open, anchorRef, menuRef, onClose])
 
   if (!open) return null
 
   return createPortal(
-    <div ref={menuRef} className={className} style={style ?? { position: 'fixed', top: 0, left: 0, visibility: 'hidden' }} {...props}>
+    <div ref={menuRef} className={className} style={style ?? { position: 'fixed', top: 0, left: 0, opacity: 0 }} {...props}>
       {children}
     </div>,
     document.body,

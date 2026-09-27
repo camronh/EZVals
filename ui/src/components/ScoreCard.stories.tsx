@@ -10,4 +10,4 @@ export const Passed: Story = { args: { score: { key: 'pass', passed: true } } }
 export const Failed: Story = { args: { score: { key: 'pass', passed: false, notes: 'Output does not mention the refund window' } } }
 export const Value: Story = { args: { score: { key: 'helpfulness', value: 0.87 } } }
 export const ValueAndPassed: Story = { args: { score: { key: 'similarity', value: 0.91, passed: true, notes: 'Above the 0.8 threshold' } } }
-export const Editable: Story = { args: { score: { key: 'pass', passed: false, notes: 'Hover to edit' }, onEdit: fn() } }
+export const Editable: Story = { args: { score: { key: 'pass', passed: false, notes: 'Missing the refund timeline' }, onEdit: fn() } }

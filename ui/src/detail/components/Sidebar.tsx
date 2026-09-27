@@ -1,15 +1,13 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { RunResultRow, Score } from '../../types'
-import { AnnotationEditor, EditActions, inputClass } from '../../components/AnnotationEditor'
+import { AnnotationEditor, EditActions } from '../../components/AnnotationEditor'
 import { extractToolNamesFromMessages, DataViewer } from '../../components/DataViewer'
 import { Icon } from '../../components/Icon'
 import { ScoreCard } from '../../components/ScoreCard'
 import { getRawText } from '../../lib/format'
 
-const label = 'text-[12px] font-medium text-theme-text-muted'
 const sectionHeader = 'flex h-10 w-full items-center justify-between px-4 text-left'
-const chip = 'rounded-md bg-theme-bg-elevated px-1.5 py-0.5 text-[11px] text-theme-text-secondary'
 
 function formatMetadataLabel(key: string) {
   return key.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').trim().replace(/\b\w/g, (c) => c.toUpperCase())
@@ -18,7 +16,7 @@ function formatMetadataLabel(key: string) {
 function Row({ name, children }: { name: string; children: ReactNode }) {
   return (
     <div className="flex min-w-0 items-center justify-between gap-2">
-      <span className={label}>{name}</span>
+      <span className="section-label">{name}</span>
       {children}
     </div>
   )
@@ -27,10 +25,10 @@ function Row({ name, children }: { name: string; children: ReactNode }) {
 function Collapsible({ title, defaultOpen, children }: { title: string; defaultOpen: boolean; children: ReactNode }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className="border-b border-theme-border">
-      <button className={`${sectionHeader} group`} onClick={() => setOpen(!open)}>
-        <span className={`${label} group-hover:text-theme-text-secondary`}>{title}</span>
-        <span className={`collapse-icon text-theme-text-muted ${open ? 'open' : ''}`}><Icon name="chevron-down" className="h-3 w-3" /></span>
+    <div className="border-b border-line">
+      <button className={`${sectionHeader} group hover:bg-surface-muted`} onClick={() => setOpen(!open)} aria-expanded={open}>
+        <span className="section-label group-hover:text-fg">{title}</span>
+        <span className={`collapse-icon text-fg-muted ${open ? 'open' : ''}`}><Icon name="chevron-down" className="h-3 w-3" /></span>
       </button>
       <div className={`collapsible-content ${open ? 'open' : ''}`}><div><div className="max-h-48 overflow-auto px-4 pb-3">{children}</div></div></div>
     </div>
@@ -39,10 +37,10 @@ function Collapsible({ title, defaultOpen, children }: { title: string; defaultO
 
 function DrawerButton({ title, count, onClick }: { title: string; count: number; onClick: () => void }) {
   return (
-    <button onClick={onClick} className={`${sectionHeader} border-b border-theme-border text-[13px] text-theme-text-secondary hover:bg-theme-bg-elevated hover:text-theme-text`}>
+    <button onClick={onClick} aria-haspopup="dialog" className={`${sectionHeader} border-b border-line text-sm text-fg-secondary hover:bg-surface-muted hover:text-fg`}>
       {title}
-      <span className="flex items-center gap-2 text-theme-text-muted">
-        <span className="font-mono text-[12px] tabular-nums">{count}</span>
+      <span className="flex items-center gap-2 text-fg-muted">
+        <span className="text-xs tabular-nums">{count}</span>
         <Icon name="chevron-right" className="h-3 w-3" />
       </span>
     </button>
@@ -98,20 +96,20 @@ export function ScoreEditor({ score, onSave, onCancel }: { score: Score; onSave:
     }
   }
   return (
-    <div className="score-editor rounded-md border border-theme-border bg-theme-bg p-2.5" onKeyDown={cancelOnEscape(onCancel)}>
-      <div className="mb-2 text-[13px] font-medium text-theme-text">{score.key}</div>
+    <div className="score-editor rounded-lg border border-line bg-surface p-3 shadow-sm" onKeyDown={cancelOnEscape(onCancel)}>
+      <div className="mb-2 text-sm font-medium text-fg">{score.key}</div>
       <div className="space-y-2">
         {hasValue ? (
-          <input className={`${inputClass} font-mono`} aria-label="Value" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Value (number or text)" disabled={saving} autoFocus />
+          <input className="input w-full font-mono" aria-label="Value" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Value (number or text)" disabled={saving} autoFocus />
         ) : null}
         {hasPassed ? (
-          <select className={inputClass} aria-label="Passed" value={String(passed)} onChange={(e) => setPassed(e.target.value === 'true')} disabled={saving} autoFocus={!hasValue}>
-            <option value="true">Passed: true</option>
-            <option value="false">Passed: false</option>
+          <select className="input w-full" aria-label="Result" value={String(passed)} onChange={(e) => setPassed(e.target.value === 'true')} disabled={saving} autoFocus={!hasValue}>
+            <option value="true">Passed</option>
+            <option value="false">Failed</option>
           </select>
         ) : null}
-        <textarea className={`${inputClass} min-h-[60px]`} aria-label="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes..." disabled={saving} />
-        {error ? <div className="text-[12px] text-accent-error">{error}</div> : null}
+        <textarea className="input min-h-[60px] w-full" aria-label="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Why this score?" disabled={saving} />
+        {error ? <div className="text-xs text-danger">{error}</div> : null}
         <EditActions saving={saving} onSave={save} onCancel={onCancel} />
       </div>
     </div>
@@ -138,10 +136,10 @@ export function Sidebar({ row, runId, onSaveAnnotation, onSaveScores, onOpenMess
   const metadata = Object.entries(r.metadata ?? {})
 
   return (
-    <div id="sidebar-panel" className="flex min-h-0 flex-col overflow-auto bg-theme-bg-secondary">
+    <div id="sidebar-panel" className="flex min-h-0 flex-1 flex-col overflow-auto bg-surface-subtle">
       {scores.length ? (
-        <div className="border-b border-theme-border">
-          <div className={`${label} flex h-10 items-center px-4`}>Scores</div>
+        <div className="border-b border-line">
+          <h2 className="section-label flex h-10 items-center px-4">Scores</h2>
           <div className="space-y-1.5 px-3 pb-3">
             {scores.map((score, i) => editing === i ? (
               <ScoreEditor
@@ -158,27 +156,24 @@ export function Sidebar({ row, runId, onSaveAnnotation, onSaveScores, onOpenMess
         </div>
       ) : null}
 
-      <div className="space-y-2.5 border-b border-theme-border px-4 py-3.5">
-        <Row name="Status">
-          <span className={`rounded-md px-1.5 py-0.5 text-[12px] font-medium ${r.status === 'error' ? 'bg-accent-error-bg text-accent-error' : r.status === 'running' || r.status === 'pending' ? 'bg-theme-bg-elevated text-accent-warn' : 'bg-theme-bg-elevated text-theme-text-secondary'}`}>{r.status ?? 'completed'}</span>
-        </Row>
-        {r.latency != null ? <Row name="Latency"><span className="font-mono text-[12px] tabular-nums text-theme-text">{r.latency.toFixed(2)}s</span></Row> : null}
+      <div className="space-y-2.5 border-b border-line px-4 py-3.5">
+        {r.latency != null ? <Row name="Latency"><span className="text-sm tabular-nums text-fg">{r.latency.toFixed(2)}s</span></Row> : null}
         {row.dataset ? (
           <Row name="Dataset">
-            <a className="max-w-[70%] truncate text-right text-[13px] text-accent-link hover:text-accent-link-hover" title={`Open dashboard filtered to dataset: ${row.dataset}`} href={`/?run_id=${encodeURIComponent(runId)}&dataset_in=${encodeURIComponent(row.dataset)}`}>
+            <a className="link max-w-[70%] truncate text-right text-sm" title={`Open dashboard filtered to dataset: ${row.dataset}`} href={`/?run_id=${encodeURIComponent(runId)}&dataset_in=${encodeURIComponent(row.dataset)}`}>
               {row.dataset}
             </a>
           </Row>
         ) : null}
-        {row.labels?.length ? <Row name="Labels"><div className="flex max-w-[70%] flex-wrap justify-end gap-1">{row.labels.map((l) => <span key={l} className={`${chip} max-w-[140px] truncate`} title={l}>{l}</span>)}</div></Row> : null}
+        {row.labels?.length ? <Row name="Labels"><div className="flex max-w-[70%] flex-wrap justify-end gap-1">{row.labels.map((l) => <span key={l} className="chip max-w-[140px] truncate" title={l}>{l}</span>)}</div></Row> : null}
         {traceUrl ? (
           <Row name="Trace">
-            <a href={traceUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[13px] text-accent-link hover:text-accent-link-hover">
+            <a href={traceUrl} target="_blank" rel="noreferrer" className="link flex items-center gap-1 text-sm">
               {String(traceUrl).replace(/^\w+:\/\/(www\.)?/, '').split('/')[0]}<Icon name="external" className="h-3 w-3" />
             </a>
           </Row>
         ) : null}
-        {tools.length ? <Row name="Tools"><div id="tool-names" className="flex max-w-[70%] flex-wrap justify-end gap-1">{tools.map((t) => <span key={t} className={chip}>{t}</span>)}</div></Row> : null}
+        {tools.length ? <Row name="Tools"><div id="tool-names" className="flex max-w-[70%] flex-wrap justify-end gap-1">{tools.map((t) => <span key={t} className="chip font-mono">{t}</span>)}</div></Row> : null}
       </div>
 
       {messages.length ? <DrawerButton title="Messages" count={messages.length} onClick={onOpenMessages} /> : null}
@@ -188,12 +183,12 @@ export function Sidebar({ row, runId, onSaveAnnotation, onSaveScores, onOpenMess
           <dl className="space-y-2.5">
             {metadata.map(([key, value]) => (
               <div key={key}>
-                <dt className={label}>{formatMetadataLabel(key)}</dt>
+                <dt className="section-label">{formatMetadataLabel(key)}</dt>
                 <dd className="mt-0.5">
                   {typeof value === 'string' && /^https?:\/\/\S+$/i.test(value.trim()) ? (
-                    <a href={value} target="_blank" rel="noreferrer" className="break-all text-[12px] text-accent-link hover:text-accent-link-hover">{value}</a>
+                    <a href={value} target="_blank" rel="noreferrer" className="link break-all text-xs">{value}</a>
                   ) : (
-                    <pre className="whitespace-pre-wrap break-words font-mono text-[12px] text-theme-text">{getRawText(value) || '—'}</pre>
+                    <pre className="whitespace-pre-wrap break-words font-mono text-xs text-fg">{getRawText(value) || '—'}</pre>
                   )}
                 </dd>
               </div>
@@ -206,9 +201,9 @@ export function Sidebar({ row, runId, onSaveAnnotation, onSaveScores, onOpenMess
 
       <div className="flex-1">
         <div className="flex h-10 items-center justify-between px-4">
-          <span className={label}>Annotation</span>
+          <h2 className="section-label">Annotation</h2>
           {editing !== 'annotation' ? (
-            <button className="-mr-1 flex h-6 w-6 items-center justify-center rounded-md text-theme-text-muted hover:bg-theme-bg-elevated hover:text-theme-text" title="Edit annotation" onClick={() => setEditing('annotation')}>
+            <button className="btn btn-ghost btn-xs btn-icon -mr-1" title="Edit annotation" aria-label="Edit annotation" onClick={() => setEditing('annotation')}>
               <Icon name="pencil" className="h-3 w-3" />
             </button>
           ) : null}
@@ -226,18 +221,18 @@ export function Sidebar({ row, runId, onSaveAnnotation, onSaveScores, onOpenMess
               />
             </div>
           ) : r.annotation ? (
-            <div className="whitespace-pre-wrap text-[13px] text-theme-text-secondary">{r.annotation}</div>
+            <div className="whitespace-pre-wrap text-sm text-fg-secondary">{r.annotation}</div>
           ) : (
-            <button type="button" className="text-[13px] text-accent-link hover:text-accent-link-hover" onClick={() => setEditing('annotation')}>
-              + Add annotation
+            <button type="button" className="link text-sm" onClick={() => setEditing('annotation')}>
+              Add annotation
             </button>
           )}
         </div>
       </div>
 
-      <div className="flex flex-shrink-0 items-center gap-4 border-t border-theme-border px-4 py-2 text-[11px] text-theme-text-muted">
-        <span><kbd className="mr-1 rounded border border-theme-border bg-theme-bg px-1 font-mono">↑↓</kbd>nav</span>
-        <span><kbd className="mr-1 rounded border border-theme-border bg-theme-bg px-1 font-mono">Esc</kbd>{editing !== null ? 'cancel' : 'back'}</span>
+      <div className="flex flex-shrink-0 items-center gap-4 border-t border-line px-4 py-2 text-xs text-fg-muted">
+        <span className="flex items-center gap-1.5"><kbd className="kbd">↑</kbd><kbd className="kbd">↓</kbd>next result</span>
+        <span className="flex items-center gap-1.5"><kbd className="kbd">Esc</kbd>{editing !== null ? 'cancel' : 'back'}</span>
       </div>
     </div>
   )

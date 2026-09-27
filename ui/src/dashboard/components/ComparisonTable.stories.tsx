@@ -15,7 +15,7 @@ const meta: Meta<typeof ComparisonTable> = {
   title: 'Dashboard/ComparisonTable',
   component: ComparisonTable,
   parameters: { layout: 'fullscreen' },
-  decorators: [(Story) => <div className="bg-theme-bg p-4"><Story /></div>],
+  decorators: [(Story) => <div className="bg-surface p-4"><Story /></div>],
   args: { onSort: fn(), onSaveAnnotation: fn(async () => {}) },
 }
 export default meta

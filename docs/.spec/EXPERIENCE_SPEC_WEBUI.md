@@ -24,7 +24,24 @@ The dashboard is three stacked regions above the results table:
 
 Most runs are graded by a single pass/fail score, so the UI is built around one metric: the pass rate and each row's outcome icon carry it, and per-key detail appears only when a run has several keys (two or three is normal; more is unusual but supported).
 
-The UI uses one neutral palette with a single blue accent; green, red and amber only ever mean passed, failed and in progress. Text uses the system font; monospace is reserved for code and data (inputs, outputs, ids, latencies).
+The UI uses one neutral palette with a single blue accent; green, red and amber only ever mean passed, failed and in progress, and always come with an icon or a word. Compared runs take blue, violet, teal and pink, never a status colour. Text uses the system font; prose (inputs, outputs, notes) is set in it too, and monospace is reserved for structured data, errors, commands and ids.
+
+The visual language is the EZVals design system: semantic colour tokens for both themes, a type scale (11–32px), a 4/6/8/12px radius scale, one set of button, field, chip, menu and dialog styles, and a single focus ring. It is documented in Storybook under **Design System** (Foundations and Controls).
+
+### Accessibility
+
+```gherkin
+Scenario: The UI meets WCAG 2.1 AA
+  Then every text colour has at least 4.5:1 contrast on the surfaces it is used on, in both themes
+  And field and checkbox edges, the focus ring and status marks have at least 3:1
+  And every control has an accessible name, and every story passes an automated WCAG 2.1 AA check in the story tests
+
+Scenario: Keyboard use
+  Then every control shows a visible focus ring when reached by keyboard
+  And menus take focus when opened, arrow keys move between items, and Escape closes them and returns focus to their button
+  And dialogs keep focus inside until closed with Escape, Close or a click outside, then return focus to where it was
+  And option switches (All / Failed / Errors, Pretty / Raw, the theme) are radio groups: arrow keys move the choice
+```
 
 ### Theme
 
@@ -220,6 +237,19 @@ Scenario: Open detail view
   Then a full-page detail view opens
   At URL: /runs/{run_id}/results/{index}
 
+Scenario: Detail header
+  Then the header shows where the result is: session / run / eval name (the run links back to its dashboard)
+  And the result's position ("5 of 12") with previous and next buttons, then Regrade and Rerun
+
+Scenario: Verdict
+  Given the detail view is open
+  Then a strip under the header says how the result came out, and why:
+    - error: the error's one-line summary, with the rest of the traceback below it (capped in height, with "Show all")
+    - failed: "Failed" (with several scores, the keys that failed) and the failing scores' notes
+    - passed: "Passed" and any notes the grader left
+    - running, queued, cancelled or not run: that status
+  And a result with only numeric scores has no strip
+
 Scenario: Detail view contents
   Given the detail view is open
   Then user sees:
@@ -233,7 +263,10 @@ Scenario: Detail view contents
     - Tools used (unique tool names from trace_data.messages tool calls, if present)
     - Trace (a link to trace_url, labeled with its site's host name), if set
     - Latency
-    - Error message (if any; a long traceback is capped in height, scrollable and expandable)
+
+Scenario: Detail layout
+  Then Input is on the left, and Output is on the right with Reference beneath it, so the two can be compared
+  And prose renders in the UI's text face and structured data (JSON) in monospace
 
 Scenario: Scores lead the sidebar
   Given the result has scores
@@ -287,7 +320,7 @@ Scenario: Detail pane sizes persist in-session
 Scenario: Detail view on a narrow screen
   Given the viewport is narrower than 768px
   When the user opens a detail page
-  Then Input, Reference and Output stack full-width, followed by the sidebar
+  Then Input, Output and Reference stack full-width, followed by the sidebar
   And resize handles are hidden (saved pane sizes still apply on wider screens)
 ```
 
@@ -434,34 +467,32 @@ Scenario: Export as Markdown
 
 Scenario: Export as PNG
   Given evaluation results exist
-  When the user clicks Export > PNG
-  Then a modal opens with a PNG preview
-  And export controls are collapsed by default behind a compact options button
-  And the controls include:
-    - Editable title
-    - Score color customization
-    - Toggles for showing test count and average latency in the footer
-  And the preview image shows:
-    - EZVals logo and title
-    - Test count (when enabled) in the bottom-left
-    - Average latency (when enabled) in the bottom-left
-    - Vertical bar chart for each score metric with percentages
-    - EZVals logo and "ezvals.com" branding in the bottom-right
+  When the user clicks Export > Image
+  Then a dialog opens with a preview of the image
+  And export options are collapsed by default behind a compact options button
+  And the options include:
+    - Editable title (the session name by default)
+    - Score colours (good, mid, low; the theme's passed, in-progress and failed colours by default)
+    - Toggles for showing the eval count and average latency under the title
+  And the image shows the summary as on screen (the visible rows):
+    - the title, and the eval count and average latency when enabled
+    - the pass rate, large, with the outcome bar and a legend of passed, failed and errored counts
+    - each score key with its value and a bar, only when there is more than one key or a numeric one
+    - the EZVals mark and "ezvals.com" in the bottom-right
   And the image matches the current theme (dark or light)
   And the user can click Save to download the PNG
   And the user can click Copy to copy the image to clipboard
 
 Scenario: Export as PNG in comparison mode
   Given comparison mode is active with 2+ runs
-  When the user clicks Export > PNG
+  When the user clicks Export > Image
   Then the default title is the session name
   And the modal includes editable run names and run colors
   And the modal includes up/down controls to reorder runs
-  And the PNG preview shows:
-    - Run chips with colors and test counts
-    - Grouped bars per metric (one bar per run, colored by run)
-    - Percentage labels above each bar
-    - Latency as an additional metric
+  And the image shows one row per run:
+    - the run's colour dot and name
+    - its pass rate as a bar in the run's colour, with the change in points from the first run
+    - its average latency
 ```
 
 ---
@@ -567,7 +598,7 @@ Scenario: Progress while running
 
 Scenario: Not run yet
   Given no row has been run
-  Then the summary says how many evals are ready to run
+  Then the summary says how many evals are ready to run ("6 evals ready to run")
 
 Scenario: Stats update with filters
   Given filters, search or the outcome switch narrow the rows
@@ -745,7 +776,17 @@ Scenario: Discovery finds no evals or fails
   When GET /results (or /api/runs/latest/data)
   Then 200 with the active run's ids and names and no results
   And `discovery_error` holds the worker's error and traceback when discovery failed
-  And the UI shows it as a banner above the table, keeping the toolbar so the user can fix the file and Reload
+  And the UI shows "Couldn't load your evals" with the traceback and how to recover (fix the file, then Reload evals from the ⋯ menu), keeping the header so the user can Reload
+  And with no results, the table and the "No evals found" message are not shown
+
+Scenario: No results match the filters
+  Given filters or search hide every row
+  Then the table says so and offers "Clear filters", which resets filters and search
+
+Scenario: Loading and load failures
+  Then while a page loads it says what it is loading ("Loading results…")
+  And if it can't load, it says so ("Couldn't load results") and suggests checking that `ezvals serve` is still running
+  And action failures appear as toasts that start with "Couldn't …" and include the reason
 ```
 
 ---
@@ -854,10 +895,10 @@ Scenario: Comparison summary
   Given comparison mode is active with 2+ runs (max 4)
   Then the summary is a table with one row per run:
     - color dot and run name
-    - pass rate
+    - pass rate with a bar in the run's colour, and for runs after the first, the change in points from the first run
     - one column per score key (pass rate or average), only when the runs have more than one key or a numeric one
     - average latency
-  And the best value in each column is emphasized
+  And the best value in each column is emphasized (nothing is, when the runs tie)
   And non-primary rows have a remove (×) button
   And an "Add run" button adds another run (if < 4 runs)
 

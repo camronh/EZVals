@@ -5,13 +5,13 @@ import { formatValue } from './format'
 import { outcomeOf } from './stats'
 
 export const COLUMNS: ColumnDef[] = [
-  { key: 'function', label: 'Eval', width: '15%', type: 'string', align: 'left' },
-  { key: 'input', label: 'Input', width: '18%', type: 'string', align: 'left' },
-  { key: 'reference', label: 'Reference', width: '18%', type: 'string', align: 'left' },
-  { key: 'output', label: 'Output', width: '18%', type: 'string', align: 'left' },
+  { key: 'function', label: 'Eval', width: '19%', type: 'string', align: 'left' },
+  { key: 'input', label: 'Input', width: '17%', type: 'string', align: 'left' },
+  { key: 'reference', label: 'Reference', width: '17%', type: 'string', align: 'left' },
+  { key: 'output', label: 'Output', width: '22%', type: 'string', align: 'left' },
   { key: 'error', label: 'Error', width: '18%', type: 'string', align: 'left' },
-  { key: 'scores', label: 'Scores', width: '140px', type: 'number', align: 'left' },
-  { key: 'latency', label: 'Time', width: '70px', type: 'number', align: 'right' },
+  { key: 'scores', label: 'Scores', width: '160px', type: 'number', align: 'left' },
+  { key: 'latency', label: 'Time', width: '64px', type: 'number', align: 'right' },
 ]
 export const COLUMN_KEYS = COLUMNS.map((c) => c.key)
 export const DEFAULT_HIDDEN_COLUMNS = ['error']

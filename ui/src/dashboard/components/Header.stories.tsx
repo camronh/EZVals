@@ -7,7 +7,7 @@ const meta: Meta<typeof Header> = {
   title: 'Dashboard/Header',
   component: Header,
   parameters: { layout: 'fullscreen' },
-  decorators: [(Story) => <div className="min-h-[360px] bg-theme-bg"><Story /></div>],
+  decorators: [(Story) => <div className="min-h-[360px] bg-surface"><Story /></div>],
   args: {
     sessionName: 'support-agent',
     runName: 'baseline',

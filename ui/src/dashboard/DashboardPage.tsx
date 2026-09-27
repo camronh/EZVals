@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Config, FilterState, OutcomeFilter, SortRule } from '../types'
 import { api } from '../api'
+import { Icon } from '../components/Icon'
+import { PageMessage } from '../components/Spinner'
 import { Toasts, useToasts } from '../components/Toasts'
 import { useDebouncedValue, useLocalState, useSessionState } from '../hooks/storage'
 import { buildComparison } from '../lib/comparison'
@@ -142,8 +144,8 @@ export function DashboardPage({ query }: { query: DashboardQuery }) {
     await reload()
   }, [notify, reload])
 
-  if (error && !data) return <div className="p-4 text-theme-text-muted">Failed to load results. Please refresh the page.</div>
-  if (!data) return <div className="flex h-screen items-center justify-center text-theme-text-muted">Loading...</div>
+  if (error && !data) return <PageMessage title="Couldn't load results">Check that <code className="font-mono">ezvals serve</code> is still running, then refresh the page.</PageMessage>
+  if (!data) return <PageMessage loading title="Loading results…" />
 
   const keyOrder = (data.score_chips ?? []).map((c) => c.key)
   const statsRows = filtering ? rows.map((r) => r.row) : data.results
@@ -185,52 +187,56 @@ export function DashboardPage({ query }: { query: DashboardQuery }) {
     try {
       download(await api.exportMarkdown(data.run_id, payload), `${comparison.comparing ? 'comparison' : data.run_id}.md`)
     } catch (err) {
-      notify(`Export failed: ${(err as Error).message}`)
+      notify(`Couldn't export: ${(err as Error).message}`)
     }
   }
 
   return (
-    <div className="flex h-screen flex-col bg-theme-bg font-sans text-theme-text">
+    <div className="flex h-screen flex-col bg-surface font-sans text-fg">
       <Header
         sessionName={data.session_name}
         runName={data.run_name}
         runId={data.run_id}
         sessionRuns={sessionRuns}
-        onRename={(name) => act(() => (data.results.some((r) => r.result.status !== 'not_started') ? api.rename(data.run_id, name) : api.setPendingRunName(name)), 'Rename failed')}
-        onRenameRun={(runId, name) => act(() => api.rename(runId, name), 'Rename failed')}
-        onDeleteRun={(runId) => act(() => api.deleteRun(runId), 'Delete failed')}
-        onSelectRun={(runId) => runId !== data.run_id && act(() => api.activate(runId), 'Could not open run')}
+        onRename={(name) => act(() => (data.results.some((r) => r.result.status !== 'not_started') ? api.rename(data.run_id, name) : api.setPendingRunName(name)), "Couldn't rename the run")}
+        onRenameRun={(runId, name) => act(() => api.rename(runId, name), "Couldn't rename the run")}
+        onDeleteRun={(runId) => act(() => api.deleteRun(runId), "Couldn't delete the run")}
+        onSelectRun={(runId) => runId !== data.run_id && act(() => api.activate(runId), "Couldn't open the run")}
         onNewRun={() => act(async () => {
           await api.newRun()
           setSelected(new Set())
-        }, 'New run failed')}
+        }, "Couldn't start a new run")}
         onCompare={(runId) => comparison.start([data.run_id, runId])}
         comparingCount={comparison.comparing ? comparison.runs.length : undefined}
         onExitCompare={() => {
           const first = comparison.runs[0].runId
           comparison.start([])
-          if (first !== data.run_id) act(() => api.activate(first), 'Could not open run')
+          if (first !== data.run_id) act(() => api.activate(first), "Couldn't open the run")
         }}
         onOpenSettings={() => api.config().then((config) => setModal({ kind: 'settings', config }), (err) => notify(err.message))}
         onRegrade={() => act(async () => {
           const { regraded, skipped_without_target: skipped } = await api.regrade(selectedIndices.length ? selectedIndices : undefined)
           notify(`Regrading ${regraded} result${regraded === 1 ? '' : 's'}${skipped ? ` (${skipped} skipped: no target)` : ''}`, 'success')
-        }, 'Regrade failed')}
+        }, "Couldn't regrade")}
         onReloadServer={async () => {
           setReloading(true)
-          await act(api.reloadServer, 'Reload failed')
+          await act(api.reloadServer, "Couldn't reload evals")
           setTimeout(() => window.location.reload(), 700)
         }}
         reloading={reloading}
         runState={runState}
         selectedCount={selected.size}
-        onRun={() => act(() => api.run(selectedIndices.length ? selectedIndices : undefined, configs.active), 'Run failed')}
-        onStop={() => act(api.stop, 'Stop failed')}
-        onPauseToggle={() => act(data.is_paused ? api.resume : api.pause, 'Run control failed')}
+        onRun={() => act(() => api.run(selectedIndices.length ? selectedIndices : undefined, configs.active), "Couldn't start the run")}
+        onStop={() => act(api.stop, "Couldn't stop the run")}
+        onPauseToggle={() => act(data.is_paused ? api.resume : api.pause, "Couldn't pause or resume the run")}
       />
-      <main className="flex-1 overflow-auto px-4 pb-4 pt-4">
+      <main className="flex-1 overflow-auto px-5 pb-6 pt-5">
         {data.discovery_error ? (
-          <pre id="discovery-error" className="mb-4 max-h-60 overflow-auto whitespace-pre-wrap rounded-lg border border-red-500/30 bg-accent-error-bg p-3 font-mono text-xs text-accent-error">{data.discovery_error}</pre>
+          <div id="discovery-error" role="alert" className="mb-5 rounded-lg bg-danger-subtle">
+            <div className="flex items-center gap-2 px-4 pt-3 text-sm font-semibold text-danger"><Icon name="alert" />Couldn't load your evals</div>
+            <p className="px-4 pt-0.5 text-sm text-fg-secondary">Fix the error below, then choose <span className="font-medium text-fg">Reload evals</span> from the ⋯ menu.</p>
+            <pre className="m-3 mt-2.5 max-h-60 overflow-auto whitespace-pre-wrap rounded-md bg-surface p-3 font-mono text-xs leading-5 text-fg">{data.discovery_error}</pre>
+          </div>
         ) : null}
         {data.results.length ? (
           <StatsPanel
@@ -266,7 +272,7 @@ export function DashboardPage({ query }: { query: DashboardQuery }) {
         ) : null}
         {comparison.comparing ? (
           <ComparisonTable runs={comparison.runs} rows={comparisonRows} onSort={(col, type, multi) => setSort(toggleSort(sort, col, type, multi))} onSaveAnnotation={saveAnnotation} />
-        ) : (
+        ) : data.discovery_error && !data.results.length ? null : (
           <ResultsTable
             runId={data.run_id}
             rows={rows}
@@ -280,8 +286,10 @@ export function DashboardPage({ query }: { query: DashboardQuery }) {
             onOpen={(index) => { window.location.href = `/runs/${data.run_id}/results/${index}` }}
             onSaveAnnotation={saveAnnotation}
             oneMetric={!extraChips(data.score_chips ?? []).length}
-            emptyText={filtering && data.results.length ? 'No results match the current filters' : undefined}
-            evalPath={data.discovery_error ? undefined : data.eval_path ?? data.path ?? undefined}
+            emptyText={filtering && data.results.length ? (
+              <>No results match the current filters. <button className="link font-medium" onClick={() => { setFilters(defaultFilters()); setSearch('') }}>Clear filters</button></>
+            ) : undefined}
+            evalPath={data.eval_path ?? data.path ?? undefined}
           />
         )}
       </main>
@@ -293,26 +301,23 @@ export function DashboardPage({ query }: { query: DashboardQuery }) {
           onConfigSelect={(name) => act(async () => {
             await api.selectConfig(name)
             setConfigs({ ...configs, active: name })
-          }, 'Could not select config')}
+          }, "Couldn't switch the run config")}
           onSave={(config) => act(async () => {
             await api.saveConfig(config)
             setModal(null)
-          }, 'Failed to save settings')}
+          }, "Couldn't save settings")}
           onClose={() => setModal(null)}
         />
       ) : null}
+      {modal?.kind === 'png' ? (
       <PngExportModal
-        open={modal?.kind === 'png'}
         onClose={() => setModal(null)}
-        displayChips={stats.chips}
-        displayLatency={stats.avgLatency}
-        displayFilteredCount={filtering ? rows.length : null}
-        totalTests={data.results.length}
-        isComparisonMode={comparison.comparing}
-        normalizedComparisonRuns={comparison.runs}
-        comparisonData={comparison.data}
+        stats={stats}
+        total={data.results.length}
+        comparison={comparison.comparing ? { runs: comparison.runs, stats: comparisonStats } : undefined}
         sessionName={data.session_name ?? ''}
       />
+      ) : null}
       <Toasts toasts={toasts} />
     </div>
   )

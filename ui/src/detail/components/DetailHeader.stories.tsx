@@ -8,6 +8,8 @@ const meta: Meta<typeof DetailHeader> = {
   parameters: { layout: 'fullscreen' },
   args: {
     name: 'refund_request[direct]',
+    sessionName: 'model-upgrade',
+    run: { id: 'a1b2c3d4', name: 'baseline' },
     runCommand: 'ezvals run evals/::refund_request[direct]',
     position: { index: 3, total: 12 },
     busy: null,

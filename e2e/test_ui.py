@@ -93,7 +93,7 @@ def test_detail_view_navigation_and_annotation(app: Page):
     expect(app).to_have_url(re.compile(r"/results/1$"))
 
     app.get_by_title("Edit annotation").click()
-    app.get_by_placeholder("Add annotation...").fill("Looks right")
+    app.get_by_role("textbox", name="Annotation").fill("Looks right")
     app.get_by_role("button", name="Save").click()
     app.reload()
     expect(app.get_by_text("Looks right")).to_be_visible()

@@ -15,17 +15,18 @@ export function useToasts() {
   return { toasts, notify }
 }
 
+/** Brief notices in the bottom-right corner; errors are announced assertively, successes politely. */
 export function Toasts({ toasts }: { toasts: Toast[] }) {
-  if (!toasts.length) return null
   return (
     <div id="toast-container" className="fixed bottom-4 right-4 z-[200] flex flex-col gap-2">
       {toasts.map((t) => (
         <div
           key={t.id}
-          className="flex max-w-sm items-start gap-2.5 rounded-lg border border-theme-border bg-theme-bg px-3.5 py-2.5 text-[13px] text-theme-text shadow-[var(--shadow)]"
-          style={{ animation: 'toast-in 0.2s ease-out' }}
+          role={t.tone === 'error' ? 'alert' : 'status'}
+          className="popover flex max-w-sm items-start gap-2.5 px-3.5 py-2.5 text-sm"
+          style={{ animation: 'enter-up 0.2s ease-out' }}
         >
-          <span className={`mt-0.5 shrink-0 ${t.tone === 'error' ? 'text-accent-error' : 'text-accent-success'}`}><Icon name={t.tone === 'error' ? 'alert' : 'check'} /></span>
+          <span className={`mt-[3px] shrink-0 ${t.tone === 'error' ? 'text-danger' : 'text-success'}`}><Icon name={t.tone === 'error' ? 'alert' : 'check'} /></span>
           {t.message}
         </div>
       ))}

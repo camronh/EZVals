@@ -35,7 +35,7 @@ export const EditingScore: Story = {
   args: { row: completedRows[1] },
   play: async ({ canvasElement }) => {
     await userEvent.click(within(canvasElement).getAllByTitle('Edit score')[0])
-    await expect(await within(canvasElement).findByDisplayValue('Passed: false')).toBeVisible()
+    await expect(await within(canvasElement).findByDisplayValue('Failed')).toBeVisible()
   },
 }
 
@@ -48,7 +48,7 @@ export const EditingValueAndPassed: Story = {
     const value = canvas.getByLabelText('Value')
     await userEvent.clear(value)
     await userEvent.type(value, '.5')
-    await userEvent.selectOptions(canvas.getByLabelText('Passed'), 'false')
+    await userEvent.selectOptions(canvas.getByLabelText('Result'), 'false')
     await userEvent.click(canvas.getByText('Save'))
     await waitFor(() => expect(args.onSaveScores).toHaveBeenCalledWith([{ key: 'similarity', value: 0.5, passed: false, notes: 'Above the 0.8 threshold' }]))
   },
@@ -79,22 +79,22 @@ export const EscapeCancelsScoreEdit: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await userEvent.click(canvas.getAllByTitle('Edit score')[0])
-    const select = canvas.getByLabelText('Passed')
+    const select = canvas.getByLabelText('Result')
     await waitFor(() => expect(select).toHaveFocus())
     await userEvent.keyboard('{Escape}')
-    await waitFor(() => expect(canvas.queryByLabelText('Passed')).toBeNull())
+    await waitFor(() => expect(canvas.queryByLabelText('Result')).toBeNull())
   },
 }
 
-/** Without an annotation, a "+ Add annotation" link opens the editor. */
+/** Without an annotation, an "Add annotation" link opens the editor. */
 export const AddAnnotation: Story = {
   args: { row: completedRows[1] },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await userEvent.click(canvas.getByText('+ Add annotation'))
-    await expect(canvas.getByPlaceholderText('Add annotation...')).toHaveFocus()
+    await userEvent.click(canvas.getByText('Add annotation'))
+    await expect(canvas.getByRole('textbox', { name: 'Annotation' })).toHaveFocus()
     await userEvent.keyboard('{Escape}')
-    await waitFor(() => expect(canvas.getByText('+ Add annotation')).toBeVisible())
+    await waitFor(() => expect(canvas.getByText('Add annotation')).toBeVisible())
   },
 }
 

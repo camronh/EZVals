@@ -55,7 +55,7 @@ const extraRun = {
 export const MarkdownTable: Story = { args: { runId: extraRun.run_id, index: 0 }, parameters: { msw: { handlers: apiHandlers(extraRun) } } }
 /** A long traceback stays capped so the panels remain usable. */
 export const LongError: Story = { args: { runId: extraRun.run_id, index: 1 }, parameters: { msw: { handlers: apiHandlers(extraRun) } } }
-/** On a phone the panes stack: input, reference, output, then the sidebar. */
+/** On a phone the panes stack: input, output, reference, then the sidebar. */
 export const Mobile: Story = { globals: { viewport: { value: 'mobile2', isRotated: false } } }
 
 /** Escape closes an open drawer instead of leaving the page. */

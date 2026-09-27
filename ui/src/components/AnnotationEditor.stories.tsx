@@ -19,7 +19,7 @@ export const SaveFails: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await userEvent.click(canvas.getByRole('button', { name: 'Save' }))
-    await expect(await canvas.findByText('Run not found')).toBeVisible()
+    await expect(await canvas.findByText("Couldn't save: Run not found")).toBeVisible()
   },
 }
 
@@ -27,7 +27,7 @@ export const SavesTrimmedText: Story = {
   args: { initial: '' },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement)
-    await userEvent.type(canvas.getByPlaceholderText('Add annotation...'), '  looks right  ')
+    await userEvent.type(canvas.getByRole('textbox', { name: 'Annotation' }), '  looks right  ')
     await userEvent.click(canvas.getByRole('button', { name: 'Save' }))
     await expect(args.onSave).toHaveBeenCalledWith('looks right')
   },

@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import type { SessionRun } from '../../types'
 import { CopyableText } from '../../components/CopyableText'
-import { Dropdown, button, iconButton, primaryButton } from '../../components/Dropdown'
+import { Dropdown, useMenuKeys } from '../../components/Dropdown'
 import { FloatingMenu } from '../../components/FloatingMenu'
 import { Icon } from '../../components/Icon'
 import { formatRunTimestamp } from '../../lib/format'
@@ -42,12 +42,14 @@ export function RunsMenu({ anchor, open, onClose, runs, onPick }: {
   runs: SessionRun[]
   onPick: (run: SessionRun) => void
 }) {
+  const menu = useRef<HTMLDivElement | null>(null)
+  useMenuKeys(open, menu, onClose)
   return (
-    <FloatingMenu anchorRef={anchor} open={open} onClose={onClose}>
+    <FloatingMenu ref={menu} anchorRef={anchor} open={open} onClose={onClose} role="menu" aria-label="Runs to compare">
       {runs.map((run) => (
-        <button key={run.run_id} className="compare-option menu-item" onClick={() => { onPick(run); onClose() }}>
+        <button key={run.run_id} role="menuitem" className="compare-option menu-item" onClick={() => { onPick(run); onClose() }}>
           <span className="truncate">{run.run_name || run.run_id}</span>
-          <span className="ml-auto shrink-0 pl-4 text-[11px] text-theme-text-muted">{formatRunTimestamp(run.timestamp)}</span>
+          <span className="ml-auto shrink-0 pl-4 text-xs text-fg-muted">{formatRunTimestamp(run.timestamp)}</span>
         </button>
       ))}
     </FloatingMenu>
@@ -69,7 +71,7 @@ function RunName({ runName, runId, sessionRuns, onRename, onRenameRun, onDeleteR
       <span className="flex items-center gap-1">
         <input
           id="run-name-input"
-          className="h-7 w-48 rounded-md border border-accent-link bg-theme-bg px-2 text-sm font-medium text-theme-text outline-none"
+          className="input h-7 w-52 font-medium"
           value={draft}
           aria-label="Run name"
           onChange={(e) => setDraft(e.target.value)}
@@ -78,29 +80,31 @@ function RunName({ runName, runId, sessionRuns, onRename, onRenameRun, onDeleteR
           autoFocus
           onFocus={(e) => e.currentTarget.select()}
         />
-        <button className="save-run-name-btn flex h-7 w-7 items-center justify-center rounded-md text-accent-success hover:bg-theme-bg-elevated" title="Save name" aria-label="Save name" onMouseDown={(e) => e.preventDefault()} onClick={save}>
-          <Icon name="check" className="h-3.5 w-3.5" />
+        <button className="save-run-name-btn btn btn-ghost btn-sm btn-icon !text-success" title="Save name" aria-label="Save name" onMouseDown={(e) => e.preventDefault()} onClick={save}>
+          <Icon name="check" />
         </button>
       </span>
     )
   }
   return (
-    <span className="group flex min-w-0 items-center gap-0.5">
+    <span className="flex min-w-0 items-center gap-0.5">
       {sessionRuns.some((r) => r.run_id !== runId) ? (
         <button
           ref={anchor}
           id="run-dropdown-expanded"
-          className="run-dropdown-btn flex min-w-0 items-center gap-1 rounded-md px-1.5 py-1 text-sm font-semibold text-theme-text hover:bg-theme-bg-elevated"
+          className="run-dropdown-btn flex h-7 min-w-0 items-center gap-1 rounded-md px-1.5 font-semibold text-fg hover:bg-surface-muted"
           data-run-id={runId}
+          aria-haspopup="dialog"
+          aria-expanded={picking}
           onClick={() => setPicking(!picking)}
         >
           <span className="truncate">{name}</span>
-          <Icon name="chevron-down" className="h-3.5 w-3.5 shrink-0 text-theme-text-muted" />
+          <Icon name="chevron-down" className="h-3.5 w-3.5 shrink-0 text-fg-muted" />
         </button>
       ) : (
-        <CopyableText text={name} className="stats-run cursor-pointer truncate px-1.5 text-sm font-semibold text-theme-text" />
+        <CopyableText text={name} className="stats-run cursor-pointer truncate px-1.5 font-semibold text-fg" />
       )}
-      <button className="edit-run-btn-expanded flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-theme-text-muted hover:bg-theme-bg-elevated hover:text-theme-text" title="Rename run" aria-label="Rename run" onClick={() => { setDraft(name); setEditing(true) }}>
+      <button className="edit-run-btn-expanded btn btn-ghost btn-xs btn-icon" title="Rename run" aria-label="Rename run" onClick={() => { setDraft(name); setEditing(true) }}>
         <Icon name="pencil" className="h-3 w-3" />
       </button>
       {picking ? <RunPicker anchorRef={anchor} onClose={() => setPicking(false)} sessionRuns={sessionRuns} activeRunId={runId} onSelectRun={onSelectRun} onRenameRun={onRenameRun} onDeleteRun={onDeleteRun} /> : null}
@@ -111,7 +115,7 @@ function RunName({ runName, runId, sessionRuns, onRename, onRenameRun, onDeleteR
 function RunControls({ runState, selectedCount, onRun, onStop, onPauseToggle }: Pick<Props, 'runState' | 'selectedCount' | 'onRun' | 'onStop' | 'onPauseToggle'>) {
   if (runState === 'idle') {
     return (
-      <button id="play-btn" className={primaryButton} onClick={onRun}>
+      <button id="play-btn" className="btn btn-primary" onClick={onRun}>
         <Icon name="play" className="h-3 w-3" />
         <span id="play-btn-text">{selectedCount ? `Run ${selectedCount}` : 'Run'}</span>
       </button>
@@ -120,10 +124,10 @@ function RunControls({ runState, selectedCount, onRun, onStop, onPauseToggle }: 
   const paused = runState === 'paused'
   return (
     <>
-      <button id="pause-btn" className={button} onClick={onPauseToggle}>
+      <button id="pause-btn" className="btn" onClick={onPauseToggle}>
         <Icon name={paused ? 'play' : 'pause'} className="h-3 w-3" />{paused ? 'Resume' : 'Pause'}
       </button>
-      <button id="play-btn" className={`${button} !text-accent-error`} onClick={onStop}>
+      <button id="play-btn" className="btn btn-danger" onClick={onStop}>
         <Icon name="stop" className="h-3 w-3" /><span id="play-btn-text">Stop</span>
       </button>
     </>
@@ -137,30 +141,32 @@ export function Header(props: Props) {
   const others = props.sessionRuns.filter((r) => r.run_id !== props.runId)
   const active = props.runState === 'running' || props.runState === 'paused'
   return (
-    <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b border-theme-border bg-theme-bg px-4">
+    <header className="sticky top-0 z-40 flex h-12 shrink-0 items-center gap-3 border-b border-line bg-surface px-4">
       <img src="/logo.png" alt="EZVals" className="h-6 w-6 shrink-0" />
-      <div className="flex min-w-0 flex-1 items-center gap-1 text-sm">
+      <nav aria-label="Run" className="flex min-w-0 flex-1 items-center gap-1 text-base">
         {props.sessionName ? (
           <>
-            <CopyableText text={props.sessionName} className="stats-session hidden cursor-pointer truncate px-1 text-theme-text-muted hover:text-theme-text-secondary sm:inline" />
-            <span className="hidden text-theme-text-muted opacity-60 sm:inline">/</span>
+            <CopyableText text={props.sessionName} className="stats-session hidden cursor-pointer truncate px-1 text-fg-muted hover:text-fg sm:inline" />
+            <span aria-hidden="true" className="hidden text-line-strong sm:inline">/</span>
           </>
         ) : null}
         {props.comparingCount ? (
-          <span id="compare-mode-label" className="px-1.5 font-semibold text-theme-text">Comparing {props.comparingCount} runs</span>
+          <span id="compare-mode-label" className="px-1.5 font-semibold text-fg">Comparing {props.comparingCount} runs</span>
         ) : (
           <RunName {...props} />
         )}
-      </div>
+      </nav>
       {props.comparingCount ? (
-        <button id="exit-compare-btn" className={button} onClick={props.onExitCompare}>Exit</button>
+        <button id="exit-compare-btn" className="btn" onClick={props.onExitCompare}>Exit</button>
       ) : (
         <div className="flex shrink-0 items-center gap-2">
           <button
             ref={compareAnchor}
             id="add-compare-btn"
-            className={`${button} hidden md:inline-flex`}
+            className="btn hidden md:inline-flex"
             aria-label="Compare runs"
+            aria-haspopup="menu"
+            aria-expanded={comparing}
             title={others.length ? undefined : 'Needs another run in this session'}
             disabled={!others.length}
             onClick={() => setComparing(!comparing)}
@@ -168,23 +174,27 @@ export function Header(props: Props) {
             <Icon name="compare" />Compare
           </button>
           <RunsMenu anchor={compareAnchor} open={comparing} onClose={() => setComparing(false)} runs={others} onPick={(run) => props.onCompare(run.run_id)} />
-          <button id="new-run-btn-expanded" className={`${button} hidden md:inline-flex`} aria-label="Create new run" title={active ? 'A run is in progress' : undefined} disabled={active} onClick={props.onNewRun}>
+          <button id="new-run-btn-expanded" className="btn hidden md:inline-flex" aria-label="Create new run" title={active ? 'A run is in progress' : undefined} disabled={active} onClick={props.onNewRun}>
             <Icon name="plus" />New run
           </button>
-          <Dropdown panelClass="z-50 w-56 p-1" button={({ toggle }) => <button id="more-menu-toggle" className={iconButton} onClick={toggle} title="More actions" aria-label="More actions"><Icon name="more" /></button>}>
+          <Dropdown
+            label="More actions"
+            panelClass="w-64 p-1"
+            button={({ toggle, trigger }) => <button id="more-menu-toggle" className="btn btn-icon" onClick={toggle} title="More actions" aria-label="More actions" {...trigger}><Icon name="more" /></button>}
+          >
             {(close) => (
               <div id="more-menu">
-                <button id="regrade-btn" className="menu-item" disabled={props.runState !== 'idle'} onClick={() => { close(); props.onRegrade() }}>
+                <button id="regrade-btn" role="menuitem" className="menu-item" disabled={props.runState !== 'idle'} onClick={() => { close(); props.onRegrade() }}>
                   <Icon name="target" />
                   <span>{props.selectedCount ? `Regrade ${props.selectedCount} selected` : 'Regrade'}</span>
-                  <span className="ml-auto text-[11px] text-theme-text-muted">no re-run</span>
+                  <span className="ml-auto text-xs text-fg-muted">keeps outputs</span>
                 </button>
-                <button id="restart-server-btn" className="menu-item" disabled={props.reloading} onClick={() => { close(); props.onReloadServer() }}>
+                <button id="restart-server-btn" role="menuitem" className="menu-item" disabled={props.reloading} onClick={() => { close(); props.onReloadServer() }}>
                   <span className={props.reloading ? 'animate-spin' : ''}><Icon name="refresh" /></span>
-                  <span>{props.reloading ? 'Reloading...' : 'Reload evals'}</span>
+                  <span>{props.reloading ? 'Reloading…' : 'Reload evals'}</span>
                 </button>
-                <div className="my-1 border-t border-theme-border" />
-                <button id="settings-toggle" className="menu-item" onClick={() => { close(); props.onOpenSettings() }}>
+                <div role="separator" className="my-1 border-t border-line" />
+                <button id="settings-toggle" role="menuitem" className="menu-item" onClick={() => { close(); props.onOpenSettings() }}>
                   <Icon name="gear" /><span>Settings</span>
                 </button>
               </div>

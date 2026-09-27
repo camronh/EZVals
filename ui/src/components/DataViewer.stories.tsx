@@ -5,7 +5,7 @@ import { DataViewer } from './DataViewer'
 const meta: Meta<typeof DataViewer> = {
   title: 'Components/DataViewer',
   component: DataViewer,
-  decorators: [(Story) => <div className="max-w-2xl rounded border border-theme-border p-3"><Story /></div>],
+  decorators: [(Story) => <div className="max-w-2xl rounded-sm border border-line p-3"><Story /></div>],
 }
 export default meta
 type Story = StoryObj<typeof DataViewer>

@@ -19,7 +19,7 @@ const meta: Meta<Args> = {
     const [widths, setWidths] = useState<Record<string, number>>({})
     const rows = sortBy(tableRows(run.results, new Set(COLUMN_KEYS)), sort, (r, col) => sortValue(r.result, r.row, col))
     return (
-      <div className="bg-theme-bg p-4">
+      <div className="bg-surface p-4">
         <ResultsTable
           runId={run.run_id}
           rows={rows}

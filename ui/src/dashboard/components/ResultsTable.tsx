@@ -4,7 +4,7 @@ import type { ResultData, SortRule } from '../../types'
 import { Icon } from '../../components/Icon'
 import { ScoreBadges } from '../../components/ScoreBadges'
 import { useHoverPreview } from '../../hooks/useHoverPreview'
-import { formatValue } from '../../lib/format'
+import { errorSummary, formatValue } from '../../lib/format'
 import { outcomeOf, type Outcome } from '../../lib/stats'
 import { COLUMNS, type TableRow } from '../../lib/table'
 import { CellPreviewPopover, hasPreview, type PreviewColumn, type PreviewTarget } from './CellPreviewPopover'
@@ -22,13 +22,13 @@ type Props = {
   onOpen: (index: number) => void
   onSaveAnnotation: (runId: string, index: number, annotation: string | null) => Promise<void>
   /** Shown when there are no rows; without it, the table explains that no evals were found in `evalPath`. */
-  emptyText?: string
+  emptyText?: ReactNode
   /** The run's only score key is pass/fail, so the outcome icon says it all and rows show just its notes. */
   oneMetric?: boolean
   evalPath?: string
 }
 
-const empty = <span className="text-theme-text-muted">—</span>
+const empty = <span className="text-fg-muted">—</span>
 const EXAMPLE_EVAL = `from ezvals import eval, EvalContext
 
 @eval(input="What is 2+2?", reference="4")
@@ -42,14 +42,14 @@ const glyph = (path: ReactNode, tone: string) => (
 )
 const check = <path d="m3.5 8.5 3 3 6-7" />
 const OUTCOMES: Record<Outcome, [string, ReactNode]> = {
-  not_run: ['not run', <span className="h-2.5 w-2.5 rounded-full border-[1.5px] border-theme-text-muted opacity-50" />],
-  queued: ['queued', spinner('border-amber-500/30 border-t-amber-500')],
-  running: ['running', spinner('border-blue-500/30 border-t-blue-500')],
-  passed: ['passed', glyph(check, 'text-accent-success')],
-  failed: ['failed', glyph(<path d="m4.5 4.5 7 7m0-7-7 7" />, 'text-accent-error')],
-  error: ['error', glyph(<><path d="M8 2.5 14 13H2z" /><path d="M8 6.5v3m0 1.75v.01" /></>, 'text-accent-error')],
-  scored: ['scored', glyph(check, 'text-theme-text-muted')],
-  cancelled: ['cancelled', glyph(<><circle cx="8" cy="8" r="5.5" /><path d="m4.2 11.8 7.6-7.6" /></>, 'text-theme-text-muted')],
+  not_run: ['not run', <span className="h-2.5 w-2.5 rounded-full border-[1.5px] border-line-strong" />],
+  queued: ['queued', spinner('border-surface-muted border-t-warning')],
+  running: ['running', spinner('border-surface-muted border-t-accent')],
+  passed: ['passed', glyph(check, 'text-success')],
+  failed: ['failed', glyph(<path d="m4.5 4.5 7 7m0-7-7 7" />, 'text-danger')],
+  error: ['error', glyph(<><path d="M8 2.5 14 13H2z" /><path d="M8 6.5v3m0 1.75v.01" /></>, 'text-danger')],
+  scored: ['scored', glyph(check, 'text-fg-muted')],
+  cancelled: ['cancelled', glyph(<><circle cx="8" cy="8" r="5.5" /><path d="m4.2 11.8 7.6-7.6" /></>, 'text-fg-muted')],
 }
 
 /** A row's outcome, per the spec's outcome table. */
@@ -58,8 +58,21 @@ export function StatusIcon({ outcome }: { outcome: Outcome }) {
   return <span className={`status-indicator status-indicator-${outcome} inline-flex h-4 w-4 shrink-0 items-center justify-center`} role="status" aria-label={label} title={label}>{icon}</span>
 }
 
+/** A value in a table cell: three lines at most; structured data in mono, spaced so it wraps between fields. */
+export function Value({ value }: { value: unknown }) {
+  return typeof value === 'object'
+    ? <div className="line-clamp-3 font-mono text-xs [overflow-wrap:anywhere]">{JSON.stringify(value, null, 1).replace(/\n\s*/g, ' ')}</div>
+    : <div className="line-clamp-3">{formatValue(value)}</div>
+}
+
+/** An eval's name, allowed to wrap before its case (`refund_request` / `[direct]`) rather than mid-word. */
+export function EvalName({ name }: { name: string }) {
+  const bracket = name.indexOf('[')
+  return bracket > 0 ? <>{name.slice(0, bracket)}<wbr />{name.slice(bracket)}</> : <>{name}</>
+}
+
 function Skeleton({ widths }: { widths: string[] }) {
-  return <div className="space-y-1">{widths.map((w) => <div key={w} className={`h-2.5 ${w} animate-pulse rounded bg-theme-bg-elevated`} />)}</div>
+  return <div className="space-y-1">{widths.map((w) => <div key={w} className={`h-2.5 ${w} animate-pulse rounded-sm bg-surface-muted`} />)}</div>
 }
 
 export function AnnotationIndicator({ onEnter, onLeave, onClick }: { onEnter: (el: HTMLElement) => void; onLeave: () => void; onClick: (el: HTMLElement) => void }) {
@@ -67,8 +80,9 @@ export function AnnotationIndicator({ onEnter, onLeave, onClick }: { onEnter: (e
     <button
       type="button"
       data-annotation-indicator="true"
-      className="annotation-indicator group/icon inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-theme-text-muted hover:text-theme-text"
-      title="Show annotation"
+      className="annotation-indicator group/icon -m-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-fg-muted hover:bg-surface-muted hover:text-fg"
+      title="Annotation"
+      aria-label="Annotation"
       onMouseEnter={(e) => onEnter(e.currentTarget)}
       onMouseLeave={onLeave}
       onClick={(e) => onClick(e.currentTarget)}
@@ -148,18 +162,19 @@ export function ResultsTable({ runId, rows, hidden, sort, widths, selected, onSe
     onMouseLeave: preview.leave,
   })
   const cell = (key: string, content: ReactNode, extra: React.TdHTMLAttributes<HTMLTableCellElement> = {}) => (
-    <td data-col={key} className={`px-3 py-3 align-middle ${key === 'latency' ? 'text-right' : ''} ${hidden.includes(key) ? 'hidden' : ''}`} {...extra}>{content}</td>
+    <td data-col={key} className={`px-3 py-2.5 align-top ${key === 'latency' ? 'text-right' : ''} ${hidden.includes(key) ? 'hidden' : ''}`} {...extra}>{content}</td>
   )
 
   return (
     <>
-      <table id="results-table" data-run-id={runId} className="w-full min-w-[760px] table-fixed border-collapse text-sm text-theme-text">
+      <table id="results-table" data-run-id={runId} className="w-full min-w-[760px] table-fixed border-collapse text-sm text-fg">
         <thead className={rows.length || emptyText ? '' : 'hidden'}>
-          <tr className="border-b border-theme-border">
-            <th style={{ width: 32 }} className="bg-theme-bg px-2 py-2 text-center align-middle">
+          <tr className="border-b border-line">
+            <th style={{ width: 36 }} className="bg-surface px-2 py-2 text-center align-middle">
               <input
                 ref={selectAll}
                 type="checkbox"
+                aria-label="Select all"
                 id="select-all-checkbox"
                 checked={visible.length > 0 && selectedVisible === visible.length}
                 onChange={(e) => {
@@ -178,7 +193,7 @@ export function ResultsTable({ runId, rows, hidden, sort, widths, selected, onSe
                   data-col={col.key}
                   title={col.key === 'latency' && avgLatency != null ? `(Avg: ${avgLatency.toFixed(2)}s)` : undefined}
                   style={{ width: widths[col.key] ? `${widths[col.key]}px` : col.width, textAlign: col.align }}
-                  className={`relative bg-theme-bg px-3 py-2 text-[12px] font-medium text-theme-text-muted ${hidden.includes(col.key) ? 'hidden' : ''}`}
+                  className={`relative cursor-pointer select-none bg-surface px-3 py-2 text-xs font-medium text-fg-muted hover:text-fg ${hidden.includes(col.key) ? 'hidden' : ''}`}
                   aria-sort={rule ? (rule.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
                   onClick={(e) => !resize.recentlyResized() && onSort(col.key, col.type, e.shiftKey)}
                 >
@@ -189,15 +204,15 @@ export function ResultsTable({ runId, rows, hidden, sort, widths, selected, onSe
             })}
           </tr>
         </thead>
-        <tbody className="divide-y divide-theme-border-subtle">
+        <tbody className="divide-y divide-line-subtle">
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={COLUMNS.length + 1} className="px-4 py-16 text-center text-sm text-theme-text-muted">
+              <td colSpan={COLUMNS.length + 1} className="px-4 py-16 text-center text-sm text-fg-muted">
                 {emptyText ?? (
                   <div id="no-evals" className="mx-auto max-w-md">
-                    <div className="text-[15px] font-medium text-theme-text">No evals found{evalPath ? <> in <code className="font-mono text-[13px]">{evalPath}</code></> : null}</div>
-                    <p className="mt-1">Add a function decorated with <code className="font-mono text-[12px]">@eval</code> (or an <code className="font-mono text-[12px]">.eval.ts</code> file), then choose Reload evals from the ⋯ menu.</p>
-                    <pre className="mt-4 overflow-x-auto rounded-lg border border-theme-border bg-theme-bg-secondary p-3 text-left font-mono text-[12px] leading-relaxed text-theme-text-secondary">{EXAMPLE_EVAL}</pre>
+                    <div className="text-base font-semibold text-fg">No evals found{evalPath ? <> in <code className="font-mono text-sm">{evalPath}</code></> : null}</div>
+                    <p className="mt-1">Add a function decorated with <code className="font-mono text-xs">@eval</code> (or an <code className="font-mono text-xs">.eval.ts</code> file), then choose Reload evals from the ⋯ menu.</p>
+                    <pre className="mt-4 overflow-x-auto rounded-lg border border-line bg-surface-subtle p-3 text-left font-mono text-xs leading-5 text-fg">{EXAMPLE_EVAL}</pre>
                   </div>
                 )}
               </td>
@@ -217,15 +232,22 @@ export function ResultsTable({ runId, rows, hidden, sort, widths, selected, onSe
                 data-row-id={row.index}
                 data-status={status}
                 data-dataset={row.dataset ?? ''}
-                className={`group cursor-pointer transition-colors hover:bg-theme-bg-secondary ${notStarted ? 'text-theme-text-secondary' : ''}`}
+                className={`group cursor-pointer transition-colors ${selected.has(row.index) ? 'bg-accent-subtle' : 'hover:bg-surface-subtle'} ${notStarted ? 'text-fg-secondary' : ''}`}
                 onClick={(e) => {
                   if (!(e.target as HTMLElement).closest('input, a, [data-annotation-indicator]')) onOpen(row.index)
                 }}
               >
-                <td className="px-2 py-3 text-center align-middle">
+                <td
+                  className="px-2 py-2.5 text-center align-top"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (e.target === e.currentTarget) toggleRow(row.index, !selected.has(row.index), e.shiftKey)
+                  }}
+                >
                   <input
                     type="checkbox"
-                    className="row-checkbox"
+                    className="row-checkbox mt-0.5"
+                    aria-label={`Select ${row.row.function}`}
                     data-row-id={row.index}
                     checked={selected.has(row.index)}
                     onChange={(e) => toggleRow(row.index, e.target.checked, (e.nativeEvent as MouseEvent).shiftKey)}
@@ -235,23 +257,23 @@ export function ResultsTable({ runId, rows, hidden, sort, widths, selected, onSe
                   <div className="flex min-w-0 items-start gap-2">
                     <span className="mt-0.5"><StatusIcon outcome={outcome} /></span>
                     <div className="min-w-0 flex-1">
-                      <a href={`/runs/${runId}/results/${row.index}`} title={row.row.function} className="block truncate text-[13px] font-medium text-theme-text hover:underline">
-                        {row.row.function}
+                      <a href={`/runs/${runId}/results/${row.index}`} title={row.row.function} className="line-clamp-2 font-medium text-fg [overflow-wrap:anywhere] hover:underline">
+                        <EvalName name={row.row.function} />
                       </a>
-                      <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] text-theme-text-muted">
-                        {row.dataset ? <span className="dataset-chip max-w-[160px] truncate" title={row.dataset}>{row.dataset}</span> : null}
-                        {row.labels?.map((l) => <span key={l} className="label-chip max-w-[140px] truncate rounded bg-theme-bg-elevated px-1.5 text-[11px] text-theme-text-secondary" title={l}>{l}</span>)}
-                        {row.row.trial ? <span className="trial-chip font-mono text-[11px]" title={`Trial ${row.row.trial}`}>#{row.row.trial}</span> : null}
+                      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1 text-xs text-fg-muted">
+                        {row.dataset ? <span className="dataset-chip mr-0.5 max-w-[160px] truncate" title={row.dataset}>{row.dataset}</span> : null}
+                        {row.labels?.map((l) => <span key={l} className="label-chip chip max-w-[140px] truncate" title={l}>{l}</span>)}
+                        {row.row.trial ? <span className="trial-chip font-mono text-2xs" title={`Trial ${row.row.trial}`}>#{row.row.trial}</span> : null}
                       </div>
                     </div>
                   </div>
                 ))}
-                {cell('input', <div className="line-clamp-4 text-[12px]">{formatValue(r.input)}</div>, hover(row, 'input'))}
-                {cell('reference', r.reference != null ? <div className="line-clamp-4 text-[12px]">{formatValue(r.reference)}</div> : empty, hover(row, 'reference'))}
+                {cell('input', <Value value={r.input} />, hover(row, 'input'))}
+                {cell('reference', r.reference != null ? <Value value={r.reference} /> : empty, hover(row, 'reference'))}
                 {cell('output', (
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1" {...hover(row, 'output')}>
-                      {running ? <Skeleton widths={['w-3/4', 'w-1/2']} /> : done && r.output != null ? <div className="line-clamp-4 text-[12px]">{formatValue(r.output)}</div> : r.error && hidden.includes('error') ? <div className="line-clamp-4 text-[12px] text-accent-error">{r.error}</div> : empty}
+                      {running ? <Skeleton widths={['w-3/4', 'w-1/2']} /> : done && r.output != null ? <Value value={r.output} /> : r.error && hidden.includes('error') ? <div className="line-clamp-3 font-mono text-xs text-danger">{errorSummary(r.error)}</div> : empty}
                     </div>
                     {r.annotation?.trim() ? (
                       <AnnotationIndicator
@@ -262,9 +284,9 @@ export function ResultsTable({ runId, rows, hidden, sort, widths, selected, onSe
                     ) : null}
                   </div>
                 ))}
-                {cell('error', r.error ? <div className="line-clamp-4 text-[12px] text-accent-error">{r.error}</div> : empty, hover(row, 'error'))}
+                {cell('error', r.error ? <div className="line-clamp-3 font-mono text-xs text-danger">{errorSummary(r.error)}</div> : empty, hover(row, 'error'))}
                 {cell('scores', running ? <Skeleton widths={['w-14', 'w-10']} /> : done && r.scores?.length ? <ScoreBadges scores={r.scores} passFail={oneMetric ? 'none' : 'failed'} /> : empty, hover(row, 'scores'))}
-                {cell('latency', r.latency != null ? <span className="latency-value font-mono text-[12px] tabular-nums text-theme-text-muted">{r.latency.toFixed(2)}s</span> : running ? <div className="latency-skeleton ml-auto h-3 w-8 animate-pulse rounded bg-theme-bg-elevated" /> : empty)}
+                {cell('latency', r.latency != null ? <span className="latency-value text-xs tabular-nums text-fg-muted">{r.latency.toFixed(2)}s</span> : running ? <div className="latency-skeleton ml-auto h-3 w-8 animate-pulse rounded-sm bg-surface-muted" /> : empty)}
               </tr>
             )
           })}

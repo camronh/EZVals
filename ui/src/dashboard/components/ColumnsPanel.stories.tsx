@@ -6,7 +6,7 @@ import { ColumnsPanel } from './ColumnsPanel'
 const meta: Meta<typeof ColumnsPanel> = {
   title: 'Dashboard/ColumnsPanel',
   component: ColumnsPanel,
-  decorators: [(Story) => <div className="w-64 rounded border border-theme-border bg-theme-bg-secondary text-xs"><Story /></div>],
+  decorators: [(Story) => <div className="w-64 rounded-sm border border-line bg-surface-subtle text-xs"><Story /></div>],
   args: { onHiddenChange: fn(), onSearchColumnsChange: fn(), onResetSort: fn(), onResetWidths: fn() },
 }
 export default meta

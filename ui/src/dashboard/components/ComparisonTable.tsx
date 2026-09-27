@@ -2,9 +2,9 @@ import type { ComparisonRun, ResultData, SortRule } from '../../types'
 import { ScoreBadges } from '../../components/ScoreBadges'
 import { useHoverPreview } from '../../hooks/useHoverPreview'
 import type { ComparisonEntry } from '../../lib/comparison'
-import { formatValue } from '../../lib/format'
+import { errorSummary } from '../../lib/format'
 import { CellPreviewPopover, hasPreview, type PreviewColumn, type PreviewTarget } from './CellPreviewPopover'
-import { AnnotationIndicator } from './ResultsTable'
+import { AnnotationIndicator, EvalName, Value } from './ResultsTable'
 
 export type ComparisonRow = ComparisonEntry & { index: number }
 
@@ -15,8 +15,8 @@ type Props = {
   onSaveAnnotation: (runId: string, index: number, annotation: string | null) => Promise<void>
 }
 
-const header = 'bg-theme-bg px-3 py-2 text-left text-[12px] font-medium text-theme-text-muted'
-const empty = <span className="text-theme-text-muted">—</span>
+const header = 'cursor-pointer select-none bg-surface px-3 py-2 text-left text-xs font-medium text-fg-muted hover:text-fg'
+const empty = <span className="text-fg-muted">—</span>
 
 /** One row per eval, one column per compared run. */
 export function ComparisonTable({ runs, rows, onSort, onSaveAnnotation }: Props) {
@@ -32,9 +32,9 @@ export function ComparisonTable({ runs, rows, onSort, onSaveAnnotation }: Props)
 
   return (
     <>
-      <table id="results-table" className="comparison-table w-full min-w-[760px] table-fixed border-collapse text-sm text-theme-text">
+      <table id="results-table" className="comparison-table w-full min-w-[760px] table-fixed border-collapse text-sm text-fg">
         <thead>
-          <tr className="border-b border-theme-border">
+          <tr className="border-b border-line">
             {(['function', 'input', 'reference'] as const).map((col) => (
               <th key={col} data-col={col} style={{ width: '15%' }} className={header} onClick={(e) => onSort(col, 'string', e.shiftKey)}>
                 {{ function: 'Eval', input: 'Input', reference: 'Reference' }[col]}
@@ -44,7 +44,7 @@ export function ComparisonTable({ runs, rows, onSort, onSaveAnnotation }: Props)
               <th
                 key={run.runId}
                 data-col={`output-${run.runId}`}
-                style={{ width: `${Math.floor(50 / runs.length)}%`, borderLeft: `2px solid ${run.color}40` }}
+                style={{ width: `${Math.floor(50 / runs.length)}%`, borderLeft: `2px solid color-mix(in srgb, ${run.color} 45%, transparent)` }}
                 className={`${header} comparison-output-header`}
                 onClick={(e) => onSort(`output-${run.runId}`, 'string', e.shiftKey)}
               >
@@ -56,7 +56,7 @@ export function ComparisonTable({ runs, rows, onSort, onSaveAnnotation }: Props)
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-theme-border-subtle">
+        <tbody className="divide-y divide-line-subtle">
           {rows.map((row) => {
             const first = runs.map((r) => row.byRun[r.runId]).find(Boolean)
             const link = first ? `/runs/${runs.find((r) => row.byRun[r.runId])!.runId}/results/${first.index}?${query}` : null
@@ -66,36 +66,36 @@ export function ComparisonTable({ runs, rows, onSort, onSaveAnnotation }: Props)
                 data-row="main"
                 data-row-id={row.index}
                 data-compare-key={row.key}
-                className={`group transition-colors hover:bg-theme-bg-secondary ${link ? 'cursor-pointer' : ''}`}
+                className={`group transition-colors hover:bg-surface-subtle ${link ? 'cursor-pointer' : ''}`}
                 onClick={(e) => {
                   if (link && !(e.target as HTMLElement).closest('a, input, [data-annotation-indicator]')) window.location.href = link
                 }}
               >
-                <td data-col="function" className="px-3 py-3 align-middle">
-                  {link ? <a href={link} title={row.function} className="block truncate text-[13px] font-medium text-theme-text hover:underline">{row.function}</a> : <span className="block truncate text-[13px] font-medium">{row.function}</span>}
-                  <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] text-theme-text-muted">
-                    {row.dataset ? <span className="dataset-chip max-w-[160px] truncate">{row.dataset}</span> : null}
-                    {row.labels?.map((l) => <span key={l} className="label-chip max-w-[140px] truncate rounded bg-theme-bg-elevated px-1.5 text-[11px] text-theme-text-secondary">{l}</span>)}
-                    {first?.row.trial ? <span className="trial-chip font-mono text-[11px]">#{first.row.trial}</span> : null}
+                <td data-col="function" className="px-3 py-2.5 align-top">
+                  {link ? <a href={link} title={row.function} className="line-clamp-2 font-medium text-fg [overflow-wrap:anywhere] hover:underline"><EvalName name={row.function} /></a> : <span className="line-clamp-2 font-medium [overflow-wrap:anywhere]"><EvalName name={row.function} /></span>}
+                  <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1 text-xs text-fg-muted">
+                    {row.dataset ? <span className="dataset-chip mr-0.5 max-w-[160px] truncate">{row.dataset}</span> : null}
+                    {row.labels?.map((l) => <span key={l} className="label-chip chip max-w-[140px] truncate">{l}</span>)}
+                    {first?.row.trial ? <span className="trial-chip font-mono text-2xs">#{first.row.trial}</span> : null}
                   </div>
                 </td>
                 {(['input', 'reference'] as const).map((col) => (
-                  <td key={col} data-col={col} className="px-3 py-3 align-middle" {...(first ? hover(`${row.key}:${col}`, col, first.row.result, '', first.index) : {})}>
-                    {first?.row.result[col] != null ? <div className="line-clamp-4 text-[12px]">{formatValue(first.row.result[col])}</div> : empty}
+                  <td key={col} data-col={col} className="px-3 py-2.5 align-top" {...(first ? hover(`${row.key}:${col}`, col, first.row.result, '', first.index) : {})}>
+                    {first?.row.result[col] != null ? <Value value={first.row.result[col]} /> : empty}
                   </td>
                 ))}
                 {runs.map((run) => {
                   const match = row.byRun[run.runId]
-                  const style = { borderLeft: `2px solid ${run.color}20` }
-                  if (!match) return <td key={run.runId} data-col={`output-${run.runId}`} className="comparison-output-cell px-3 py-3 align-middle" style={style}>{empty}</td>
+                  const style = { borderLeft: `2px solid color-mix(in srgb, ${run.color} 20%, transparent)` }
+                  if (!match) return <td key={run.runId} data-col={`output-${run.runId}`} className="comparison-output-cell px-3 py-2.5 align-top" style={style}>{empty}</td>
                   const r = match.row.result
                   const key = `${row.key}:${run.runId}`
                   return (
-                    <td key={run.runId} data-col={`output-${run.runId}`} className="comparison-output-cell px-3 py-3" style={style}>
+                    <td key={run.runId} data-col={`output-${run.runId}`} className="comparison-output-cell px-3 py-2.5 align-top" style={style}>
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
-                          <div className="line-clamp-3 text-[12px]" {...hover(`${key}:output`, 'output', r, run.runId, match.index)}>{r.output != null ? formatValue(r.output) : r.error ? null : empty}</div>
-                          {r.error ? <div className="truncate text-[12px] text-accent-error" {...hover(`${key}:error`, 'error', r, run.runId, match.index)}>Error: {r.error.split('\n')[0]}</div> : null}
+                          <div {...hover(`${key}:output`, 'output', r, run.runId, match.index)}>{r.output != null ? <Value value={r.output} /> : r.error ? null : empty}</div>
+                          {r.error ? <div className="line-clamp-2 font-mono text-xs text-danger" {...hover(`${key}:error`, 'error', r, run.runId, match.index)}>{errorSummary(r.error)}</div> : null}
                         </div>
                         {r.annotation?.trim() ? (
                           <AnnotationIndicator

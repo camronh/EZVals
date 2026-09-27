@@ -591,7 +591,7 @@ Open the overflow (three-dot) menu in the header, then hover **Download** to exp
 - **JSON**: The full run as one document
 - **CSV**: Flat format for spreadsheets
 - **Markdown**: ASCII charts + table (respects current filters)
-- **PNG**: Chart image with stats bars, metrics, and branding
+- **Image** (PNG): the summary as a picture: the pass rate and outcome bar, or one row per compared run
 
 ## Configuration
 

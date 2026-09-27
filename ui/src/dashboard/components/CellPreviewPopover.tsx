@@ -51,7 +51,7 @@ export function CellPreviewPopover({ target, onKeep, onClose, onSaveAnnotation }
 
   return createPortal(
     <div
-      className="cell-preview-popover"
+      className="cell-preview-popover popover"
       onMouseEnter={onKeep}
       onMouseLeave={editing ? undefined : onClose}
       style={{
@@ -67,7 +67,7 @@ export function CellPreviewPopover({ target, onKeep, onClose, onSaveAnnotation }
       <div className="cell-preview-label flex items-center justify-between gap-2">
         <span>{LABELS[col]}</span>
         {col === 'annotation' && !editing ? (
-          <button className="-my-1 -mr-1.5 flex h-5 w-5 items-center justify-center rounded text-theme-text-muted hover:bg-theme-bg-elevated hover:text-theme-text" title="Edit annotation" onClick={() => setEditingTarget(target)}>
+          <button className="btn btn-ghost btn-xs btn-icon -my-1 -mr-1.5" title="Edit annotation" aria-label="Edit annotation" onClick={() => setEditingTarget(target)}>
             <Icon name="pencil" className="h-3 w-3" />
           </button>
         ) : null}
@@ -76,7 +76,7 @@ export function CellPreviewPopover({ target, onKeep, onClose, onSaveAnnotation }
         {col === 'scores' ? (
           <div className="space-y-1.5">{(result.scores ?? []).map((s, i) => <ScoreCard key={`${s.key}-${i}`} score={s} />)}</div>
         ) : col === 'error' ? (
-          <pre className="whitespace-pre-wrap break-words font-mono text-[12px] text-accent-error">{result.error}</pre>
+          <pre className="whitespace-pre-wrap break-words font-mono text-xs text-danger">{result.error}</pre>
         ) : col === 'annotation' ? (
           editing ? (
             <AnnotationEditor
@@ -89,7 +89,7 @@ export function CellPreviewPopover({ target, onKeep, onClose, onSaveAnnotation }
               }}
             />
           ) : (
-            <div className="whitespace-pre-wrap break-words text-[13px] text-theme-text-secondary">{annotation}</div>
+            <div className="whitespace-pre-wrap break-words text-sm text-fg-secondary">{annotation}</div>
           )
         ) : (
           <DataViewer content={result[col]} placeholder="—" />

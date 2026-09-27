@@ -14,6 +14,8 @@ const preview: Preview = {
   ],
   loaders: [mswLoader()],
   parameters: {
+    // Every story is checked against WCAG 2.1 AA by axe when the stories run as tests (npm test).
+    a11y: { test: 'error', options: { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] } } },
     layout: 'padded',
     backgrounds: { disable: true },
     controls: { matchers: { color: /(background|color)$/i } },

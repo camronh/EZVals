@@ -5,7 +5,7 @@ type CopyableTextProps = {
   className?: string
 }
 
-/** Text that copies itself on click and briefly shows "Copied!". */
+/** Text that copies itself when clicked and briefly shows "Copied". */
 export function CopyableText({ text, className = '' }: CopyableTextProps) {
   const [copied, setCopied] = useState(false)
 
@@ -21,11 +21,11 @@ export function CopyableText({ text, className = '' }: CopyableTextProps) {
   }, [text])
 
   return (
-    <span onClick={handleCopy} className={`relative ${className}`}>
+    <button type="button" onClick={handleCopy} title="Copy" className={`relative rounded-sm text-left ${className}`}>
       {text}
       {copied ? (
-        <span className="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-theme-text px-2 py-0.5 text-[11px] font-medium text-theme-bg shadow-[var(--shadow)]">Copied!</span>
+        <span className="absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-fg px-2 py-0.5 text-2xs font-medium text-surface shadow-popover" role="status">Copied</span>
       ) : null}
-    </span>
+    </button>
   )
 }

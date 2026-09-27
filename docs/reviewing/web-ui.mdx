@@ -42,12 +42,11 @@ The summary always describes the rows you can see, so filtering answers question
 
 ## Open a result
 
-Click an eval to open its detail page. It shows:
+Click an eval to open its detail page. A strip at the top says how it came out and why: the error, the grader's notes on a failure, or "Passed". Below it:
 
-- the input, output and reference, with chat transcripts rendered as conversations (you can switch to raw JSON)
-- scores with their notes
-- the error and traceback, if there is one
-- metadata, trace data, the tools the agent used and latency
+- the input on the left, and the output with the reference beneath it, so you can compare them; chat transcripts render as conversations (you can switch to raw JSON)
+- scores with their notes, which you can correct
+- metadata, the tools the agent used, latency and extra trace data
 - a link to the trace, if you stored a `trace_url`
 
 <Frame>
@@ -75,7 +74,7 @@ Compare shows up to four runs from the same session side by side. Start it from 
   <img className="hidden dark:block" src="/assets/comparison-dark.png" alt="Comparing two runs" />
 </Frame>
 
-- The summary becomes a table with one row per run and the best value in each column highlighted.
+- The summary becomes a table with one row per run: its pass rate (and how much it changed from the first run), any other score keys and latency, with the best value in each column highlighted.
 - The results table gets one column per run, with each run's output, scores and latency. Rows are matched by eval name and dataset, and a dash marks an eval that isn't in a run.
 - Opening a result shows every run's output for that eval next to each other.
 - You can add, remove and reorder runs. Running is disabled while comparing.
@@ -89,6 +88,6 @@ The URL includes the compared runs, so you can bookmark or share the view with s
 | JSON | The whole run |
 | CSV | Every result, including annotations |
 | Markdown | A report with score bars and a table of the rows and columns you can see |
-| PNG | A chart of the scores (or of every compared run) to paste into a doc or chat |
+| Image | The summary as a picture (the pass rate and outcome bar, or one row per compared run) to paste into a doc or chat |
 
-JSON, CSV and Markdown are also available from the command line with [`ezvals export`](/reference/cli#ezvals-export). PNG is only in the UI.
+JSON, CSV and Markdown are also available from the command line with [`ezvals export`](/reference/cli#ezvals-export). The image is only in the UI.

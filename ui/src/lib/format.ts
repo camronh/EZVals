@@ -3,6 +3,12 @@ export function formatValue(value: unknown) {
   return typeof value === 'object' ? JSON.stringify(value) : String(value)
 }
 
+/** An error's one-line summary: its first line, or for a Python traceback that starts with "Traceback", its last. */
+export function errorSummary(error: string) {
+  const lines = error.trim().split('\n')
+  return (lines[0].startsWith('Traceback') ? lines[lines.length - 1] : lines[0]).trim()
+}
+
 /** Text for copying or previewing a value: strings as-is, everything else as pretty JSON. */
 export function getRawText(value: unknown) {
   if (value == null) return ''

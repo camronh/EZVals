@@ -7,15 +7,15 @@ import { Toasts } from './Toasts'
 const meta: Meta = { title: 'Components/Feedback' }
 export default meta
 
-export const Spinners: StoryObj = { render: () => <div className="flex gap-4 text-theme-text"><Spinner /><Spinner className="h-5 w-5" /></div> }
+export const Spinners: StoryObj = { render: () => <div className="flex gap-4 text-fg"><Spinner /><Spinner className="h-5 w-5" /></div> }
 export const Copy: StoryObj = {
   render: () => (
-    <div className="flex items-center gap-4 text-sm text-theme-text">
-      <CopyButton text={() => 'ezvals run evals/support.py::refund_request'} className="text-theme-text-muted" />
+    <div className="flex items-center gap-4 text-base text-fg">
+      <CopyButton text={() => 'ezvals run evals/support.py::refund_request'} className="text-fg-muted" />
       <CopyableText text="swift-falcon" className="cursor-pointer font-mono" />
     </div>
   ),
 }
 export const ToastMessages: StoryObj = {
-  render: () => <Toasts toasts={[{ id: 1, message: 'Regrading 3 results (1 skipped: no target)', tone: 'success' }, { id: 2, message: 'Run failed: Eval path not found: evals/', tone: 'error' }]} />,
+  render: () => <Toasts toasts={[{ id: 1, message: 'Regrading 3 results (1 skipped: no target)', tone: 'success' }, { id: 2, message: "Couldn't start the run: Eval path not found: evals/", tone: 'error' }]} />,
 }

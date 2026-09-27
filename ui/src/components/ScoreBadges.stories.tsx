@@ -26,6 +26,6 @@ export const OneMetricRow: Story = {
 export const SeveralMetricsRow: Story = {
   args: { scores: [{ key: 'pass', passed: true }, { key: 'helpfulness', value: 0.41 }, { key: 'concise', passed: false, notes: 'Over 40 words' }], passFail: 'failed' },
   play: async ({ canvasElement }) => {
-    await expect([...canvasElement.querySelectorAll('.score-badge')].map((b) => b.textContent)).toEqual(['helpfulness0.41', '✗concise'])
+    await expect([...canvasElement.querySelectorAll('.score-badge')].map((b) => b.textContent)).toEqual(['helpfulness0.41', '✗concisefailed'])
   },
 }

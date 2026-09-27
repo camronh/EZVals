@@ -1,11 +1,7 @@
 import type { Score } from '../types'
 import { formatScoreValue } from '../lib/format'
 
-export function scoreTone(score: Score) {
-  return score.passed === true ? 'bg-accent-success-bg text-accent-success'
-    : score.passed === false ? 'bg-accent-error-bg text-accent-error'
-      : 'bg-theme-bg-elevated text-theme-text-secondary'
-}
+const tone = (score: Score) => (score.passed === true ? 'chip-success' : score.passed === false ? 'chip-danger' : '')
 
 type Props = {
   scores: Score[]
@@ -24,22 +20,23 @@ export function ScoreBadges({ scores, latency, annotation, passFail = 'all' }: P
       {chips.map((s, i) => (
         <span
           key={`${s.key}-${i}`}
-          className={`score-badge inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${scoreTone(s)}`}
+          className={`score-badge chip ${tone(s)}`}
           title={`${s.key}${s.passed != null ? `: ${s.passed ? 'passed' : 'failed'}` : ''}${s.value != null ? ` (${formatScoreValue(s.value, 3)})` : ''}${s.notes ? `\n${s.notes}` : ''}`}
         >
           {s.passed != null ? <span aria-hidden="true">{s.passed ? '✓' : '✗'}</span> : null}
           {s.key}
+          {s.passed != null ? <span className="sr-only">{s.passed ? 'passed' : 'failed'}</span> : null}
           {s.passed == null && s.value != null ? <span className="font-mono tabular-nums">{formatScoreValue(s.value, 2)}</span> : null}
         </span>
       ))}
-      {latency != null ? <span className="latency-value font-mono text-[11px] tabular-nums text-theme-text-muted">{latency.toFixed(2)}s</span> : null}
+      {latency != null ? <span className="latency-value text-2xs tabular-nums text-fg-muted">{latency.toFixed(2)}s</span> : null}
       {annotation?.trim() ? (
-        <span title={annotation} className="max-w-[220px] truncate rounded-md border border-theme-border bg-theme-bg-secondary px-1.5 py-0.5 text-[11px] text-theme-text-secondary">
+        <span title={annotation} className="chip max-w-[220px] truncate font-normal">
           {annotation}
         </span>
       ) : null}
       {notes.map((s, i) => (
-        <p key={`notes-${i}`} className={`score-notes line-clamp-2 w-full text-[12px] ${s.passed === false ? 'text-accent-error' : 'text-theme-text-secondary'}`}>{s.notes}</p>
+        <p key={`notes-${i}`} className="score-notes line-clamp-2 w-full text-xs text-danger">{s.notes}</p>
       ))}
     </div>
   )

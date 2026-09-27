@@ -7,7 +7,7 @@ import { FilterBar } from './FilterBar'
 const meta: Meta<typeof FilterBar> = {
   title: 'Dashboard/FilterBar',
   component: FilterBar,
-  decorators: [(Story) => <div className="min-h-[520px] bg-theme-bg"><Story /></div>],
+  decorators: [(Story) => <div className="min-h-[520px] bg-surface"><Story /></div>],
   args: {
     outcomeCounts: { all: 24, failed: 5, errors: 2 },
     search: '',

@@ -9,10 +9,10 @@ export default meta
 
 export const Gallery: StoryObj = {
   render: () => (
-    <div className="grid grid-cols-6 gap-4 text-theme-text">
+    <div className="grid grid-cols-6 gap-4 text-fg">
       {names.map((name) => (
-        <div key={name} className="flex flex-col items-center gap-1 text-[10px] text-theme-text-muted">
-          <span className="text-theme-text"><Icon name={name} className="h-5 w-5" /></span>
+        <div key={name} className="flex flex-col items-center gap-1 text-2xs text-fg-muted">
+          <span className="text-fg"><Icon name={name} className="h-5 w-5" /></span>
           {name}
         </div>
       ))}

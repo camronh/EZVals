@@ -1,5 +1,5 @@
 import type { FilterState, OutcomeFilter } from '../../types'
-import { Dropdown, Segmented, button } from '../../components/Dropdown'
+import { Dropdown, Segmented } from '../../components/Dropdown'
 import { Icon } from '../../components/Icon'
 import { countActiveFilters } from '../../lib/filters'
 import { ColumnsPanel } from './ColumnsPanel'
@@ -28,6 +28,7 @@ type Props = {
 }
 
 const OUTCOMES: [OutcomeFilter, string][] = [['all', 'All'], ['failed', 'Failed'], ['errors', 'Errors']]
+const EXPORTS = [['json', 'JSON', 'all results'], ['csv', 'CSV', 'all results'], ['md', 'Markdown', 'this view'], ['png', 'Image', 'this view']] as const
 
 /** Narrow and shape the table: outcome switch, search, filters, columns and export. */
 export function FilterBar(props: Props) {
@@ -36,47 +37,56 @@ export function FilterBar(props: Props) {
     <div className="flex flex-wrap items-center gap-2 py-3">
       <Segmented
         id="outcome-switch"
+        label="Show"
         value={props.filters.outcome}
         onChange={(outcome) => props.onFilters({ ...props.filters, outcome })}
         options={OUTCOMES.map(([value, label]) => ({
           value,
           id: `outcome-${value}`,
-          label: <>{label}<span className="font-mono text-[11px] tabular-nums opacity-70">{props.outcomeCounts[value]}</span></>,
+          label: <>{label}<span className="font-mono text-2xs tabular-nums">{props.outcomeCounts[value]}</span></>,
         }))}
       />
       <div className="relative min-w-[160px] flex-1 sm:max-w-xs">
-        <Icon name="search" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-theme-text-muted" />
+        <Icon name="search" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted" />
         <input
           id="search-input"
           type="search"
-          className="h-8 w-full rounded-md border border-theme-border bg-theme-bg pl-8 pr-3 text-[13px] text-theme-text placeholder:text-theme-text-muted focus:border-accent-link focus:outline-none"
+          aria-label="Search results"
+          className="input w-full pl-8"
           placeholder="Search"
           value={props.search}
           onChange={(e) => props.onSearch(e.target.value)}
         />
       </div>
       <Dropdown
+        kind="dialog"
+        label="Filters"
         align="left"
-        panelClass="filters-panel z-50 w-80"
-        button={({ toggle }) => (
-          <button id="filters-toggle" className={`${button} ${activeFilters ? '!border-accent-link !text-accent-link' : ''}`} onClick={toggle}>
+        panelClass="filters-panel w-80"
+        button={({ toggle, trigger }) => (
+          <button id="filters-toggle" className={`btn ${activeFilters ? 'btn-pressed' : ''}`} onClick={toggle} {...trigger}>
             <Icon name="filter" />Filters
-            {activeFilters ? <span id="filters-count-badge" className="rounded bg-blue-600 px-1 font-mono text-[11px] leading-4 text-white">{activeFilters}</span> : null}
+            {activeFilters ? <span id="filters-count-badge" className="rounded-sm bg-accent-emphasis px-1 font-mono text-2xs leading-4 text-fg-on-emphasis">{activeFilters}</span> : null}
           </button>
         )}
       >
         <FiltersPanel filters={props.filters} onChange={props.onFilters} scoreKeys={props.scoreKeys} datasets={props.datasets} labels={props.labels} />
       </Dropdown>
       {props.selectedCount ? (
-        <span id="selection-count" className="flex h-8 items-center gap-1 rounded-md bg-blue-500/10 pl-2.5 pr-1 text-[13px] font-medium text-accent-link">
+        <span id="selection-count" className="flex h-8 items-center gap-0.5 rounded-md bg-accent-subtle pl-2.5 pr-1 text-sm font-medium text-accent">
           {props.selectedCount} selected
-          <button className="flex h-6 w-6 items-center justify-center rounded hover:bg-blue-500/10" aria-label="Clear selection" title="Clear selection" onClick={props.onClearSelection}>
+          <button className="btn btn-ghost btn-xs btn-icon !text-accent" aria-label="Clear selection" title="Clear selection" onClick={props.onClearSelection}>
             <Icon name="close" className="h-3 w-3" />
           </button>
         </span>
       ) : null}
       <div className="ml-auto flex items-center gap-2">
-        <Dropdown panelClass="z-[60] w-72" button={({ toggle }) => <button id="columns-toggle" className={button} onClick={toggle}><Icon name="grid" />Columns</button>}>
+        <Dropdown
+          kind="dialog"
+          label="Columns"
+          panelClass="w-72"
+          button={({ toggle, trigger }) => <button id="columns-toggle" className="btn" onClick={toggle} {...trigger}><Icon name="grid" />Columns</button>}
+        >
           <ColumnsPanel
             hidden={props.hiddenColumns}
             searchColumns={props.searchColumns}
@@ -86,12 +96,16 @@ export function FilterBar(props: Props) {
             onResetWidths={props.onResetWidths}
           />
         </Dropdown>
-        <Dropdown panelClass="z-[60] w-52 p-1" button={({ toggle }) => <button id="export-toggle" className={button} onClick={toggle}><Icon name="download" />Export</button>}>
+        <Dropdown
+          label="Export"
+          panelClass="w-56 p-1"
+          button={({ toggle, trigger }) => <button id="export-toggle" className="btn" onClick={toggle} {...trigger}><Icon name="download" />Export</button>}
+        >
           {(close) => (
             <div id="export-menu">
-              {([['json', 'JSON', 'all results'], ['csv', 'CSV', 'all results'], ['md', 'Markdown', 'this view'], ['png', 'Image', 'this view']] as const).map(([id, label, hint]) => (
-                <button key={id} id={`export-${id}-btn`} className="menu-item" onClick={() => { close(); props.onExport(id === 'md' ? 'markdown' : id) }}>
-                  {label}<span className="ml-auto text-[11px] text-theme-text-muted">{hint}</span>
+              {EXPORTS.map(([id, label, hint]) => (
+                <button key={id} id={`export-${id}-btn`} role="menuitem" className="menu-item" onClick={() => { close(); props.onExport(id === 'md' ? 'markdown' : id) }}>
+                  {label}<span className="ml-auto text-xs text-fg-muted">{hint}</span>
                 </button>
               ))}
             </div>

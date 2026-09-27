@@ -9,7 +9,7 @@ const meta: Meta<typeof ComparisonView> = {
   title: 'Detail/ComparisonView',
   component: ComparisonView,
   parameters: { layout: 'fullscreen' },
-  decorators: [(Story) => <div className="flex h-[640px] flex-col bg-blue-50/40 dark:bg-neutral-950"><Story /></div>],
+  decorators: [(Story) => <div className="flex h-[640px] flex-col bg-surface"><Story /></div>],
   args: { base: completedRows[1], layout, onResize: () => () => {} },
 }
 export default meta

@@ -1,6 +1,7 @@
 import type { ResultData, RunResultRow, RunSummary, ScoreChip } from '../types'
 
-export const COMPARISON_COLORS = ['#3b82f6', '#f97316', '#22c55e', '#a855f7']
+/** Compared runs' colours (the --run-1…4 tokens): hues that never mean passed, failed or in progress. */
+export const COMPARISON_COLORS = ['var(--run-1)', 'var(--run-2)', 'var(--run-3)', 'var(--run-4)']
 
 /** Progress of the current (possibly selective) run. */
 export function runProgress(data: RunSummary) {

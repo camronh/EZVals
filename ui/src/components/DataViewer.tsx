@@ -61,7 +61,7 @@ function buildViewer(content: unknown, placeholder = '—') {
   if (content == null || content === '') {
     return {
       raw: '',
-      html: `<div class="data-surface text-[13px] text-theme-text-muted">${escapeHtml(placeholder)}</div>`,
+      html: `<div class="data-surface text-sm text-fg-muted">${escapeHtml(placeholder)}</div>`,
     }
   }
 
@@ -92,7 +92,7 @@ function buildViewer(content: unknown, placeholder = '—') {
     }
   }
 
-  return { raw: rawText, html: `<div class="data-surface"><pre class="data-pre">${escapeHtml(rawText)}</pre></div>` }
+  return { raw: rawText, html: `<div class="data-surface"><div class="data-text">${escapeHtml(rawText)}</div></div>` }
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -203,7 +203,7 @@ function buildMessageItems(messages: unknown) {
       items.push({
         key: `tool-calls-${items.length}`,
         role: 'tool_calls',
-        title: 'Tool Calls',
+        title: 'Tool calls',
         content: toolCallsContent,
       })
       continue
@@ -240,7 +240,7 @@ function buildMessageItems(messages: unknown) {
       items.push({
         key: `tool-result-${items.length}`,
         role: 'tool_result',
-        title: `${toolName} Result`,
+        title: `${toolName} result`,
         content: String(content),
       })
       continue
@@ -293,7 +293,7 @@ export function DataViewer({ content, placeholder, className = '' }: DataViewerP
     return (
       <div className={wrapperClass} data-raw={rawText}>
         <div className="mb-2 flex items-center justify-end">
-          <Segmented size="sm" value={mode} onChange={setMode} options={[{ value: 'pretty', label: 'Pretty' }, { value: 'raw', label: 'Raw' }]} />
+          <Segmented size="sm" label="View" value={mode} onChange={setMode} options={[{ value: 'pretty', label: 'Pretty' }, { value: 'raw', label: 'Raw' }]} />
         </div>
         {mode === 'pretty' ? (
           <div className="space-y-2">

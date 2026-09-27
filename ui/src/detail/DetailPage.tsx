@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
 import type { ResultDetail, Score } from '../types'
 import { api } from '../api'
@@ -6,7 +6,8 @@ import { DataViewer } from '../components/DataViewer'
 import { resultKey, withColors } from '../lib/comparison'
 import { ComparisonView, type ComparedRun } from './components/ComparisonView'
 import { DetailHeader } from './components/DetailHeader'
-import { DataPanel, Drawer, ErrorBanner, ResizeHandle } from './components/Panels'
+import { PageMessage } from '../components/Spinner'
+import { Banner, DataPanel, Drawer, ResizeHandle, Verdict } from './components/Panels'
 import { Sidebar } from './components/Sidebar'
 import { useResizableLayout } from './useResizableLayout'
 
@@ -14,7 +15,7 @@ export type DetailRoute = { runId: string; index: number; compareRunIds: string[
 
 const finished = (detail: ResultDetail) => ['completed', 'error', 'cancelled'].includes(detail.result.result.status ?? 'completed')
 
-/** One result: input, reference and output panes, a sidebar of scores and metadata, and a drawer for messages. */
+/** One result: its verdict, the input, output and reference panes, a sidebar of scores and metadata, and a drawer for messages. */
 export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
   const [detail, setDetail] = useState<ResultDetail | null>(null)
   const [error, setError] = useState<Error | null>(null)
@@ -29,8 +30,10 @@ export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
   const navigate = useCallback((i: number) => { window.location.href = `/runs/${runId}/results/${i}${query}` }, [query, runId])
 
   useEffect(() => {
-    document.title = 'Result Detail - EZVals'
-    api.result(runId, index).then(setDetail, setError)
+    api.result(runId, index).then((d) => {
+      setDetail(d)
+      document.title = `${d.result.function} · EZVals`
+    }, setError)
   }, [index, runId])
 
   useEffect(() => {
@@ -44,7 +47,8 @@ export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
     })).then(setCompared)
   }, [compareRunIds, comparing, detail])
 
-  useEffect(() => {
+  // A layout effect, so the keys work as soon as the result is on screen.
+  useLayoutEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (editing || !detail || e.defaultPrevented) return
       if (e.key === 'Escape') {
@@ -70,7 +74,7 @@ export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
         setDetail(next)
       }
     } catch (err) {
-      setActionError(`${kind === 'rerun' ? 'Rerun' : 'Regrade'} failed: ${(err as Error).message}`)
+      setActionError(`Couldn't ${kind === 'rerun' ? 'rerun' : 'regrade'} this result: ${(err as Error).message}`)
     } finally {
       setBusy(null)
     }
@@ -81,8 +85,8 @@ export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
     setDetail((d) => d && { ...d, result: { ...d.result, result: { ...d.result.result, ...patch } } })
   }
 
-  if (error) return <div className="p-4 text-[13px] text-theme-text-muted">Failed to load result.</div>
-  if (!detail) return <div className="flex h-screen items-center justify-center text-[13px] text-theme-text-muted">Loading...</div>
+  if (error) return <PageMessage title="Couldn't load this result">Check that <code className="font-mono">ezvals serve</code> is still running, then refresh the page.</PageMessage>
+  if (!detail) return <PageMessage loading title="Loading result…" />
 
   const row = detail.result
   const r = row.result
@@ -90,10 +94,12 @@ export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
   const messages = Array.isArray(r.trace_data?.messages) ? r.trace_data.messages : []
 
   return (
-    <div className="flex h-screen flex-col bg-theme-bg font-sans text-theme-text">
+    <div className="flex h-screen flex-col bg-surface font-sans text-fg">
       <DetailHeader
         name={row.function}
         trial={row.trial}
+        sessionName={detail.session_name}
+        run={{ id: detail.run_id, name: detail.run_name }}
         runCommand={detail.eval_path ? `ezvals run ${detail.eval_path}::${row.function}` : `ezvals run ${row.function}`}
         position={detail}
         onNavigate={navigate}
@@ -101,32 +107,32 @@ export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
         onRerun={comparing ? undefined : () => runAgain('rerun')}
         onRegrade={comparing || !row.regradable || r.status !== 'completed' ? undefined : () => runAgain('regrade')}
       />
-      {actionError ? <ErrorBanner error={actionError} /> : null}
-      {r.error ? <ErrorBanner error={r.error} /> : null}
+      {actionError ? <Banner tone="danger" icon="alert" title={actionError} /> : null}
+      {comparing ? null : <Verdict result={r} />}
       <div ref={container} id="detail-body" className="flex min-h-0 flex-1 flex-col overflow-auto md:flex-row md:overflow-hidden">
         <div id="main-panel" className="flex min-w-0 flex-col max-md:flex-none md:flex-1">
           {comparing ? (
             compared ? <ComparisonView runs={compared} base={row} layout={layout} onResize={start} /> : null
           ) : (
             <div id="io-row" className="flex min-h-0 flex-1 flex-col md:flex-row">
-              <div id="input-column" className="flex min-w-0 flex-col md:w-[var(--input-width)]" style={{ '--input-width': `${layout.inputWidth}%` } as CSSProperties}>
-                <DataPanel id="input-panel" tone="input" value={r.input} className="flex-1 max-md:min-h-[8rem] max-md:flex-none" />
+              <DataPanel id="input-panel" tone="input" value={r.input} className="max-md:min-h-[8rem] max-md:flex-none md:w-[var(--input-width)]" style={{ '--input-width': `${layout.inputWidth}%` } as CSSProperties} />
+              <ResizeHandle direction="col" onMouseDown={start('inputWidth')} />
+              <div id="output-column" className="flex min-w-0 flex-1 flex-col max-md:border-t max-md:border-line">
+                <DataPanel id="output-panel" tone="output" value={r.output} loading={loading} className="flex-1 max-md:min-h-[12rem] max-md:flex-none" />
                 {r.reference != null ? (
                   <>
                     <ResizeHandle direction="row" onMouseDown={start('refHeight')} />
-                    <DataPanel id="ref-panel" tone="reference" value={r.reference} className="flex-shrink-0 max-md:min-h-[6rem] md:h-[var(--ref-height)] md:min-h-[60px]" style={{ '--ref-height': `${layout.refHeight}px` } as CSSProperties} />
+                    <DataPanel id="ref-panel" tone="reference" value={r.reference} className="flex-shrink-0 max-md:min-h-[6rem] max-md:border-t max-md:border-line md:h-[var(--ref-height)] md:min-h-[60px]" style={{ '--ref-height': `${layout.refHeight}px` } as CSSProperties} />
                   </>
                 ) : null}
               </div>
-              <ResizeHandle direction="col" onMouseDown={start('inputWidth')} />
-              <DataPanel id="output-panel" tone="output" value={r.output} loading={loading} className="flex-1 max-md:min-h-[12rem] max-md:flex-none" />
             </div>
           )}
         </div>
         {comparing ? null : (
           <>
             <ResizeHandle direction="col" onMouseDown={start('sidebarWidth')} />
-            <div id="sidebar-column" style={{ '--sidebar-width': `${layout.sidebarWidth}px` } as CSSProperties} className="flex min-h-0 flex-col max-md:flex-none max-md:border-t max-md:border-theme-border md:w-[var(--sidebar-width)] md:min-w-[200px]">
+            <div id="sidebar-column" style={{ '--sidebar-width': `${layout.sidebarWidth}px` } as CSSProperties} className="flex min-h-0 flex-col max-md:flex-none max-md:border-t max-md:border-line md:w-[var(--sidebar-width)] md:min-w-[200px]">
               <Sidebar
                 row={row}
                 runId={detail.run_id}
