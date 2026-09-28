@@ -65,6 +65,9 @@ skills-sandbox/.venv/
 
 # Built host binary and embedded UI
 python/ezvals/bin/
+# Release builds (scripts/build_release.sh)
+/dist/
+/npm/
 cmd/ezvals/web/*
 !cmd/ezvals/web/.gitkeep
 /ezvals-bin
