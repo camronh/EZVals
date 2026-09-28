@@ -2,7 +2,7 @@
 
 Unit testing for AI agents and LLM apps. Write evals like tests, in Python or TypeScript; EZVals runs them, stores every result, and gives you a web UI to review, annotate and compare runs.
 
-![UI screenshot](assets/ui.png)
+![UI screenshot](https://raw.githubusercontent.com/camronh/EZVals/main/assets/ui.png)
 
 ## Install
 
@@ -36,7 +36,7 @@ evaluate("refund", { input: "I want a refund", dataset: "customer_service" }, as
 });
 ```
 
-A failed assertion is a failing score, not an error, and whatever the eval stored before it is kept. Use `cases=` to run one eval over many inputs, `ctx.store(scores=...)` for named or numeric scores, and `target=` to separate calling your agent from scoring it. See the [docs](docs/) and [examples](examples/).
+A failed assertion is a failing score, not an error, and whatever the eval stored before it is kept. Use `cases=` to run one eval over many inputs, `ctx.store(scores=...)` for named or numeric scores, and `target=` to separate calling your agent from scoring it. See the [docs](https://github.com/camronh/EZVals/tree/main/docs) and [examples](https://github.com/camronh/EZVals/tree/main/examples).
 
 ## Run it
 
@@ -62,7 +62,7 @@ ezvals skills add --claude   # or --codex, --cursor, --windsurf, --kiro, --roo, 
 
 ## How it works
 
-`ezvals` is a single Go binary (`cmd/ezvals/`) that owns the CLI, the web UI (`ui/`, embedded at build time) and storage. To run evals it spawns a small worker from the language SDK (`python/`, `typescript/`) that imports your files and executes evals on request; results stream back and are appended to a per-run event log. Adding a language means writing an SDK against [the SDK spec](docs/.spec/EXPERIENCE_SPEC_SDK.md) and passing the shared `conformance/` fixtures.
+`ezvals` is a single Go binary (`cmd/ezvals/`) that owns the CLI, the web UI (`ui/`, embedded at build time) and storage. To run evals it spawns a small worker from the language SDK (`python/`, `typescript/`) that imports your files and executes evals on request; results stream back and are appended to a per-run event log. Adding a language means writing an SDK against [the SDK spec](https://github.com/camronh/EZVals/blob/main/docs/.spec/EXPERIENCE_SPEC_SDK.md) and passing the shared `conformance/` fixtures.
 
 ## Development
 

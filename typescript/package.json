@@ -2,6 +2,16 @@
   "name": "ezvals",
   "version": "0.2.0",
   "description": "Code-first evals for AI agents and LLM apps",
+  "keywords": [
+    "evals",
+    "evaluation",
+    "llm",
+    "ai",
+    "agents",
+    "testing"
+  ],
+  "homepage": "https://github.com/camronh/EZVals#readme",
+  "bugs": "https://github.com/camronh/EZVals/issues",
   "license": "MIT",
   "type": "module",
   "repository": {

@@ -15,6 +15,8 @@ done
 cd typescript
 if published ezvals; then echo "ezvals@$VERSION is already on npm"; exit 0; fi
 npm ci && npm run build
-trap 'npm pkg delete optionalDependencies' EXIT
+# The repo's README becomes the npm page (a symlink would be left out of the package).
+trap 'npm pkg delete optionalDependencies; rm -f README.md' EXIT
+cp ../README.md README.md
 for pkg in ../npm/*/; do npm pkg set "optionalDependencies.$(basename "$pkg")=$VERSION"; done
 npm publish --access public
