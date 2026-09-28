@@ -32,7 +32,7 @@ func newTestServer(t *testing.T) (*Server, *httptest.Server, string) {
 	t.Chdir(dir)
 	os.WriteFile("evals.py", []byte(serverFixture), 0o644)
 	s := &Server{store: openStore(filepath.Join(dir, "sessions")), session: "s", runName: "first", activeID: newRunID(), path: "evals.py"}
-	s.discover()
+	s.discover(false)
 	ts := httptest.NewServer(s.routes())
 	t.Cleanup(func() {
 		if s.exec != nil {
@@ -190,6 +190,30 @@ func TestDiscoveryErrorStillServesAnEmptyRun(t *testing.T) {
 		if _, data := call(t, ts, "GET", "/api/runs/latest/data", ""); data["discovery_error"] != body["discovery_error"] {
 			t.Fatalf("/data: %v", data)
 		}
+	}
+}
+
+func TestSwitchingRunsReusesDiscoveredEvals(t *testing.T) {
+	s, ts, _ := newTestServer(t)
+	for _, id := range []string{"aaaa1111", "bbbb2222"} {
+		s.store.Create(Event{Type: "run", RunID: id, SessionName: "s", RunName: id, Path: "evals.py"}, false)
+	}
+	os.WriteFile("evals.py", []byte(serverFixture+"\n@eval\ndef added(ctx: EvalContext):\n    ctx.output = 1\n"), 0o644)
+
+	// Switching runs doesn't import the eval code again: it's slow for real projects and the evals haven't changed.
+	for _, id := range []string{"aaaa1111", "bbbb2222", "aaaa1111"} {
+		start := time.Now()
+		if code, _ := call(t, ts, "POST", "/api/runs/"+id+"/activate", ""); code != 200 {
+			t.Fatal(code)
+		}
+		if elapsed := time.Since(start); elapsed > 100*time.Millisecond || len(s.discovered) != 5 {
+			t.Fatalf("switch to %s took %v with %d evals", id, elapsed, len(s.discovered))
+		}
+	}
+	// Reload evals picks up the change.
+	call(t, ts, "POST", "/api/server/restart", "")
+	if len(s.discovered) != 6 {
+		t.Fatalf("after reload: %d evals", len(s.discovered))
 	}
 }
 

@@ -197,6 +197,12 @@ Scenario: Code changes are picked up
   Given the user edits an eval file while the UI is open
   When the user clicks Run
   Then the edited code runs (every run starts fresh eval processes)
+
+Scenario: Switching runs is instant
+  Given the session has runs of the same eval path
+  When the user opens another run in the sidebar
+  Then it shows without importing the eval code again
+  And the evals listed for a run not started yet are the ones found at startup, by the last run, or by Reload evals
 ```
 
 ### Trials and Regrading

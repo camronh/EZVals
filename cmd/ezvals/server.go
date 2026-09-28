@@ -39,7 +39,8 @@ type Server struct {
 	activeID      string
 	configName    string
 	discovered    []Eval
-	discoveryErr  string // why discovery found nothing: the worker's error, e.g. an eval file that fails to import
+	discoveryErr  string               // why discovery found nothing: the worker's error, e.g. an eval file that fails to import
+	discoveries   map[string]discovery // what each eval path held when its code was last imported
 	exec          *Execution
 	selectedTotal *int
 }
@@ -158,7 +159,7 @@ func serveCmd(args []string) {
 	if *annotation != "any" {
 		query.Set("annotation", *annotation)
 	}
-	s.discover()
+	s.discover(false)
 
 	var listener net.Listener
 	var err error
@@ -234,24 +235,42 @@ func (s *Server) switchTo(id string) error {
 	if err := s.activate(id); err != nil {
 		return err
 	}
-	s.discover()
+	s.discover(false)
 	return nil
 }
 
-// discover lists the evals at the eval path without running them.
-func (s *Server) discover() {
+type discovery struct {
+	evals []Eval
+	err   string
+}
+
+// discover lists the evals at the eval path without running them. Importing eval code can take seconds, so each
+// path's evals are kept until fresh is set (Reload evals) or a run imports the code again.
+func (s *Server) discover(fresh bool) {
 	s.discovered, s.discoveryErr = nil, ""
 	if s.path == "" {
 		return
 	}
-	workers, evals, err := startWorkers(s.path, RunInfo{}, false)
-	if err != nil {
-		s.discoveryErr = err.Error()
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		return
+	d, ok := s.discoveries[s.path]
+	if fresh || !ok {
+		workers, evals, err := startWorkers(s.path, RunInfo{}, false)
+		if err != nil {
+			d = discovery{err: err.Error()}
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		} else {
+			stopWorkers(workers)
+			d = discovery{evals: evals}
+		}
+		s.remember(d)
 	}
-	stopWorkers(workers)
-	s.discovered = expandTrials(s.filter(evals), loadConfig().Trials)
+	s.discovered, s.discoveryErr = expandTrials(s.filter(d.evals), loadConfig().Trials), d.err
+}
+
+func (s *Server) remember(d discovery) {
+	if s.discoveries == nil {
+		s.discoveries = map[string]discovery{}
+	}
+	s.discoveries[s.path] = d
 }
 
 // filter applies the serve command's dataset, label and function filters.
@@ -400,8 +419,10 @@ func (s *Server) spawn(runName string) ([]*Worker, []Eval, error) {
 		Timeout: cfg.Timeout}
 	workers, manifest, err := startWorkers(s.path, info, cfg.Verbose)
 	if err != nil {
+		s.remember(discovery{err: err.Error()})
 		return nil, nil, fail(400, "%v", err)
 	}
+	s.remember(discovery{evals: manifest})
 	return workers, expandTrials(s.filter(manifest), cfg.Trials), nil
 }
 
@@ -651,7 +672,7 @@ func (s *Server) routes() http.Handler {
 		return map[string]any{"ok": true}, nil
 	})
 	handle("POST /api/server/restart", func(r *http.Request) (any, error) {
-		s.discover()
+		s.discover(true)
 		return map[string]any{"ok": true}, nil
 	})
 
@@ -715,7 +736,7 @@ func (s *Server) routes() http.Handler {
 		if err := s.activate(r.PathValue("id")); err != nil {
 			return nil, err
 		}
-		s.discover()
+		s.discover(false)
 		return map[string]any{"ok": true, "run_id": s.activeID, "run_name": s.runName}, nil
 	})
 
