@@ -3,6 +3,22 @@ title: "Changelog"
 description: "All notable changes to EZVals"
 ---
 
+## Unreleased
+
+- Changed: `ezvals` is now a single Go host (CLI, HTTP API, run storage and the web UI) that runs your evals in language workers. The Python SDK has no dependencies, and a TypeScript SDK (`.eval.ts` files) produces the same results, checked by a shared conformance suite.
+- Changed: Runs are stored as append-only event logs, so a run interrupted with Ctrl+C keeps its finished results. Legacy `.json` runs are read in place and never converted or deleted.
+- Added: Repeated trials (pass@k and pass^k), regrading of stored outputs for evals with a `target`, and SQL queries over runs with `ezvals query`.
+- Removed: OpenTelemetry span capture. `trace_url` and message transcripts still link and render.
+- Changed: The web UI is rebuilt as a workbench. A runs sidebar lists the session's runs with their pass rates and replaces the run dropdown. The open run sits in its own panel with Compare, Regrade and Run, and Regrade and Compare only show when they can be used.
+- Added: A review panel beside the results table. Click a row to read the result without leaving the run, step with ↑/↓, press Enter for the full page and Esc to close. The URL keeps the open result.
+- Changed: The summary leads with the pass rate, a trend of the session's recent runs and an outcome bar. Per-key stats appear only when a run has more than one score key.
+- Changed: The results table shows an outcome icon per row, centres its cells, keeps column headers pinned when scrolling, and shows errors as a one-line summary.
+- Changed: The result page steps between results in place, without reloading, and shows why a result errored in a strip under the header.
+- Changed: A documented design system (Geist type, semantic colours for light and dark, shared controls), shown in Storybook under Design System. Every screen meets WCAG 2.1 AA, and the story tests enforce it.
+- Changed: SDK and CLI output leads with failures, trims tracebacks to your own code, and suggests the closest option for a mistyped one.
+- Fixed: Saving settings keeps your project's own keys and their order in `ezvals.json`.
+- Fixed: Switching runs no longer re-imports your eval code (about 1s to about 50ms on a heavy project).
+
 ## 0.1.10 - 2026-02-24
 
 - Changed: Run picker dropdown now uses a listbox-style UI with inline rename, copy-to-clipboard feedback, keyboard navigation, and selection indicators replacing the old FloatingMenu.
