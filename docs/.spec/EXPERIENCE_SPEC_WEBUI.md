@@ -246,7 +246,7 @@ Scenario: Open a result beside the table
 
 Scenario: Review panel contents
   Then the panel's header shows the outcome icon, the eval name, its position among the rows in view ("2 of 6"), previous and next buttons, "Open" and close
-  And beneath it: the verdict strip (errors and unfinished results only), Output, Reference (if set), Input, then the same sidebar as the detail page (scores, details, messages, metadata, annotation)
+  And beneath it, in reading order: one line of context (dataset, labels, latency, trace link, tools), the verdict strip (errors and unfinished results only), the scores with their notes, Output, Reference (if set), Input, the annotation, then messages, metadata and extra data
   And scores and the annotation can be edited in place
 
 Scenario: Step through results
@@ -317,6 +317,7 @@ Scenario: Message-format data rendering
   And input, output, reference, or trace messages contain chat-style message arrays
   When the UI detects common message schemas (OpenAI, Anthropic, or text/message variants)
   Then those sections default to a pretty chat-style rendering
+  And beneath them one line of context: dataset (a link that filters the dashboard to it), labels, latency, the trace link and the tools used
   And each section provides a Pretty/Raw toggle
   And Raw shows the underlying JSON payload without transformation
 

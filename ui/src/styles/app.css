@@ -309,7 +309,7 @@ tr[data-row="main"] { transition: opacity 0.3s ease-out, background-color 0.12s 
   font-size: 12.5px;
   line-height: 1.6;
 }
-.data-viewer code.hljs { background: transparent !important; color: var(--fg); }
+.data-viewer code.hljs { background: transparent !important; padding: 0; color: var(--fg); }
 .data-viewer .hljs-attr { color: var(--syntax-key); }
 .data-viewer .hljs-string { color: var(--syntax-string); }
 .data-viewer .hljs-number, .data-viewer .hljs-literal { color: var(--syntax-number); }

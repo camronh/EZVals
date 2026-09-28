@@ -13,15 +13,6 @@ function formatMetadataLabel(key: string) {
   return key.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').trim().replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-function Row({ name, children }: { name: string; children: ReactNode }) {
-  return (
-    <div className="flex min-w-0 items-center justify-between gap-2">
-      <span className="section-label">{name}</span>
-      {children}
-    </div>
-  )
-}
-
 function Collapsible({ title, defaultOpen, children }: { title: string; defaultOpen: boolean; children: ReactNode }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
@@ -116,70 +107,71 @@ export function ScoreEditor({ score, onSave, onCancel }: { score: Score; onSave:
   )
 }
 
-type Props = {
-  row: RunResultRow
-  runId: string
-  onSaveAnnotation: (annotation: string | null) => Promise<void>
-  onSaveScores: (scores: Score[]) => Promise<void>
-  onOpenMessages: () => void
-  onEditingChange: (editing: boolean) => void
-  /** Shown in the dashboard's review panel, where Esc closes the panel. */
-  inPanel?: boolean
+type Editing = 'annotation' | number | null
+
+/** What is being edited (a score by index, or the annotation), reported to the page so its shortcuts pause meanwhile. */
+export function useEditing(onEditingChange: (editing: boolean) => void) {
+  const [editing, setEditing] = useState<Editing>(null)
+  useEffect(() => onEditingChange(editing !== null), [editing, onEditingChange])
+  return [editing, setEditing] as const
 }
 
-export function Sidebar({ row, runId, onSaveAnnotation, onSaveScores, onOpenMessages, onEditingChange, inPanel }: Props) {
-  const r = row.result
-  const [editing, setEditing] = useState<'annotation' | number | null>(null)
-  useEffect(() => onEditingChange(editing !== null), [editing, onEditingChange])
-  const messages = Array.isArray(r.trace_data?.messages) ? r.trace_data.messages : []
-  const tools = extractToolNamesFromMessages(messages)
-  const scores = r.scores ?? []
-  const { messages: _m, trace_url: traceUrl, ...extraTrace } = r.trace_data ?? {}
-  const metadata = Object.entries(r.metadata ?? {})
+type EditProps = { editing: Editing; setEditing: (editing: Editing) => void }
 
+/** Each score with its mark or value and its notes, edited in place. */
+export function Scores({ scores, onSaveScores, editing, setEditing }: EditProps & { scores: Score[]; onSaveScores: (scores: Score[]) => Promise<void> }) {
+  if (!scores.length) return null
   return (
-    <div id="sidebar-panel" className="flex min-h-0 flex-1 flex-col overflow-auto bg-surface-subtle">
-      {scores.length ? (
-        <div className="border-b border-line">
-          <h2 className="section-label flex h-10 items-center px-4">Scores</h2>
-          <div className="space-y-1.5 px-3 pb-3">
-            {scores.map((score, i) => editing === i ? (
-              <ScoreEditor
-                key={`${score.key}-${i}`}
-                score={score}
-                onCancel={() => setEditing(null)}
-                onSave={async (edited) => {
-                  await onSaveScores(scores.map((s, j) => (j === i ? edited : s)))
-                  setEditing(null)
-                }}
-              />
-            ) : <ScoreCard key={`${score.key}-${i}`} score={score} onEdit={() => setEditing(i)} />)}
-          </div>
-        </div>
-      ) : null}
-
-      <div className="space-y-2.5 border-b border-line px-4 py-3.5">
-        {r.latency != null ? <Row name="Latency"><span className="text-sm tabular-nums text-fg">{r.latency.toFixed(2)}s</span></Row> : null}
-        {row.dataset ? (
-          <Row name="Dataset">
-            <a className="link max-w-[70%] truncate text-right text-sm" title={`Open dashboard filtered to dataset: ${row.dataset}`} href={`/?run_id=${encodeURIComponent(runId)}&dataset_in=${encodeURIComponent(row.dataset)}`}>
-              {row.dataset}
-            </a>
-          </Row>
-        ) : null}
-        {row.labels?.length ? <Row name="Labels"><div className="flex max-w-[70%] flex-wrap justify-end gap-1">{row.labels.map((l) => <span key={l} className="chip max-w-[140px] truncate" title={l}>{l}</span>)}</div></Row> : null}
-        {traceUrl ? (
-          <Row name="Trace">
-            <a href={traceUrl} target="_blank" rel="noreferrer" className="link flex items-center gap-1 text-sm">
-              {String(traceUrl).replace(/^\w+:\/\/(www\.)?/, '').split('/')[0]}<Icon name="external" className="h-3 w-3" />
-            </a>
-          </Row>
-        ) : null}
-        {tools.length ? <Row name="Tools"><div id="tool-names" className="flex max-w-[70%] flex-wrap justify-end gap-1">{tools.map((t) => <span key={t} className="chip font-mono">{t}</span>)}</div></Row> : null}
+    <section aria-label="Scores" className="border-b border-line">
+      <h2 className="section-label flex h-10 items-center px-4">Scores</h2>
+      <div className="space-y-1.5 px-3 pb-3">
+        {scores.map((score, i) => editing === i ? (
+          <ScoreEditor
+            key={`${score.key}-${i}`}
+            score={score}
+            onCancel={() => setEditing(null)}
+            onSave={async (edited) => {
+              await onSaveScores(scores.map((s, j) => (j === i ? edited : s)))
+              setEditing(null)
+            }}
+          />
+        ) : <ScoreCard key={`${score.key}-${i}`} score={score} onEdit={() => setEditing(i)} />)}
       </div>
+    </section>
+  )
+}
 
+/** One line of context: dataset (filters the dashboard to it), labels, latency, the trace link and the tools used. */
+export function ResultContext({ row, runId }: { row: RunResultRow; runId: string }) {
+  const r = row.result
+  const traceUrl = r.trace_data?.trace_url
+  const tools = extractToolNamesFromMessages(Array.isArray(r.trace_data?.messages) ? r.trace_data.messages : [])
+  return (
+    <div id="result-context" className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line px-4 py-2.5 text-xs text-fg-muted">
+      {row.dataset ? (
+        <a className="link max-w-[200px] truncate" title={`Open dashboard filtered to dataset: ${row.dataset}`} href={`/?run_id=${encodeURIComponent(runId)}&dataset_in=${encodeURIComponent(row.dataset)}`}>{row.dataset}</a>
+      ) : null}
+      {row.labels?.length ? <span className="flex flex-wrap gap-1">{row.labels.map((l) => <span key={l} className="chip max-w-[140px] truncate" title={l}>{l}</span>)}</span> : null}
+      {r.latency != null ? <span className="tabular-nums" title="Latency">{r.latency.toFixed(2)}s</span> : null}
+      {traceUrl ? (
+        <a href={traceUrl} target="_blank" rel="noreferrer" className="link flex items-center gap-1">
+          {String(traceUrl).replace(/^\w+:\/\/(www\.)?/, '').split('/')[0]}<Icon name="external" className="h-3 w-3" />
+        </a>
+      ) : null}
+      {tools.length ? <span id="tool-names" className="flex flex-wrap items-center gap-1" title="Tools used">{tools.map((t) => <span key={t} className="chip font-mono">{t}</span>)}</span> : null}
+    </div>
+  )
+}
+
+/** The result's messages (in a drawer), metadata and any other trace data. */
+export function Extras({ row, onOpenMessages }: { row: RunResultRow; onOpenMessages: () => void }) {
+  const r = row.result
+  const messages = Array.isArray(r.trace_data?.messages) ? r.trace_data.messages : []
+  const { messages: _m, trace_url: _t, ...extraTrace } = r.trace_data ?? {}
+  const metadata = Object.entries(r.metadata ?? {})
+  return (
+    <>
       {messages.length ? <DrawerButton title="Messages" count={messages.length} onClick={onOpenMessages} /> : null}
-
       {metadata.length ? (
         <Collapsible title="Metadata" defaultOpen>
           <dl className="space-y-2.5">
@@ -198,43 +190,68 @@ export function Sidebar({ row, runId, onSaveAnnotation, onSaveScores, onOpenMess
           </dl>
         </Collapsible>
       ) : null}
-
       {Object.keys(extraTrace).length ? <Collapsible title="Extra data" defaultOpen={false}><DataViewer content={extraTrace} placeholder="—" /></Collapsible> : null}
+    </>
+  )
+}
 
-      <div className="flex-1">
-        <div className="flex h-10 items-center justify-between px-4">
-          <h2 className="section-label">Annotation</h2>
-          {editing !== 'annotation' ? (
-            <button className="btn btn-ghost btn-xs btn-icon -mr-1" title="Edit annotation" aria-label="Edit annotation" onClick={() => setEditing('annotation')}>
-              <Icon name="pencil" className="h-3 w-3" />
-            </button>
-          ) : null}
-        </div>
-        <div className="px-4 pb-4">
-          {editing === 'annotation' ? (
-            <div onKeyDown={cancelOnEscape(() => setEditing(null))}>
-              <AnnotationEditor
-                initial={r.annotation ?? ''}
-                onCancel={() => setEditing(null)}
-                onSave={async (annotation) => {
-                  await onSaveAnnotation(annotation)
-                  setEditing(null)
-                }}
-              />
-            </div>
-          ) : r.annotation ? (
-            <div className="whitespace-pre-wrap text-sm text-fg-secondary">{r.annotation}</div>
-          ) : (
-            <button type="button" className="link text-sm" onClick={() => setEditing('annotation')}>
-              Add annotation
-            </button>
-          )}
-        </div>
+/** The reviewer's own note on the result. */
+export function Annotation({ annotation, onSaveAnnotation, editing, setEditing }: EditProps & { annotation?: string | null; onSaveAnnotation: (annotation: string | null) => Promise<void> }) {
+  return (
+    <section aria-label="Annotation">
+      <div className="flex h-10 items-center justify-between px-4">
+        <h2 className="section-label">Annotation</h2>
+        {editing !== 'annotation' ? (
+          <button className="btn btn-ghost btn-xs btn-icon -mr-1" title="Edit annotation" aria-label="Edit annotation" onClick={() => setEditing('annotation')}>
+            <Icon name="pencil" className="h-3 w-3" />
+          </button>
+        ) : null}
       </div>
+      <div className="px-4 pb-4">
+        {editing === 'annotation' ? (
+          <div onKeyDown={cancelOnEscape(() => setEditing(null))}>
+            <AnnotationEditor
+              initial={annotation ?? ''}
+              onCancel={() => setEditing(null)}
+              onSave={async (next) => {
+                await onSaveAnnotation(next)
+                setEditing(null)
+              }}
+            />
+          </div>
+        ) : annotation ? (
+          <div className="whitespace-pre-wrap text-sm text-fg-secondary">{annotation}</div>
+        ) : (
+          <button type="button" className="link text-sm" onClick={() => setEditing('annotation')}>
+            Add annotation
+          </button>
+        )}
+      </div>
+    </section>
+  )
+}
 
+type Props = {
+  row: RunResultRow
+  runId: string
+  onSaveAnnotation: (annotation: string | null) => Promise<void>
+  onSaveScores: (scores: Score[]) => Promise<void>
+  onOpenMessages: () => void
+  onEditingChange: (editing: boolean) => void
+}
+
+/** The result page's right column: scores, context, extras and the annotation, with the keyboard hints. */
+export function Sidebar({ row, runId, onSaveAnnotation, onSaveScores, onOpenMessages, onEditingChange }: Props) {
+  const [editing, setEditing] = useEditing(onEditingChange)
+  return (
+    <div id="sidebar-panel" className="flex min-h-0 flex-1 flex-col overflow-auto bg-surface-subtle">
+      <Scores scores={row.result.scores ?? []} onSaveScores={onSaveScores} editing={editing} setEditing={setEditing} />
+      <ResultContext row={row} runId={runId} />
+      <Extras row={row} onOpenMessages={onOpenMessages} />
+      <div className="flex-1"><Annotation annotation={row.result.annotation} onSaveAnnotation={onSaveAnnotation} editing={editing} setEditing={setEditing} /></div>
       <div className="flex flex-shrink-0 items-center gap-4 border-t border-line px-4 py-2 text-xs text-fg-muted">
         <span className="flex items-center gap-1.5"><kbd className="kbd">↑</kbd><kbd className="kbd">↓</kbd>next result</span>
-        <span className="flex items-center gap-1.5"><kbd className="kbd">Esc</kbd>{editing !== null ? 'cancel' : inPanel ? 'close' : 'back'}</span>
+        <span className="flex items-center gap-1.5"><kbd className="kbd">Esc</kbd>{editing !== null ? 'cancel' : 'back'}</span>
       </div>
     </div>
   )

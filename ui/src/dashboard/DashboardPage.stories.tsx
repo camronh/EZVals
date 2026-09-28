@@ -16,7 +16,7 @@ type Story = StoryObj<typeof DashboardPage>
 
 export const Completed: Story = { parameters: { msw: { handlers: apiHandlers(completedRun) } } }
 
-/** A result open in the review panel beside the table (?result=1); ↓ steps to the next row, Esc closes it. */
+/** A result open in the review panel beside the table (?result=1), read top to bottom: context, why (scores), output, reference, input, then the note. ↓ steps to the next row. */
 export const ReviewPanel: Story = {
   args: { query: readQuery(new URLSearchParams('result=1')) },
   parameters: { msw: { handlers: apiHandlers(completedRun) } },
@@ -24,6 +24,9 @@ export const ReviewPanel: Story = {
     const canvas = within(canvasElement)
     const panel = await canvas.findByRole('complementary', { name: /Result: refund_request\[indirect\]/ })
     await expect(within(panel).getByRole('status', { name: 'failed' })).toBeVisible()
+    const order = ['Scores', 'Output', 'Reference', 'Input', 'Annotation'].map((name) => within(panel).getByRole('region', { name }))
+    await expect(panel.querySelector('#result-context')!.compareDocumentPosition(order[0]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    for (let i = 1; i < order.length; i++) await expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     await userEvent.keyboard('{ArrowDown}')
     await expect(await canvas.findByRole('complementary', { name: /Result: greeting/ })).toBeVisible()
     await userEvent.keyboard('{ArrowUp}')
