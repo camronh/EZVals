@@ -1,30 +1,12 @@
 import { defineConfig } from 'vite'
-import path from 'path'
-import { fileURLToPath } from 'url'
 import react from '@vitejs/plugin-react'
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-
-// https://vite.dev/config/
+// `npm run build` writes the UI into the Go host, which embeds it. `npm run dev` proxies the API to `ezvals serve --port 8987`.
 export default defineConfig({
   plugins: [react()],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, 'src'),
-    },
-  },
-  build: {
-    outDir: path.resolve(__dirname, '../ezvals/static'),
-    assetsDir: 'assets',
-    emptyOutDir: true,
-  },
+  build: { outDir: '../cmd/ezvals/web', emptyOutDir: true },
   server: {
     host: '127.0.0.1',
-    port: 5173,
-    proxy: {
-      '/api': 'http://127.0.0.1:8987',
-      '/results': 'http://127.0.0.1:8987',
-    },
+    proxy: { '/api': 'http://127.0.0.1:8987', '/results': 'http://127.0.0.1:8987' },
   },
 })

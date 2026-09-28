@@ -12,23 +12,12 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Assemble EZVals docs into skill
-        run: |
-          mkdir -p ezvals/skills/evals/ezvals-docs
-
-          # Copy docs, flattening the directory structure
-          cp docs/introduction.mdx ezvals/skills/evals/ezvals-docs/
-          cp docs/setup.mdx ezvals/skills/evals/ezvals-docs/quickstart.mdx
-          cp docs/examples/*.mdx ezvals/skills/evals/ezvals-docs/
-          cp docs/core-concepts/*.mdx ezvals/skills/evals/ezvals-docs/
-          cp docs/guides/*.mdx ezvals/skills/evals/ezvals-docs/
-          cp docs/api-reference/*.mdx ezvals/skills/evals/ezvals-docs/
-
-          echo "Assembled $(ls ezvals/skills/evals/ezvals-docs | wc -l) docs"
+        run: make skill-docs
 
       - name: Validate skill version matches tag
         run: |
           TAG=${GITHUB_REF#refs/tags/v}
-          SKILL_VER=$(grep -oP 'Version:\s*\K[0-9.]+' ezvals/skills/evals/SKILL.md)
+          SKILL_VER=$(grep -oP 'Version:\s*\K[0-9.]+' cmd/ezvals/skill/SKILL.md)
           if [ "$TAG" != "$SKILL_VER" ]; then
             echo "Error: Tag version ($TAG) does not match skill version ($SKILL_VER)"
             exit 1
@@ -40,7 +29,7 @@ jobs:
         env:
           SSH_DEPLOY_KEY: ${{ secrets.SKILL_REPO_DEPLOY_KEY }}
         with:
-          source-directory: 'ezvals/skills/evals'
+          source-directory: 'cmd/ezvals/skill'
           destination-github-username: 'camronh'
           destination-repository-name: 'evals-skill'
           target-branch: main

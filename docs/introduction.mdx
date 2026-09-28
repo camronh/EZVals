@@ -1,93 +1,55 @@
 ---
-title: EZVals
-description: The evals framework your coding agent wants
+title: Introduction
+description: Evals for LLM apps and agents, written and run by your coding agent
 ---
 
-<img
-  className="block dark:hidden"
-  src="/assets/hero-light.svg"
-  alt="EZVals"
-/>
-<img
-  className="hidden dark:block"
-  src="/assets/hero-dark.svg"
-  alt="EZVals"
-/>
+EZVals is an eval framework for LLM apps and agents, with SDKs for Python and TypeScript. It's designed to be driven by a coding agent: your agent writes the evals, runs them from the CLI, reads the results and iterates, while you review the same runs in a local web UI.
 
-EZVals is an evaluation framework for testing LLMs and Agents
-
-What makes EZVals special is that its built to be used by your coding agent. Your agent writes evals, runs them, analyzes results, and iterates while you monitor the situation from the Dashboard.
-
-<CardGroup cols={2}>
-  <Card title="Agent-First" icon="robot">
-    Full CLI that mirrors every UI action. Built-in [skill](/guides/agent-skill) gives your agent eval-specific guidance.
-  </Card>
-  <Card title="Local Dashboard" icon="chart-mixed">
-    [Compare runs](/guides/web-ui), annotate, and export from a local web UI.
-  </Card>
-  <Card title="Flexible" icon="sliders">
-    Quick smoke tests or deep multi-model comparisons. [Pytest-style assertions](/core-concepts/scoring), clean code.
-  </Card>
-  <Card title="Local-Only" icon="laptop-code">
-    Code, data, and results live in your repo. No external platforms or auth.
-  </Card>
-</CardGroup>
-
-## Get Started
-
-Install the EZVals skill for your coding agent:
-
-```bash
-npx skills add camronh/evals-skill
-```
-
-Then prompt your agent:
+An eval is an ordinary function: give it an input, call your agent, check the output. Everything else (cases, scores, repeated trials, run history) builds on that.
 
 <CodeGroup>
 
-```text Compare
-Compare Opus 4.6 vs GPT-5.3 on answer correctness. Show me the comparison.
+```python Python
+from ezvals import eval, EvalContext
+
+@eval(input="I want a refund", dataset="support")
+async def test_refund(ctx: EvalContext):
+    ctx.output = await support_agent(ctx.input)
+    assert "refund" in ctx.output.lower(), "Should acknowledge the refund"
 ```
 
-```text Evaluate
-Help me evaluate hallucinations in my RAG agent @agent.py
-```
+```ts TypeScript
+import assert from "node:assert";
+import { evaluate } from "ezvals";
 
-```text Error Analysis
-Run error analysis on the last eval run @.ezvals/sessions/rag-tests/baseline_a1b2c3d4.json
+evaluate("test_refund", { input: "I want a refund", dataset: "support" }, async (ctx) => {
+  ctx.output = await supportAgent(String(ctx.input));
+  assert(String(ctx.output).toLowerCase().includes("refund"), "Should acknowledge the refund");
+});
 ```
-
 
 </CodeGroup>
 
-The agent writes the evals, runs them, and reports back with results. For the comparison example, that looks something like:
+<Frame>
+  <img className="block dark:hidden" src="/assets/ui-screenshot-light.png" alt="EZVals web UI showing a run's results" />
+  <img className="hidden dark:block" src="/assets/ui-screenshot-dark.png" alt="EZVals web UI showing a run's results" />
+</Frame>
 
-```markdown
-I ran both models against your 50-question correctness dataset.
+## Why EZVals
 
-| Model    | Correctness | Avg Latency |
-|----------|-------------|-------------|
-| Opus 4.6 | 94%         | 1.2s        |
-| GPT-5.3  | 87%         | 0.8s        |
+- **Agent-first.** A CLI with JSON output, SQL over every saved run, and a bundled skill that teaches your coding agent how to design evals and graders.
+- **Built for nondeterminism.** [Repeated trials](/writing-evals/trials) report pass@k and pass^k, and [regrading](/writing-evals/targets-and-regrading) re-scores stored outputs when you change a grader, without paying for new agent runs.
+- **Local.** Eval code, run files and the web UI all live in your repo and on your machine. No account, no hosted service.
+- **One tool, two languages.** Python and TypeScript evals can sit in the same directory and run as one run.
 
-Opus scores 7% higher on correctness but is ~50% slower.
-
-Full comparison: http://127.0.0.1:8000/?compare_run_id=a1b2...&compare_run_id=c3d4...
-```
-
-<img
-  className="block dark:hidden"
-  src="/assets/comparison-light.png"
-  alt="EZVals Comparison View"
-/>
-<img
-  className="hidden dark:block"
-  src="/assets/comparison-dark.png"
-  alt="EZVals Comparison View"
-/>
-
-Results can be exported as JSON, CSV, Markdown, or PNG from the dashboard or CLI.
-
-<Card title="Setup Details" icon="gear" href="/setup">
-  Install the library directly, configure your project, and learn how EZVals works under the hood.
-</Card>
+<CardGroup cols={3}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Install, write a first eval, run it and open the UI.
+  </Card>
+  <Card title="How EZVals works" icon="diagram-project" href="/how-it-works">
+    Evals, cases, scores, runs and sessions in one page.
+  </Card>
+  <Card title="Using with coding agents" icon="robot" href="/reviewing/coding-agents">
+    Install the skill and let your agent do the work.
+  </Card>
+</CardGroup>

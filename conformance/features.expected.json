@@ -1,0 +1,91 @@
+[
+  {
+    "function": "graded",
+    "dataset": "features",
+    "labels": [],
+    "status": "completed",
+    "input": "q",
+    "output": "a",
+    "reference": null,
+    "scores": [
+      {
+        "key": "pass",
+        "passed": true
+      }
+    ],
+    "metadata": {},
+    "trace_data": {}
+  },
+  {
+    "function": "repeated",
+    "dataset": "features",
+    "labels": [],
+    "trial": 1,
+    "status": "completed",
+    "input": null,
+    "output": "same",
+    "reference": null,
+    "scores": [
+      {
+        "key": "pass",
+        "passed": true
+      }
+    ],
+    "metadata": {},
+    "trace_data": {}
+  },
+  {
+    "function": "repeated",
+    "dataset": "features",
+    "labels": [],
+    "trial": 2,
+    "status": "completed",
+    "input": null,
+    "output": "same",
+    "reference": null,
+    "scores": [
+      {
+        "key": "pass",
+        "passed": true
+      }
+    ],
+    "metadata": {},
+    "trace_data": {}
+  },
+  {
+    "function": "repeated_case[x]",
+    "dataset": "features",
+    "labels": [],
+    "trial": 1,
+    "status": "completed",
+    "input": 1,
+    "output": 1,
+    "reference": null,
+    "scores": [
+      {
+        "key": "pass",
+        "passed": true
+      }
+    ],
+    "metadata": {},
+    "trace_data": {}
+  },
+  {
+    "function": "repeated_case[x]",
+    "dataset": "features",
+    "labels": [],
+    "trial": 2,
+    "status": "completed",
+    "input": 1,
+    "output": 1,
+    "reference": null,
+    "scores": [
+      {
+        "key": "pass",
+        "passed": true
+      }
+    ],
+    "metadata": {},
+    "trace_data": {}
+  }
+]

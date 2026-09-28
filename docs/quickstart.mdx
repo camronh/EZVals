@@ -1,0 +1,124 @@
+---
+title: Quickstart
+description: Install EZVals, get a first eval running, and review it in the browser
+---
+
+This page takes you from an empty project to a saved run you can review in the web UI.
+
+<Steps>
+  <Step title="Install">
+    Install the package for your language. Both ship the same `ezvals` CLI and web UI.
+
+    <CodeGroup>
+
+    ```bash uv
+    uv add ezvals --dev
+    ```
+
+    ```bash pip
+    pip install ezvals
+    ```
+
+    ```bash npm
+    npm install --save-dev ezvals
+    ```
+
+    </CodeGroup>
+
+    The Python package has no Python dependencies. The npm package needs Node 22.18 or newer, which runs `.ts` eval files directly with no build step. In a TypeScript project, run every command on this page as `npx ezvals`.
+  </Step>
+
+  <Step title="Let your coding agent write the evals">
+    Install the EZVals skill, which teaches your agent how to plan evals, pick graders and read results:
+
+    ```bash
+    npx skills add camronh/evals-skill
+    ```
+
+    Then ask for what you want, for example:
+
+    ```text
+    /evals Help me evaluate hallucinations in my RAG agent @agent.py
+    ```
+
+    The agent writes the eval files, runs them, and reports back. See [Using with coding agents](/reviewing/coding-agents) for other install options and prompts.
+  </Step>
+
+  <Step title="Or write one by hand">
+    Python evals can live in any `.py` file (files starting with `_` are skipped). TypeScript evals live in files ending in `.eval.ts` (or `.eval.mts`, `.eval.js`, `.eval.mjs`).
+
+    <CodeGroup>
+
+    ```python evals.py
+    from ezvals import eval, EvalContext
+
+    @eval(input="What is 2+2?", reference="4")
+    async def test_math(ctx: EvalContext):
+        ctx.output = await my_llm(ctx.input)
+        assert ctx.output == ctx.reference
+    ```
+
+    ```ts math.eval.ts
+    import assert from "node:assert";
+    import { evaluate } from "ezvals";
+
+    evaluate("test_math", { input: "What is 2+2?", reference: "4" }, async (ctx) => {
+      ctx.output = await myLlm(String(ctx.input));
+      assert.equal(ctx.output, ctx.reference);
+    });
+    ```
+
+    </CodeGroup>
+  </Step>
+
+  <Step title="Run it">
+    ```bash
+    ezvals run evals.py
+    ```
+
+    `ezvals run` prints a short per-eval summary with a pass or fail mark for each eval, followed by a failures section with each failing eval's reason, and saves the run under `.ezvals/sessions/`. Add `--json` to print the full run as JSON, which is what coding agents usually read.
+  </Step>
+
+  <Step title="Review it in the browser">
+    ```bash
+    ezvals serve evals.py
+    ```
+
+    This opens the web UI at `http://127.0.0.1:8000`. It lists every eval it found but runs nothing until you press the Run button. Open a result to see its input, output and scores. See [Web UI](/reviewing/web-ui).
+  </Step>
+
+  <Step title="Iterate and compare">
+    Change your agent or prompt, run again, and compare the two runs side by side in the UI. Giving runs names in a shared session makes this easy:
+
+    ```bash
+    ezvals run evals.py --session prompt-work --run-name baseline
+    ezvals run evals.py --session prompt-work --run-name shorter-prompt
+    ```
+
+    Every run starts fresh worker processes, so edits to eval code are always picked up. See [Sessions & comparing runs](/reviewing/sessions).
+  </Step>
+</Steps>
+
+## What's in your project now
+
+```
+your-project/
+├── evals.py
+└── .ezvals/
+    └── sessions/
+        └── default/
+            └── a1b2c3d4.jsonl   # one file per run
+```
+
+An optional `ezvals.json` holds defaults such as `concurrency` and `timeout`. It's created only when you save settings from the UI, or you can write it yourself. See [Configuration](/reference/cli#configuration).
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="How EZVals works" icon="diagram-project" href="/how-it-works">
+    The mental model behind evals, runs and sessions.
+  </Card>
+  <Card title="Writing evals" icon="code" href="/writing-evals/evals">
+    Inputs, outputs, context, timeouts and errors.
+  </Card>
+</CardGroup>

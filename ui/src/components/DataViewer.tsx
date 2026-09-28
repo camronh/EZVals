@@ -1,4 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import DOMPurify from 'dompurify'
+import hljs from 'highlight.js/lib/core'
+import json from 'highlight.js/lib/languages/json'
+import 'highlight.js/styles/github-dark-dimmed.css'
+import { marked } from 'marked'
+import { useMemo, useState } from 'react'
+import { getRawText } from '../lib/format'
+import { Segmented } from './Dropdown'
+
+hljs.registerLanguage('json', json)
 
 type MessageItem = {
   key: string
@@ -34,10 +43,6 @@ type ToolCallInfo = {
 
 type MessageViewMode = 'pretty' | 'raw'
 
-type MarkedLike = { parse: (input: string) => string }
-type DomPurifyLike = { sanitize: (input: string) => string }
-type HljsLike = { highlight: (input: string, opts: { language: string }) => { value: string } }
-
 function escapeHtml(str: unknown) {
   if (str == null) return ''
   return String(str)
@@ -52,22 +57,11 @@ function looksLikeMarkdown(text: string) {
     .some((re) => re.test(text))
 }
 
-export function getRawText(content: unknown) {
-  if (content == null) return ''
-  if (typeof content === 'string') return content
-  if (typeof content === 'number' || typeof content === 'boolean') return String(content)
-  try {
-    return JSON.stringify(content, null, 2)
-  } catch {
-    return String(content)
-  }
-}
-
 function buildViewer(content: unknown, placeholder = '—') {
   if (content == null || content === '') {
     return {
       raw: '',
-      html: `<div class="data-surface text-xs text-zinc-400">${escapeHtml(placeholder)}</div>`,
+      html: `<div class="data-surface text-sm text-fg-muted">${escapeHtml(placeholder)}</div>`,
     }
   }
 
@@ -86,30 +80,19 @@ function buildViewer(content: unknown, placeholder = '—') {
   }
 
   if (mode === 'markdown') {
-    const marked = typeof window !== 'undefined' ? (window as unknown as { marked?: MarkedLike }).marked : undefined
-    const purifier = typeof window !== 'undefined' ? (window as unknown as { DOMPurify?: DomPurifyLike }).DOMPurify : undefined
-    let html = marked ? marked.parse(rawText) : `<pre class="data-pre">${escapeHtml(rawText)}</pre>`
-    if (purifier) html = purifier.sanitize(html)
+    const html = DOMPurify.sanitize(marked.parse(rawText, { async: false }))
     return { raw: rawText, html: `<div class="data-surface markdown-body">${html}</div>` }
   }
 
   if (mode === 'json') {
-    const hljs = typeof window !== 'undefined' ? (window as unknown as { hljs?: HljsLike }).hljs : undefined
-    let highlighted = escapeHtml(rawText)
-    if (hljs) {
-      try {
-        highlighted = hljs.highlight(rawText, { language: 'json' }).value
-      } catch {
-        highlighted = escapeHtml(rawText)
-      }
-    }
+    const highlighted = hljs.highlight(rawText, { language: 'json' }).value
     return {
       raw: rawText,
       html: `<div class="data-surface"><pre class="data-pre"><code class="hljs language-json">${highlighted}</code></pre></div>`,
     }
   }
 
-  return { raw: rawText, html: `<div class="data-surface"><pre class="data-pre">${escapeHtml(rawText)}</pre></div>` }
+  return { raw: rawText, html: `<div class="data-surface"><div class="data-text">${escapeHtml(rawText)}</div></div>` }
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -220,7 +203,7 @@ function buildMessageItems(messages: unknown) {
       items.push({
         key: `tool-calls-${items.length}`,
         role: 'tool_calls',
-        title: 'Tool Calls',
+        title: 'Tool calls',
         content: toolCallsContent,
       })
       continue
@@ -257,7 +240,7 @@ function buildMessageItems(messages: unknown) {
       items.push({
         key: `tool-result-${items.length}`,
         role: 'tool_result',
-        title: `${toolName} Result`,
+        title: `${toolName} result`,
         content: String(content),
       })
       continue
@@ -300,11 +283,9 @@ type DataViewerProps = {
 export function DataViewer({ content, placeholder, className = '' }: DataViewerProps) {
   const { html, raw } = useMemo(() => buildViewer(content, placeholder), [content, placeholder])
   const messageItems = useMemo(() => buildMessageItems(content), [content])
-  const [mode, setMode] = useState<MessageViewMode>('pretty')
-
-  useEffect(() => {
-    setMode('pretty')
-  }, [content])
+  const [chosen, setChosen] = useState<{ content: unknown; mode: MessageViewMode }>({ content, mode: 'pretty' })
+  const mode = chosen.content === content ? chosen.mode : 'pretty'
+  const setMode = (next: MessageViewMode) => setChosen({ content, mode: next })
 
   if (messageItems && messageItems.length > 0) {
     const rawText = getRawText(content)
@@ -312,25 +293,10 @@ export function DataViewer({ content, placeholder, className = '' }: DataViewerP
     return (
       <div className={wrapperClass} data-raw={rawText}>
         <div className="mb-2 flex items-center justify-end">
-          <div className="inline-flex rounded border border-zinc-200 bg-zinc-100 p-0.5 dark:border-zinc-700 dark:bg-zinc-800/70">
-            <button
-              type="button"
-              className={`rounded px-2 py-0.5 text-[10px] font-medium ${mode === 'pretty' ? 'bg-white text-zinc-700 shadow dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'}`}
-              onClick={() => setMode('pretty')}
-            >
-              Pretty
-            </button>
-            <button
-              type="button"
-              className={`rounded px-2 py-0.5 text-[10px] font-medium ${mode === 'raw' ? 'bg-white text-zinc-700 shadow dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'}`}
-              onClick={() => setMode('raw')}
-            >
-              Raw
-            </button>
-          </div>
+          <Segmented size="sm" label="View" value={mode} onChange={setMode} options={[{ value: 'pretty', label: 'Pretty' }, { value: 'raw', label: 'Raw' }]} />
         </div>
         {mode === 'pretty' ? (
-          <div className="space-y-1">
+          <div className="space-y-2">
             {messageItems.map((item) => (
               <div key={item.key} className={`msg-box msg-${item.role}`}>
                 <div className="msg-box-header">{item.title}</div>

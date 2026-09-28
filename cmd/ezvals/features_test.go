@@ -1,0 +1,145 @@
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestTrialsPassAtK(t *testing.T) {
+	evals := expandTrials([]Eval{{ID: "a", Function: "a"}, {ID: "b", Function: "b", Trials: 2}}, 0)
+	if got := ids(evals); len(got) != 3 || got[1] != "b~1" || evals[2].Trial != 2 || evals[2].TrialOf != "b" {
+		t.Fatalf("per-eval trials expand into ids ~1..N: %v", got)
+	}
+	evals = expandTrials(evals[:1], 3)
+	run := materialize([]Event{
+		{Type: "evals", Evals: append(evals, expandTrials([]Eval{{ID: "c", Function: "c"}}, 3)...)},
+		result("a~1", "x", true), result("a~2", "x", false), result("a~3", "x", true),
+		result("c~1", "x", true), result("c~2", "x", true), result("c~3", "x", true),
+	})
+	if run.Trials != 3 || *run.PassAtK != 1 || *run.PassAllK != 0.5 {
+		t.Fatalf("trials=%d pass@k=%v pass^k=%v", run.Trials, *run.PassAtK, *run.PassAllK)
+	}
+}
+
+func TestRegradeJobsNeedATarget(t *testing.T) {
+	run := materialize([]Event{
+		manifest("with", "without", "pending"),
+		result("with", "x", true), result("without", "y", true),
+		{Type: "queued", IDs: []string{"pending"}},
+	})
+	current := []Eval{{ID: "with", Target: true}, {ID: "without"}, {ID: "pending", Target: true}}
+	jobs, noTarget := regradeJobs(run, current, nil)
+	if len(jobs) != 1 || jobs[0].ID != "with" || jobs[0].Grade.Output != "x" || noTarget != 1 {
+		t.Fatalf("jobs=%+v noTarget=%d", jobs, noTarget)
+	}
+
+	// serve passes the manifest already expanded into trials
+	trials := expandTrials([]Eval{{ID: "t", Function: "t", Target: true}}, 2)
+	run = materialize([]Event{{Type: "evals", Evals: trials}, result("t~1", "x", true), result("t~2", "y", false)})
+	jobs, _ = regradeJobs(run, trials, []int{1})
+	if len(jobs) != 1 || jobs[0].ID != "t~2" || jobs[0].Eval != "t" || !run.Results[1].Regradable {
+		t.Fatalf("trial jobs=%+v", jobs)
+	}
+}
+
+func TestQueryOverRuns(t *testing.T) {
+	store := openStore(t.TempDir())
+	store.Create(Event{Type: "run", RunID: "r1", SessionName: "s", RunName: "baseline"}, true)
+	store.Append("r1", manifest("a", "b"), result("a", "x", true), result("b", "y", false))
+	db, err := loadRunsDB(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var runName string
+	var passedRows, scoreRows int
+	db.QueryRow(`SELECT run_name FROM runs`).Scan(&runName)
+	db.QueryRow(`SELECT sum(passed) FROM results WHERE json_extract(output, '$') IN ('x', 'y')`).Scan(&passedRows)
+	db.QueryRow(`SELECT count(*) FROM scores WHERE key = 'pass'`).Scan(&scoreRows)
+	if runName != "baseline" || passedRows != 1 || scoreRows != 2 {
+		t.Fatalf("run=%q passed=%d scores=%d", runName, passedRows, scoreRows)
+	}
+}
+
+func TestMarkdownTablesHaveOneDelimiterPerColumn(t *testing.T) {
+	rows := materialize([]Event{manifest("a"), result("a", "x", true)}).Results
+	single := renderMarkdown("r", "", rows, nil, runStats(rows, 1))
+	comparison := renderComparisonMarkdown([]ComparisonRun{{RunID: "1", RunName: "one", Results: rows}, {RunID: "2", RunName: "two", Results: rows}}, "")
+	for _, md := range []string{single, comparison} {
+		lines := strings.Split(md, "\n")
+		for i, line := range lines {
+			if strings.HasPrefix(line, "|---") && strings.Count(line, "|") != strings.Count(lines[i-1], "|") {
+				t.Fatalf("delimiter row %q doesn't match header %q", line, lines[i-1])
+			}
+		}
+	}
+}
+
+// ezvals runs the host binary (from buildBinary) in dir, returning stdout, stderr and the exit code.
+func ezvals(root, binary, dir string, args ...string) (string, string, int) {
+	cmd := exec.Command(binary, args...)
+	var stderr bytes.Buffer
+	cmd.Dir, cmd.Env, cmd.Stderr = dir, sdkEnv(root), &stderr
+	out, _ := cmd.Output()
+	return string(out), stderr.String(), cmd.ProcessState.ExitCode()
+}
+
+func TestRunJSONHasCreatedAtNamesAndIsPrintedWithNoEvals(t *testing.T) {
+	root, binary := buildBinary(t)
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "evals.py"), []byte("from ezvals import eval\n\n@eval\ndef ok(ctx):\n    pass\n"), 0o644)
+	for _, args := range [][]string{{"evals.py", "--no-save"}, {"evals.py", "--json"}, {"evals.py::missing", "--no-save"}, {"evals.py", "--json", "--session", "测试", "--run-name", "!!"}} {
+		out, stderr, code := ezvals(root, binary, dir, append([]string{"run"}, args...)...)
+		var run Run
+		if code != 0 && args[0] != "evals.py::missing" || json.Unmarshal([]byte(out), &run) != nil || run.CreatedAt == 0 || run.SessionName == "" || run.RunName == "" {
+			t.Fatalf("%v: exit %d\n%s\n%s", args, code, out, stderr)
+		}
+	}
+}
+
+func TestRunOutput(t *testing.T) {
+	root, binary := buildBinary(t)
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "evals.py"), []byte(`from ezvals import eval, EvalContext
+
+@eval(cases=[{"input": "a", "reference": "a"}, {"input": "b", "reference": "c"}])
+def compare(ctx: EvalContext):
+    ctx.output = ctx.input
+    assert ctx.output == ctx.reference, "mismatch"
+
+@eval(input="x")
+def crashes(ctx: EvalContext):
+    raise RuntimeError("upstream 500")
+
+@eval(input="x", trials=2)
+def steady(ctx: EvalContext):
+    ctx.store(scores=True)
+`), 0o644)
+	_, stderr, code := ezvals(root, binary, dir, "run", "evals.py", "--no-save")
+	for _, want := range []string{"\nevals.py\n", "◐ compare", "1/2 cases", "! crashes", "✓ steady", "2/2 trials  pass@2 ✓  pass^2 ✓",
+		"── failures ──\n✗ compare[1]  evals.py\n  pass: mismatch\n  input: \"b\"  output: \"b\"\n! crashes  evals.py\n  RuntimeError: upstream 500\n",
+		"3 passed  1 failed  1 error  (5 results · 3 evals"} {
+		if code != 0 || !strings.Contains(stderr, want) {
+			t.Fatalf("exit %d, missing %q in:\n%s", code, want, stderr)
+		}
+	}
+	if strings.Contains(stderr, "\x1b[") {
+		t.Fatal("no colors when stderr isn't a terminal")
+	}
+	if _, stderr, _ := ezvals(root, binary, dir, "run", "evals.py", "--no-save", "-q"); strings.Contains(stderr, "compare") || !strings.HasPrefix(stderr, "3 passed") {
+		t.Fatalf("quiet prints only the summary:\n%s", stderr)
+	}
+
+	out, stderr, code := ezvals(root, binary, dir, "run", "evals.py::compar", "--json")
+	if code != 4 || !strings.Contains(stderr, "No evals match 'compar' in evals.py. Did you mean compare?") || !strings.Contains(out, `"results":[]`) {
+		t.Fatalf("exit %d\n%s\n%s", code, out, stderr)
+	}
+	out, _, code = ezvals(root, binary, dir, "run", "missing.py", "--json")
+	if code != 1 || out != "{\"error\":\"Path missing.py does not exist\",\"results\":[]}\n" {
+		t.Fatalf("a discovery error is still JSON on stdout: exit %d\n%s", code, out)
+	}
+}

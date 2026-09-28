@@ -1,0 +1,118 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "EZVals",
+  "colors": {
+    "primary": "#2563eb",
+    "light": "#3b82f6",
+    "dark": "#1d4ed8"
+  },
+  "logo": {
+    "dark": "/assets/logo-dark.png",
+    "light": "/assets/logo-light.png"
+  },
+  "favicon": "/assets/favicon.png",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Get started",
+            "pages": ["introduction", "quickstart", "how-it-works"]
+          },
+          {
+            "group": "Writing evals",
+            "pages": [
+              "writing-evals/evals",
+              "writing-evals/cases",
+              "writing-evals/scoring",
+              "writing-evals/targets-and-regrading",
+              "writing-evals/trials",
+              "writing-evals/file-defaults"
+            ]
+          },
+          {
+            "group": "Reviewing results",
+            "pages": [
+              "reviewing/web-ui",
+              "reviewing/sessions",
+              "reviewing/querying",
+              "reviewing/coding-agents"
+            ]
+          },
+          {
+            "group": "Recipes",
+            "pages": [
+              "recipes/rag-agent",
+              "recipes/llm-judge",
+              "recipes/agent-tasks",
+              "recipes/comparing-models"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Reference",
+        "groups": [
+          {
+            "group": "Reference",
+            "pages": [
+              "reference/cli",
+              "reference/python",
+              "reference/typescript",
+              "reference/http-api"
+            ]
+          },
+          {
+            "group": "Resources",
+            "pages": ["changelog"]
+          }
+        ]
+      }
+    ]
+  },
+  "navbar": {
+    "links": [
+      { "label": "GitHub", "href": "https://github.com/camronh/EZVals" },
+      { "label": "PyPI", "href": "https://pypi.org/project/ezvals" },
+      { "label": "npm", "href": "https://www.npmjs.com/package/ezvals" }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Get started",
+      "href": "/quickstart"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/camronh/EZVals"
+    }
+  },
+  "contextual": {
+    "options": ["copy", "view"]
+  },
+  "redirects": [
+    { "source": "/setup", "destination": "/quickstart" },
+    { "source": "/typescript", "destination": "/reference/typescript" },
+    { "source": "/core-concepts/eval-context", "destination": "/writing-evals/evals" },
+    { "source": "/core-concepts/decorators", "destination": "/writing-evals/evals" },
+    { "source": "/core-concepts/scoring", "destination": "/writing-evals/scoring" },
+    { "source": "/core-concepts/parametrize", "destination": "/writing-evals/cases" },
+    { "source": "/guides/file-defaults", "destination": "/writing-evals/file-defaults" },
+    { "source": "/guides/patterns", "destination": "/writing-evals/evals" },
+    { "source": "/guides/web-ui", "destination": "/reviewing/web-ui" },
+    { "source": "/guides/sessions", "destination": "/reviewing/sessions" },
+    { "source": "/guides/evaluators", "destination": "/writing-evals/scoring" },
+    { "source": "/guides/trials", "destination": "/writing-evals/trials" },
+    { "source": "/guides/regrading", "destination": "/writing-evals/targets-and-regrading" },
+    { "source": "/guides/querying", "destination": "/reviewing/querying" },
+    { "source": "/guides/agent-skill", "destination": "/reviewing/coding-agents" },
+    { "source": "/examples/rag-agent", "destination": "/recipes/rag-agent" },
+    { "source": "/examples/granular-evals", "destination": "/recipes/agent-tasks" },
+    { "source": "/api-reference/cli", "destination": "/reference/cli" },
+    { "source": "/api-reference/http-api", "destination": "/reference/http-api" },
+    { "source": "/api-reference/eval-result", "destination": "/reference/python" },
+    { "source": "/api-reference/score", "destination": "/reference/python" }
+  ]
+}

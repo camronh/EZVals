@@ -1,0 +1,170 @@
+---
+title: Evals & context
+description: Define an eval, fill in its context, and control timeouts and errors
+---
+
+Every eval is a function that receives an `EvalContext`. Knowing what the context holds and how it becomes a result covers most of what you need to write evals.
+
+## Define an eval
+
+<CodeGroup>
+
+```python Python
+from ezvals import eval, EvalContext
+
+@eval(
+    input="I want to cancel my subscription",
+    dataset="customer_service",
+    labels=["production"],
+    metadata={"category": "cancellation"},
+)
+async def test_cancellation(ctx: EvalContext):
+    ctx.output = await support_agent(ctx.input)
+    assert "cancel" in ctx.output.lower(), "Should address cancellation"
+```
+
+```ts TypeScript
+import assert from "node:assert";
+import { evaluate } from "ezvals";
+
+evaluate("test_cancellation", {
+  input: "I want to cancel my subscription",
+  dataset: "customer_service",
+  labels: ["production"],
+  metadata: { category: "cancellation" },
+}, async (ctx) => {
+  ctx.output = await supportAgent(String(ctx.input));
+  assert(String(ctx.output).toLowerCase().includes("cancel"), "Should address cancellation");
+});
+```
+
+</CodeGroup>
+
+- The eval's name is the Python function name or the first argument to `evaluate()`. Its id is `<file>::<name>`, for example `support.eval.ts::test_cancellation`.
+- `dataset` defaults to the file name (`evals.py` becomes `evals`, `support.eval.ts` becomes `support`).
+- Functions can be sync or async.
+- With no options, use a bare `@eval` or `evaluate(name, fn)`.
+
+The full option list (`reference`, `default_score_key`, `timeout`, `trials`, `target`, `evaluators`, `cases`, `input_loader`) is in the [Python](/reference/python#eval-options) and [TypeScript](/reference/typescript#evaluate-options) references.
+
+## The context
+
+Options you pass to the decorator start out on `ctx`. Your eval fills in the rest:
+
+| Field | What it's for |
+|-------|---------------|
+| `input`, `reference` | The test data. Set from options or [cases](/writing-evals/cases). |
+| `output` | What your agent produced. Set it before you assert, so failures still show the output. |
+| `metadata` | Anything you want to see or filter on later: the model, retrieved documents, tool calls. |
+| `trace_data` (`traceData`) | Debug data. `messages` is shown as a chat transcript and `trace_url` as a link. Other keys are shown as JSON. |
+| `latency` | Measured for you. Set it yourself to report something narrower. |
+| `scores` | Scores added so far. See [Scoring](/writing-evals/scoring). |
+
+`store()` sets several fields in one call. `metadata` and `trace_data` merge. A score with the same key as an existing score replaces it.
+
+<CodeGroup>
+
+```python Python
+result = await agent.run(ctx.input)
+ctx.store(
+    output=result.text,
+    messages=result.messages,
+    metadata={"model": "gpt-5"},
+    scores={"key": "tool_used", "passed": "search" in result.tools},
+)
+```
+
+```ts TypeScript
+const result = await agent.run(String(ctx.input));
+ctx.store({
+  output: result.text,
+  messages: result.messages,
+  metadata: { model: "gpt-5" },
+  scores: { key: "tool_used", passed: result.tools.includes("search") },
+});
+```
+
+</CodeGroup>
+
+You don't return anything. When the function finishes, the context is built into a result.
+
+## Run information
+
+The context also tells your eval where it's running. You can use this to tag traces in an external tool, or to read the settings of a [run config](/reviewing/sessions#run-configs):
+
+| Python | TypeScript | Value |
+|--------|------------|-------|
+| `ctx.run_id` | `ctx.runId` | The run's 8-character id |
+| `ctx.session_name`, `ctx.run_name` | `ctx.sessionName`, `ctx.runName` | Session and run names |
+| `ctx.eval_path` | `ctx.evalPath` | The path passed to the CLI |
+| `ctx.config` | `ctx.config` | The run config picked with `--config`, or `{}` |
+| `ctx.function_name`, `ctx.dataset`, `ctx.labels` | `ctx.functionName`, `ctx.dataset`, `ctx.labels` | This eval's name, dataset and labels |
+
+## Errors
+
+An exception other than an assertion failure is not a score. It's recorded as the result's `error`: the exception type, the message and the traceback. Anything already on the context, such as the input and any output you set, is kept. Errored results don't pass, and [evaluators](/writing-evals/scoring#evaluators) don't run on them.
+
+## Timeouts
+
+Set `timeout` (in seconds) on an eval, in [file defaults](/writing-evals/file-defaults), or for every eval with `--timeout` or `timeout` in `ezvals.json`. The run-wide value overrides per-eval timeouts. When an eval hits its timeout it stops, and its error is `TimeoutError: Evaluation timed out after 5.0s`.
+
+The timeout cancels the whole eval function, so an `except TimeoutError` inside the eval never runs. To score slowness instead of treating it as an error, put a shorter time limit on the agent call yourself:
+
+<CodeGroup>
+
+```python Python
+import asyncio
+
+@eval(input="Complex query", timeout=60)
+async def test_fast_enough(ctx: EvalContext):
+    try:
+        ctx.output = await asyncio.wait_for(agent(ctx.input), timeout=10)
+    except asyncio.TimeoutError:
+        ctx.output = None
+    assert ctx.output is not None, "Agent took longer than 10s"
+```
+
+```ts TypeScript
+evaluate("test_fast_enough", { input: "Complex query", timeout: 60 }, async (ctx) => {
+  const slow = new Promise((resolve) => setTimeout(() => resolve(null), 10_000));
+  ctx.output = await Promise.race([agent(String(ctx.input)), slow]);
+  assert(ctx.output !== null, "Agent took longer than 10s");
+});
+```
+
+</CodeGroup>
+
+<Note>
+In TypeScript, code that blocks the event loop can't be interrupted. The eval is still reported as timed out, but the blocking work keeps running until it finishes.
+</Note>
+
+## Returning several results
+
+An eval can also return a list of results instead of using `ctx`. This is useful when one call produces many outputs to grade. In Python, return `EvalResult` objects. In TypeScript, return plain objects with the same fields.
+
+<CodeGroup>
+
+```python Python
+from ezvals import eval, EvalResult
+
+@eval(dataset="greetings")
+def test_greetings():
+    return [
+        EvalResult(input=p, output=agent(p), scores=[{"key": "valid", "passed": True}])
+        for p in ["hello", "hi", "hey"]
+    ]
+```
+
+```ts TypeScript
+evaluate("test_greetings", { dataset: "greetings" }, async () =>
+  Promise.all(["hello", "hi", "hey"].map(async (p) => ({
+    input: p,
+    output: await agent(p),
+    scores: [{ key: "valid", passed: true }],
+  }))),
+);
+```
+
+</CodeGroup>
+
+Prefer [cases](/writing-evals/cases) when you can. Each case can be selected, rerun and [regraded](/writing-evals/targets-and-regrading) on its own. Evals that return several results can't be regraded.

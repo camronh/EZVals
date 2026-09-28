@@ -1,0 +1,78 @@
+---
+title: Targets & regrading
+description: Keep the agent call separate from the grading, then re-score stored outputs for free
+---
+
+Put your agent call in a `target` and your checks in the eval body. You can then share one agent call across many evals, and change graders or judge prompts without paying for new agent runs.
+
+## Targets
+
+A target runs before the eval body and receives the same `ctx`. It can set fields with `ctx.store(...)`, or just return the output. A returned value becomes `ctx.output`.
+
+<CodeGroup>
+
+```python Python
+async def run_agent(ctx: EvalContext):
+    result = await support_agent(ctx.input)
+    ctx.store(output=result.text, metadata={"tools": result.tools})
+
+@eval(input="I want a refund", target=run_agent)
+async def test_refund(ctx: EvalContext):
+    assert "refund" in ctx.output.lower(), "Should acknowledge the refund"
+
+@eval(input="Cancel my order", target=run_agent)
+async def test_cancel(ctx: EvalContext):
+    assert "cancel_order" in ctx.metadata["tools"], "Should call cancel_order"
+```
+
+```ts TypeScript
+import { evaluate, type EvalContext } from "ezvals";
+
+async function runAgent(ctx: EvalContext) {
+  const result = await supportAgent(String(ctx.input));
+  ctx.store({ output: result.text, metadata: { tools: result.tools } });
+}
+
+evaluate("test_refund", { input: "I want a refund", target: runAgent }, (ctx) => {
+  assert(String(ctx.output).toLowerCase().includes("refund"), "Should acknowledge the refund");
+});
+
+evaluate("test_cancel", { input: "Cancel my order", target: runAgent }, (ctx) => {
+  assert((ctx.metadata.tools as string[]).includes("cancel_order"), "Should call cancel_order");
+});
+```
+
+</CodeGroup>
+
+You can also set `target` in [file defaults](/writing-evals/file-defaults), so every eval in a file uses the same agent call. A single [case](/writing-evals/cases) can override it too.
+
+## Regrading
+
+Regrading scores a finished run's stored outputs again, using your current eval code. The eval body and evaluators run again, but **the target is skipped**. Instead, `ctx` starts with the stored `input`, `output`, `latency`, `metadata` and `trace_data`, as the target left them. This works the same in Python and TypeScript.
+
+```bash
+ezvals regrade a1b2c3d4                                   # by run id
+ezvals regrade .ezvals/sessions/default/a1b2c3d4.jsonl    # or by run file
+```
+
+In the [web UI](/reviewing/web-ui), regrade the whole run or the selected rows with **Regrade** in the header, or a single result from its detail page.
+
+The run is updated in place: new scores replace the old ones. Manual score edits are replaced too, but annotations are kept. These results are skipped, and the skipped count is reported:
+
+- results from evals without a target
+- results that errored or never finished
+- results from evals that return several results at once
+
+Regrading runs the eval code as it is now, so the eval file must still exist.
+
+<Tip>
+A typical loop:
+
+1. Run the agent once.
+2. Read the failures.
+3. Tighten the judge prompt or assertion.
+4. `ezvals regrade`.
+5. Repeat until the scores match your own judgment.
+
+Only then run the agent again.
+</Tip>

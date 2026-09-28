@@ -1,0 +1,100 @@
+---
+title: Sessions & runs
+description: Group related runs so you can compare them and track progress
+---
+
+Every time you run your evals, EZVals saves a **run**. Put related runs in the same **session** (the baseline and each attempt at a fix, or one run per model) and you can compare them side by side later.
+
+## Name your runs
+
+<CodeGroup>
+
+```bash Iterating on a fix
+ezvals run evals/ --session refund-bug --run-name before
+# change the prompt...
+ezvals run evals/ --session refund-bug --run-name after
+```
+
+```bash Comparing models
+ezvals run evals/ --session model-upgrade --config gpt-4
+ezvals run evals/ --session model-upgrade --config claude
+```
+
+```bash CI
+ezvals run evals/ --session "release-$VERSION" --run-name "build-$BUILD_ID" --json > results.json
+```
+
+</CodeGroup>
+
+- A session is just a name. Reusing a name adds to that session; there's nothing to create first.
+- `ezvals run` uses the session `default` unless you pass `--session`. `ezvals serve` starts a new session with a generated name (such as `calm-dragon`) each time, unless you pass one.
+- A run without `--run-name` gets a generated name such as `swift-falcon`, or the config name when you use `--config`.
+- Starting a run with a name that already exists in the session **replaces** the old run. Set `"overwrite": false` in `ezvals.json` to keep both.
+
+Rename a run later with `ezvals run --rename <run_id> <new-name>` or from the run menu in the web UI.
+
+## Run configs
+
+Run configs let you run the same evals against different settings, such as model or temperature, without changing code. Define named configs in `ezvals.json`:
+
+```json ezvals.json
+{
+  "configs": {
+    "gpt-4": { "model": "gpt-4", "temperature": 0.7 },
+    "claude": { "model": "claude-sonnet", "temperature": 0.5 }
+  }
+}
+```
+
+Choose one with `--config` on `run` or `serve`, or pick one in the web UI before a run. Your eval code reads the chosen config from `ctx.config`, which is empty when no config is chosen:
+
+<CodeGroup>
+
+```python Python
+@eval(input="Summarize this ticket: ...")
+async def test_summary(ctx: EvalContext):
+    ctx.output = await summarize(ctx.input, model=ctx.config.get("model", "gpt-4"))
+```
+
+```ts TypeScript
+evaluate("test_summary", { input: "Summarize this ticket: ..." }, async (ctx) => {
+  ctx.output = await summarize(String(ctx.input), { model: String(ctx.config.model ?? "gpt-4") });
+});
+```
+
+</CodeGroup>
+
+The run is named after the config unless you pass `--run-name`, and the config name is saved with the run. See [Comparing models](/recipes/comparing-models) for the full workflow.
+
+## Where runs are stored
+
+Runs live in your project, one file per run:
+
+```
+.ezvals/sessions/
+├── default/
+│   └── c9d0e1f2.jsonl
+└── model-upgrade/
+    ├── a1b2c3d4.jsonl    # gpt-4
+    └── e5f6a7b8.jsonl    # claude
+```
+
+- A session is a folder, and a run is a file named by its 8-character run id. The run name is stored inside the file, so renaming never moves anything.
+- Results are written as each eval finishes, so a run that crashes or is stopped keeps everything that completed.
+- Deleting a session's folder deletes the session.
+- To store runs somewhere else, set `results_dir` in `ezvals.json`. Runs are then stored in `<results_dir>/.ezvals/sessions`.
+
+<Tip>
+Add `.ezvals/` to `.gitignore` unless you want to commit results. To share a run, export it with `ezvals export` or from the web UI.
+</Tip>
+
+The run file is an append-only log that isn't meant to be read directly. To get a run as one JSON document, use `ezvals run --json`, `ezvals export <run file> -f json`, or the [HTTP API](/reference/http-api). To analyze many runs at once, use [`ezvals query`](/reviewing/querying).
+
+## Reopen a run
+
+```bash
+ezvals serve .ezvals/sessions/model-upgrade/a1b2c3d4.jsonl   # open a run file
+ezvals serve evals/ --session model-upgrade --run-name gpt-4  # open a run by name
+```
+
+If the eval files the run came from still exist, you can keep running and regrading in the same session. Otherwise the run opens read-only.

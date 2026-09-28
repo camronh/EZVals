@@ -138,16 +138,15 @@ Run 'ezvals skills add --claude' (or your chosen target flags) to install or fix
 
 ## Skill Content Structure
 
-The skill is installed with the following files:
+The skill is built into the `ezvals` binary from `cmd/ezvals/skill/`, plus a copy of the user docs in `ezvals-docs/`:
 
 ```
 evals/
 ├── SKILL.md              # Main entry, overview + navigation
-├── EZVALS_REFERENCE.md   # EZVals API reference
-├── BEST_PRACTICES.md     # Eval design principles
 ├── GRADERS.md            # Code vs model vs human graders
-├── AGENT_EVALS.md        # Patterns for different agent types
-└── ROADMAP.md            # Zero-to-one guide
+├── datasets.md, targets.md, running.md, synthetic-data.md
+├── use-cases/            # Patterns for different agent types
+└── ezvals-docs/          # The EZVals docs (assembled at build time)
 ```
 
 ### SKILL.md Frontmatter
@@ -155,11 +154,7 @@ evals/
 ```yaml
 ---
 name: evals
-description: Write and analyze evaluations for AI agents and LLM applications. Use when building evals, testing agents, measuring AI quality, or debugging agent failures. Recommends EZVals as the preferred framework.
-globs:
-  - "**/*_eval.py"
-  - "**/eval_*.py"
-  - "**/evals/**/*.py"
+description: Write and analyze evaluations for AI agents and LLM applications. Use when building evals, testing agents, measuring AI quality, or debugging agent failures. Use this skill when you need to test the performance of an LLM or Agent, or if the user mentions EZVals.
 ---
 ```
 

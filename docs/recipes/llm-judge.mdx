@@ -1,0 +1,88 @@
+---
+title: LLM judge
+description: Grade open-ended outputs with a model, and check the judge against your own judgment
+---
+
+Some qualities, such as tone, helpfulness or following a policy, can't be checked with string matching. An LLM judge can grade them, but only once you've checked that it agrees with you.
+
+## Write the judge as an evaluator
+
+Writing the judge as an [evaluator](/writing-evals/scoring#evaluators) lets you reuse it on any eval, and its reasoning is saved as the score's notes.
+
+<CodeGroup>
+
+```python Python
+from ezvals import eval, EvalContext
+
+JUDGE_PROMPT = """You grade replies from a customer support agent.
+Pass only if the reply is polite, answers the question and makes no promises
+the policy doesn't allow. Reply with PASS or FAIL, then one sentence explaining why.
+
+Question: {input}
+Reply: {output}"""
+
+async def policy_judge(result):
+    verdict = await call_llm(JUDGE_PROMPT.format(input=result.input, output=result.output))
+    return {"key": "policy", "passed": verdict.startswith("PASS"), "notes": verdict}
+
+@eval(input="Can I get a refund after 45 days?", target=run_support_agent, evaluators=[policy_judge])
+async def test_late_refund(ctx: EvalContext):
+    assert "30 days" in ctx.output, "Should state the 30-day window"
+```
+
+```ts TypeScript
+import assert from "node:assert";
+import { evaluate, type EvalResult } from "ezvals";
+
+const JUDGE_PROMPT = `You grade replies from a customer support agent.
+Pass only if the reply is polite, answers the question and makes no promises
+the policy doesn't allow. Reply with PASS or FAIL, then one sentence explaining why.`;
+
+async function policyJudge(result: EvalResult) {
+  const verdict = await callLlm(`${JUDGE_PROMPT}\n\nQuestion: ${result.input}\nReply: ${result.output}`);
+  return { key: "policy", passed: verdict.startsWith("PASS"), notes: verdict };
+}
+
+evaluate("test_late_refund", {
+  input: "Can I get a refund after 45 days?",
+  target: runSupportAgent,
+  evaluators: [policyJudge],
+}, (ctx) => {
+  assert(String(ctx.output).includes("30 days"), "Should state the 30-day window");
+});
+```
+
+</CodeGroup>
+
+To judge every eval in a file, put the judge in [file defaults](/writing-evals/file-defaults) as `evaluators`.
+
+Tips for judge prompts:
+
+- Ask for pass/fail against clear criteria rather than a 1 to 10 rating. Pass/fail is easier to agree with and to act on.
+- Ask for the reason, and store it in `notes`, so you can tell a wrong answer from a wrong judge.
+- Judge one quality per judge. Use several judges with different keys instead of one prompt that checks everything.
+
+## Calibrate it
+
+A judge is only useful if it agrees with you. Because the agent call lives in a [target](/writing-evals/targets-and-regrading), you can refine the judge against the same stored outputs:
+
+<Steps>
+  <Step title="Run once">
+    `ezvals serve evals/` and run the evals. This is the only step that calls your agent.
+  </Step>
+  <Step title="Review">
+    Read the results in the [web UI](/reviewing/web-ui#annotate-and-correct-scores). Where the judge is wrong, correct the score and add an annotation explaining why.
+  </Step>
+  <Step title="Tighten the prompt">
+    Change the judge prompt, or ask your coding agent to: "Read my score corrections in the last run and update the judge prompt."
+  </Step>
+  <Step title="Regrade">
+    Choose Regrade in the UI, or run `ezvals regrade <run_id>`. The judge scores the stored outputs again.
+  </Step>
+</Steps>
+
+Repeat until the judge's scores match yours, then trust it on new runs.
+
+<Note>
+Regrading replaces your score corrections with the judge's new scores. Annotations are kept, and each correction stays in the result's `correction_history`, so you can still check whether the new judge agrees with you.
+</Note>

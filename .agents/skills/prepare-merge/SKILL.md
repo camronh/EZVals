@@ -53,7 +53,7 @@ Review if changes require updates to:
 When updating, write docs as if they're the current state - don't mention "updated" or "changed from".
 
 ## 5. Run Tests
-- Run tests and ensure all tests pass. (Use `-n auto` to run tests in parallel)
+- Run `make test` (and `make test-e2e` if the UI or server changed) and ensure all tests pass.
 - If tests fail, fix them and re-run until all tests pass
 
 ## 5b. Check Skill Version (If Merging to Main)

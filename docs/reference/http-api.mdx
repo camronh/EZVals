@@ -1,0 +1,129 @@
+---
+title: HTTP API
+description: The REST API behind the web UI, for scripts and custom tools
+---
+
+Everything the web UI does goes through this API, so a script or coding agent can do it too: start runs, read results, add annotations or export. It's served by `ezvals serve` at `http://127.0.0.1:8000`. Requests and responses are JSON.
+
+For reading saved results without a server, [`ezvals query`](/reviewing/querying) and `ezvals run --json` are usually simpler.
+
+## Run JSON
+
+Endpoints that return a run use the same shape as `ezvals run --json` and `ezvals export -f json`:
+
+```json
+{
+  "run_id": "3f9a1c2e",
+  "session_name": "model-upgrade",
+  "run_name": "baseline",
+  "created_at": 1705312200,
+  "path": "evals/",
+  "config_name": "gpt-4.1",
+  "total_evaluations": 50,
+  "total_functions": 10,
+  "total_passed": 45,
+  "total_errors": 2,
+  "total_with_scores": 48,
+  "average_latency": 0.5,
+  "results": [
+    {
+      "id": "evals/support.py::test_refund~2",
+      "function": "test_refund",
+      "dataset": "support",
+      "labels": ["production"],
+      "trial": 2,
+      "trial_of": "evals/support.py::test_refund",
+      "regradable": true,
+      "result": {
+        "input": "I want a refund",
+        "output": "I'll help you with that",
+        "reference": null,
+        "scores": [{ "key": "pass", "passed": true }],
+        "error": null,
+        "latency": 0.234,
+        "metadata": { "model": "gpt-4.1" },
+        "trace_data": {},
+        "status": "completed",
+        "annotation": "Good tone",
+        "correction_history": []
+      }
+    }
+  ]
+}
+```
+
+- `created_at` is when the run last started (Unix seconds).
+- `trial`, `trial_of` and `regradable` appear only when they apply. Runs with trials also have `trials`, `pass_at_k` and `pass_all_k`.
+- `status` is one of `not_started`, `pending`, `running`, `completed`, `error` or `cancelled`.
+- `correction_history` lists edits made in the UI or through this API: `field` (`annotation` or `scores`), `before`, `after` and `timestamp`.
+
+## Results
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /results` | The active run, as run JSON |
+| `GET /api/runs/{run_id}/data` | Any run, as run JSON, without making it active |
+| `GET /api/runs/{run_id}/results/{index}` | One result, plus its `index`, `total` and run ids |
+| `PATCH /api/runs/{run_id}/results/{index}` | Update a result's `annotation` or `scores` |
+
+`run_id` can be `latest` for the active run. `index` is the result's 0-based position in `results`.
+
+`/results` and `/api/runs/{run_id}/data` add `score_chips` (per-score summaries) and `eval_path`. For the active run they also add `is_paused`, `selected_total`, and `discovery_error` when finding or importing the evals failed.
+
+A `PATCH` body looks like this:
+
+```json
+{ "result": { "annotation": "Hallucinated the policy", "scores": [{ "key": "pass", "passed": false }] } }
+```
+
+Only `annotation` and `scores` can be changed. Each change adds an entry to `correction_history`. Works on any saved run, not only the active one.
+
+## Running
+
+| Endpoint | Body | Description |
+|----------|------|-------------|
+| `POST /api/runs/rerun` | `{ indices?, config_name?, run_id? }` | Run all evals, or only the results at `indices`, in the active run. A different `config_name` starts a new run named after it. `run_id` makes that run active first |
+| `POST /api/runs/regrade` | `{ indices?, run_id? }` | [Regrade](/writing-evals/targets-and-regrading#regrading) results. Returns `regraded` and `skipped_without_target` |
+| `POST /api/runs/new` | `{ run_name?, indices? }` | Start a new run in the session |
+| `POST /api/runs/pause` | | Let running evals finish and start no new ones |
+| `POST /api/runs/resume` | | Continue a paused run |
+| `POST /api/runs/stop` | | Cancel everything that hasn't finished |
+| `PUT /api/pending-run-name` | `{ run_name }` | Name the next run |
+| `POST /api/server/restart` | | Discover evals again and reload `ezvals.json` |
+
+Starting a run or regrade while one is in progress returns `409`.
+
+## Sessions and runs
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/sessions` | Session names |
+| `GET /api/sessions/{name}/runs` | Runs in a session, newest first, with their totals |
+| `DELETE /api/sessions/{name}` | Delete a session and all its runs |
+| `PATCH /api/runs/{run_id}` | Rename a run: `{ "run_name": "..." }`. A blank name returns `400` |
+| `DELETE /api/runs/{run_id}` | Delete a run |
+| `POST /api/runs/{run_id}/activate` | Make a run the active one |
+
+## Export
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/runs/{run_id}/export/json` | The run as JSON |
+| `GET /api/runs/{run_id}/export/csv` | Every result as CSV |
+| `POST /api/runs/{run_id}/export/markdown` | A Markdown report of the rows and columns given in the body (`visible_indices`, `visible_columns`, `stats`, `run_name`, `session_name`) |
+
+## Settings
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/config` | The current `ezvals.json` settings. Keys that are unset, zero or false are omitted |
+| `PUT /api/config` | Save `concurrency`, `timeout`, `trials`, `results_dir` and `completion_notifications` to `ezvals.json`. The body replaces all five: a key that's missing or `null` goes back to its default. Other keys in the file are kept |
+| `GET /api/configs` | Run config names and the selected one: `{ "names": [...], "active": "..." }` |
+| `POST /api/configs/select` | Choose the run config for the next run: `{ "name": "..." }` |
+
+## Pages
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /` | The web UI |
+| `GET /runs/{run_id}/results/{index}` | The web UI's detail page for a result |

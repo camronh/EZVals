@@ -1,0 +1,138 @@
+---
+title: Scoring
+description: Turn outputs into pass/fail and numeric scores with assertions, store() and evaluators
+---
+
+Scores are what you compare across runs, so pick the simplest mechanism that says what "good" means for this eval.
+
+| You want | Use |
+|----------|-----|
+| A pass/fail check | `assert` |
+| A numeric score, or several named metrics | `ctx.store(scores=...)` |
+| The same check on many evals | An evaluator |
+
+<Tip>
+Start with one pass/fail check per eval. A single pass rate is the easiest thing to compare between runs, and the web UI is built around it. Add a second or third score only when it answers a question the first can't, such as tracking tone separately from correctness.
+</Tip>
+
+## Assertions
+
+Write checks the way you would in pytest. In TypeScript, use `node:assert` or any library that throws an error named `AssertionError`, such as chai.
+
+<CodeGroup>
+
+```python Python
+@eval(input="I want a refund", dataset="support")
+async def test_refund(ctx: EvalContext):
+    ctx.output = await support_agent(ctx.input)
+    assert "refund" in ctx.output.lower(), "Should acknowledge the refund"
+    assert len(ctx.output) < 800, "Too long"
+```
+
+```ts TypeScript
+evaluate("test_refund", { input: "I want a refund", dataset: "support" }, async (ctx) => {
+  ctx.output = await supportAgent(String(ctx.input));
+  const out = String(ctx.output);
+  assert(out.toLowerCase().includes("refund"), "Should acknowledge the refund");
+  assert(out.length < 800, "Too long");
+});
+```
+
+</CodeGroup>
+
+The first failing assertion stops the eval and becomes a failing score. It uses the eval's `default_score_key` (`pass` unless you change it), and its notes are the assertion message, or the source line for a bare `assert`.
+
+<Note>
+In Python, this works only when the eval takes an `EvalContext` parameter. In an eval without one, a failed assertion is recorded as an error instead.
+</Note>
+
+If the eval finishes without any score, a passing score is added automatically. Any exception other than an assertion failure is recorded as the result's `error`, not as a score.
+
+## Explicit scores
+
+Use `store()` for numeric scores, partial credit, or several independent metrics:
+
+<CodeGroup>
+
+```python Python
+ctx.store(scores=[
+    {"key": "relevance", "passed": "quantum" in ctx.output.lower()},
+    {"key": "similarity", "value": similarity(ctx.output, ctx.reference)},
+    {"key": "quality", "value": 0.72, "passed": True, "notes": "Judge: clear but long"},
+])
+```
+
+```ts TypeScript
+ctx.store({
+  scores: [
+    { key: "relevance", passed: String(ctx.output).toLowerCase().includes("quantum") },
+    { key: "similarity", value: similarity(ctx.output, ctx.reference) },
+    { key: "quality", value: 0.72, passed: true, notes: "Judge: clear but long" },
+  ],
+});
+```
+
+</CodeGroup>
+
+A score has a `key` and at least one of `passed` or `value`, plus optional `notes`. `True`/`False` and bare numbers are accepted as shorthand and use the default key. Storing a score with an existing key replaces the old one.
+
+You can mix assertions and explicit scores: assert the must-haves and store the metrics. Once any score is stored, an eval that finishes cleanly doesn't also get the automatic `pass` score.
+
+## When a result passes
+
+A result passes when all three of these are true:
+
+- It has no error.
+- It has at least one pass/fail score.
+- Every pass/fail score passed.
+
+Numeric-only scores don't make a result pass or fail on their own. Add `passed` alongside `value` to set a threshold. This rule is used everywhere: run totals, pass@k, the UI and the `passed` column in [SQL queries](/reviewing/querying).
+
+## Evaluators
+
+An evaluator is a function that runs after the eval body and adds scores. It receives the finished result and returns a score, a list of scores, or `None` to add nothing. It can be async. Use evaluators for checks you want on many evals: format, length, safety, or an [LLM judge](/recipes/llm-judge).
+
+<CodeGroup>
+
+```python Python
+import json
+
+def valid_json(result):
+    try:
+        json.loads(result.output)
+        return {"key": "json", "passed": True}
+    except ValueError as e:
+        return {"key": "json", "passed": False, "notes": str(e)}
+
+@eval(input="Get user 42", evaluators=[valid_json])
+async def test_user_lookup(ctx: EvalContext):
+    ctx.output = await api_agent(ctx.input)
+```
+
+```ts TypeScript
+import { evaluate, type EvalResult } from "ezvals";
+
+function validJson(result: EvalResult) {
+  try {
+    JSON.parse(String(result.output));
+    return { key: "json", passed: true };
+  } catch (e) {
+    return { key: "json", passed: false, notes: String(e) };
+  }
+}
+
+evaluate("test_user_lookup", { input: "Get user 42", evaluators: [validJson] }, async (ctx) => {
+  ctx.output = await apiAgent(String(ctx.input));
+});
+```
+
+</CodeGroup>
+
+- Evaluators also run when an assertion failed, so you still get their scores. They don't run on results that errored.
+- A score returned without a key gets the key `pass`.
+- If an evaluator raises, the result is recorded as an error.
+- Evaluators set on an eval **replace** evaluators from [file defaults](/writing-evals/file-defaults) instead of adding to them.
+
+<Tip>
+If your agent call lives in a [target](/writing-evals/targets-and-regrading), you can change an evaluator or a judge prompt and regrade stored outputs without running the agent again.
+</Tip>

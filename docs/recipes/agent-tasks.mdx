@@ -1,0 +1,90 @@
+---
+title: Agent tasks with their own checks
+description: Evaluate tasks where each one needs its own ground truth or its own way of checking
+---
+
+Cases work when every example is checked the same way. Agents that use tools often need a different check per task: one reads a live API for the right answer, another checks a side effect such as a calendar booking. In EZVals, each of those is its own eval function.
+
+## The evals
+
+All four evals share one target, and each checks its task in its own way.
+
+<CodeGroup>
+
+```python Python
+from ezvals import eval, EvalContext
+
+ezvals_defaults = {"target": run_agent, "dataset": "agent_tasks"}
+
+@eval(input="What's the weather in Tokyo?")
+async def test_weather(ctx: EvalContext):
+    actual = await weather_api.current("Tokyo")
+    ctx.reference = f"{actual.temp}°F, {actual.condition}"
+    assert str(actual.temp) in ctx.output, "Should mention the temperature"
+
+@eval(input="What's Apple's stock price?")
+async def test_stock_price(ctx: EvalContext):
+    actual = await stock_api.price("AAPL")
+    ctx.reference = actual
+    assert abs(extract_price(ctx.output) - actual) < 5, "Price too far from the live price"
+
+@eval(input="Book a meeting with John tomorrow at 2pm")
+async def test_booking(ctx: EvalContext):
+    booking = await calendar_api.find(attendee="john", date="tomorrow")
+    ctx.store(metadata={"booking": booking})
+    assert booking is not None, "No booking in the calendar"
+    assert booking.time == "14:00", f"Booked at {booking.time}"
+
+@eval(input="What's the factorial of 10?", reference="3628800")
+async def test_factorial(ctx: EvalContext):
+    assert ctx.reference in ctx.output
+```
+
+```ts TypeScript
+import assert from "node:assert";
+import { evaluate } from "ezvals";
+
+export const ezvalsDefaults = { target: runAgent, dataset: "agent_tasks" };
+
+evaluate("test_weather", { input: "What's the weather in Tokyo?" }, async (ctx) => {
+  const actual = await weatherApi.current("Tokyo");
+  ctx.reference = `${actual.temp}°F, ${actual.condition}`;
+  assert(String(ctx.output).includes(String(actual.temp)), "Should mention the temperature");
+});
+
+evaluate("test_stock_price", { input: "What's Apple's stock price?" }, async (ctx) => {
+  const actual = await stockApi.price("AAPL");
+  ctx.reference = actual;
+  assert(Math.abs(extractPrice(String(ctx.output)) - actual) < 5, "Price too far from the live price");
+});
+
+evaluate("test_booking", { input: "Book a meeting with John tomorrow at 2pm" }, async (ctx) => {
+  const booking = await calendarApi.find({ attendee: "john", date: "tomorrow" });
+  ctx.store({ metadata: { booking } });
+  assert(booking, "No booking in the calendar");
+  assert.equal(booking.time, "14:00", `Booked at ${booking.time}`);
+});
+
+evaluate("test_factorial", { input: "What's the factorial of 10?", reference: "3628800" }, (ctx) => {
+  assert(String(ctx.output).includes(String(ctx.reference)));
+});
+```
+
+</CodeGroup>
+
+## Why it's built this way
+
+- **[File defaults](/writing-evals/file-defaults)** set the target and dataset once, so each eval is only its input and its check.
+- **The reference is set inside the eval** when the right answer is only known at run time, such as live weather or stock prices. It's saved with the result, so you can see what the agent was compared against.
+- **Side effects are checked directly.** The booking eval asks the calendar what happened rather than trusting the agent's reply, and stores the booking in `metadata` for debugging.
+- All four share a dataset, so they appear together in the results and in the summary.
+
+## Run it
+
+```bash
+ezvals run evals/agent_tasks.py                    # every task
+ezvals run evals/agent_tasks.py::test_booking      # one task
+ezvals serve evals/agent_tasks.py                  # review in the browser
+```
+
+Use separate functions like this when each task needs its own data source or its own check. Use [cases](/writing-evals/cases) when many inputs share one check.

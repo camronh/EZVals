@@ -14,6 +14,55 @@ Starts at `http://127.0.0.1:8000` (browser opens by default unless `--no-open` i
 
 ---
 
+## Layout
+
+The dashboard is a workbench: a runs sidebar on a tinted canvas, and the open run in an inset main panel.
+
+1. **Sidebar**: the EZVals mark, the session, the session's runs (see [Runs Sidebar](#runs-sidebar)) with "+" to start a new run, and at the bottom Reload evals and Settings. The button at the left of the header hides and shows it, and the choice is remembered in this browser; until the user makes one, the sidebar shows on screens 1024px and wider.
+2. **Header** (top of the main panel): the run's name with a rename pencil, its eval count and time, then Compare, Regrade and the primary Run button.
+3. **Summary**: the run's headline numbers, pass-rate trend and outcome bar, plus each score key when there is more than one (see [Summary](#summary)).
+4. **Filter bar**: the outcome switch (All / Failed / Errors, each with a count), search, Filters, Columns and Export. When rows are selected, the bar shows how many.
+5. **Results table**, with the [review panel](#review-panel) beside it when a result is open.
+
+Most runs are graded by a single pass/fail score, so the UI is built around one metric: the pass rate and each row's outcome icon carry it, and per-key detail appears only when a run has several keys (two or three is normal; more is unusual but supported).
+
+The UI uses one cool neutral palette, a navy brand colour for primary actions and a blue accent for links, focus and the current row; green, red and amber only ever mean passed, failed and in progress, and always come with an icon or a word. Compared runs take blue, violet, teal and pink, never a status colour. Text is set in Geist, prose (inputs, outputs, notes) included. Geist Mono is used for eval names (they are code identifiers), headline numbers, structured data, errors, commands and ids.
+
+The visual language is the EZVals design system: semantic colour tokens for both themes, a type scale (11–40px), a 4/6/8/12px radius scale, one set of button, field, chip, menu and dialog styles, and a single focus ring. It is documented in Storybook under **Design System** (Foundations and Controls).
+
+### Accessibility
+
+```gherkin
+Scenario: The UI meets WCAG 2.1 AA
+  Then every text colour has at least 4.5:1 contrast on the surfaces it is used on, in both themes
+  And field and checkbox edges, the focus ring and status marks have at least 3:1
+  And every control has an accessible name, and every story passes an automated WCAG 2.1 AA check in the story tests
+
+Scenario: Keyboard use
+  Then every control shows a visible focus ring when reached by keyboard
+  And menus take focus when opened, arrow keys move between items, and Escape closes them and returns focus to their button
+  And dialogs keep focus inside until closed with Escape, Close or a click outside, then return focus to where it was
+  And option switches (All / Failed / Errors, Pretty / Raw, the theme) are radio groups: arrow keys move the choice
+  And the review panel and the detail page step through results with ↑ and ↓ (see [Keyboard Shortcuts](#keyboard-shortcuts))
+```
+
+### Theme
+
+```gherkin
+Scenario: Theme follows the OS by default
+  Given the user has never picked a theme
+  When the UI opens
+  Then it uses the OS light/dark preference
+  And it switches live when the OS preference changes
+
+Scenario: Pick a theme
+  When the user picks System, Light or Dark in Settings
+  Then the UI switches immediately
+  And the choice is remembered in this browser
+```
+
+---
+
 ## Main Table View
 
 ### Initial State
@@ -25,6 +74,37 @@ Scenario: View discovered evaluations
   Then all discovered evaluations are listed
   And each row shows: function name, dataset, labels, status
   And status is "not_started" for all rows
+  And the summary says the evals have not been run yet
+
+Scenario: No evals found
+  Given discovery found no evals and reported no error
+  Then the table area explains that no evals were found in the served path
+  And shows a minimal example eval to copy
+```
+
+### Row Layout
+
+```gherkin
+Scenario: Eval cell
+  Then each row's eval cell shows the eval name, with dataset, labels and trial "#n" on a quieter line beneath it
+  And a leading icon shows the row's outcome (see Result Status Indicators)
+
+Scenario: Scores cell with one metric
+  Given the run's only score key is pass/fail
+  Then the Scores cell shows no chips, since the row's outcome icon already says passed or failed
+  And a failed score's notes show in the cell
+
+Scenario: Scores cell with several metrics
+  Given the run has more than one score key, or a numeric one
+  Then a failed pass/fail score shows as a red "✗ key" chip (passed ones are implied by the outcome icon)
+  And a numeric score shows as a neutral "key 0.83" chip
+  And failed scores' notes show beneath the chips
+  And hovering a chip shows its full value and notes
+
+Scenario: Score chips elsewhere
+  Given scores appear without an outcome icon (comparison cells and cards)
+  Then a passed score shows as a green "✓ key" chip, a failed one as a red "✗ key" chip, and a numeric one as "key 0.83"
+  And failed scores' notes show beneath the chips
 ```
 
 ### Table Sorting
@@ -47,14 +127,14 @@ Scenario: Annotation indicator in results table
 
 ### Run Button (Single Action)
 
-The top-right run control is a single stable action button.
+The primary button at the right of the header runs evals. While a run is active it is replaced, in the same place, by labeled Pause (or Resume) and Stop buttons.
 
 ```gherkin
 Scenario: Stable run button label
   Given the UI is open
   When the user views the Run button
-  Then the button label is "Run" when idle
-  And the button label is "Stop" while a run is active
+  Then the button label is "Run" when idle ("Run 3" when 3 rows are selected)
+  And the button label is "Stop" while a run is active, next to "Pause"/"Resume"
 
 Scenario: Selective run with checkboxes
   Given some evaluations are checked
@@ -64,15 +144,16 @@ Scenario: Selective run with checkboxes
 
 Scenario: Run behavior
   When the user clicks "Run"
-  Then the current run is overwritten
-  And the run_name stays the same
+  Then the evals run again within the current run, replacing their previous results
+  And the run_name and run_id stay the same
   And the timestamp updates
+  And annotations are kept
 
-Scenario: New run from stats panel
-  Given the stats panel shows the current run name
-  When the user clicks the new-run icon next to the run name
+Scenario: New run from the sidebar
+  When the user clicks "+" beside Runs in the sidebar
   Then a new run file is created with an auto-generated friendly name
-  And the new run has no completed results yet
+  And the new run has no completed results yet, and it opens
+  And "+" is disabled while a run is in progress
 ```
 
 ### Run Execution
@@ -106,23 +187,93 @@ Scenario: Pause and resume running evaluations
   When the user clicks Resume
   Then pending evaluations continue running from where the run paused
 
-Scenario: Reload server from UI
+Scenario: Reload evals from UI
   Given the UI is open
-  When the user clicks "Reload Server"
-  Then the current serve process is restarted
-  And it comes back on the same port with the same serve command arguments
+  When the user clicks "Reload evals" at the bottom of the sidebar
+  Then evals are rediscovered and ezvals.json is reloaded
+  And the page reloads
+
+Scenario: Code changes are picked up
+  Given the user edits an eval file while the UI is open
+  When the user clicks Run
+  Then the edited code runs (every run starts fresh eval processes)
+
+Scenario: Switching runs is instant
+  Given the session has runs of the same eval path
+  When the user opens another run in the sidebar
+  Then it shows without importing the eval code again
+  And the evals listed for a run not started yet are the ones found at startup, by the last run, or by Reload evals
+```
+
+### Trials and Regrading
+
+```gherkin
+Scenario: Trials in the table
+  Given a run with repeated trials
+  Then each trial is its own row with "#n" on the eval's detail line
+  And the summary shows pass@k and pass^k
+
+Scenario: Regrade from the dashboard
+  When the user clicks "Regrade" in the header ("Regrade 3" when 3 rows are selected)
+  Then selected rows (or all rows when none are selected) are regraded without re-running targets
+  And a toast reports how many results were regraded and how many were skipped for having no target
+  And "Regrade" is not shown when no finished result has a target to score again
 ```
 
 ### Result Status Indicators
 
-| Status | Visual | Meaning |
+A finished row's icon shows its **outcome**, not just that it finished:
+
+| Outcome | Visual | Meaning |
 |--------|--------|---------|
-| `not_started` | Gray | Never run |
-| `pending` | Yellow spinner | Queued |
-| `running` | Blue spinner | Currently executing |
-| `completed` | Green check | Finished successfully |
-| `error` | Red X | Exception occurred |
-| `cancelled` | Gray slash | Stopped by user |
+| not run | Gray ring, dimmed row | Never run |
+| queued | Amber spinner | `pending` |
+| running | Blue spinner | Currently executing |
+| passed | Green check | Finished, no error, at least one pass/fail score and none failed |
+| failed | Red cross | At least one score failed |
+| error | Red warning | The eval raised (status `error` or an error message) |
+| scored | Gray check | Finished with only numeric scores, or no scores |
+| cancelled | Gray slash | Stopped by user |
+
+The row keeps `data-status` (the raw status) for tests and scripts.
+
+---
+
+## Review Panel
+
+Results are reviewed beside the table, so the user keeps their place in the run while reading one result.
+
+```gherkin
+Scenario: Open a result beside the table
+  Given the run has results
+  When the user clicks a row anywhere but its checkbox, eval name link or annotation mark
+  Then the result opens in a review panel on the right, and its row is marked as the current one
+  And the URL gains ?result={index}, so reloading or sharing the link reopens it
+  And while the panel is open the table narrows to a list (eval, scores, time), since the panel shows the rest
+
+Scenario: Review panel contents
+  Then the panel's header shows the outcome icon, the eval name, its position among the rows in view ("2 of 6"), previous and next buttons, "Open" and close
+  And beneath it, in reading order: one line of context (dataset, labels, latency, trace link, tools), the verdict strip (errors and unfinished results only), the scores with their notes, Output, Reference (if set), Input, the annotation, then messages, metadata and extra data
+  And scores and the annotation can be edited in place
+
+Scenario: Step through results
+  Given the review panel is open and focus is not in a field, menu or dialog
+  When the user presses ↓ or ↑
+  Then the next or previous row in view opens, and the table scrolls to keep it visible
+  When the user presses Enter
+  Then the result opens on its detail page
+  When the user presses Escape
+  Then the panel closes
+
+Scenario: The panel follows the run
+  When the user opens another run or starts a new one
+  Then the review panel closes
+  And it is hidden while comparing runs
+
+Scenario: Review panel on a narrow screen
+  Given the viewport is narrower than 1024px
+  Then the review panel slides over the table from the right instead of sitting beside it
+```
 
 ---
 
@@ -131,9 +282,20 @@ Scenario: Reload server from UI
 ```gherkin
 Scenario: Open detail view
   Given an evaluation has completed
-  When the user clicks the function name
+  When the user clicks the function name, or presses Enter or clicks "Open" in the review panel
   Then a full-page detail view opens
   At URL: /runs/{run_id}/results/{index}
+
+Scenario: Detail header
+  Then the header shows where the result is: session / run / eval name, with the result's outcome icon before the name (the run links back to its dashboard)
+  And the result's position ("5 of 12") with previous and next buttons, then Regrade and Rerun
+
+Scenario: Verdict
+  Given the detail view is open
+  Then passed and failed show as the outcome icon before the eval name, with the reason in the Scores section; there is no strip for them
+  And a strip under the header appears only for:
+    - error: the error's one-line summary, with the rest of the traceback below it (capped in height, with "Show all")
+    - running, queued, cancelled or not run: that status
 
 Scenario: Detail view contents
   Given the detail view is open
@@ -143,11 +305,20 @@ Scenario: Detail view contents
     - Reference (if set)
     - Scores (with key, value/passed, notes)
     - Metadata (expandable key-value list with formatted labels and clickable links)
-    - Run Data (expandable JSON)
+    - Extra data (collapsible JSON of trace_data fields other than messages and trace_url)
     - Annotations (editable)
     - Tools used (unique tool names from trace_data.messages tool calls, if present)
+    - Trace (a link to trace_url, labeled with its site's host name), if set
     - Latency
-    - Error message (if any)
+
+Scenario: Detail layout
+  Then Input is on the left, and Output is on the right with Reference beneath it, so the two can be compared
+  And prose renders in the UI's text face and structured data (JSON) in monospace
+
+Scenario: Scores lead the sidebar
+  Given the result has scores
+  Then they are the first section of the sidebar, each with its pass/fail mark or value and its notes in full
+  And beneath them one line of context: dataset (a link that filters the dashboard to it), labels, latency, the trace link and the tools used
 
 Scenario: Message-format data rendering
   Given the detail view is open
@@ -156,6 +327,11 @@ Scenario: Message-format data rendering
   Then those sections default to a pretty chat-style rendering
   And each section provides a Pretty/Raw toggle
   And Raw shows the underlying JSON payload without transformation
+
+Scenario: Regrade one result
+  Given the result finished and its eval has a target
+  When the user clicks "Regrade" in the header
+  Then the output stays, the eval body scores it again, and the scores update when done
 
 Scenario: Output loading state during active run
   Given the detail view is open
@@ -175,14 +351,28 @@ Scenario: Navigate between results
   When the user presses ↓ (down arrow)
   Then the next result loads
 
+  And stepping between results is instant: the page doesn't reload, and neighboring results are fetched ahead
+  And the URL follows the result, so reload and the browser's Back button work
+
+  When the user presses Escape (or clicks Back)
+  Then the user returns to the dashboard with this result open in the review panel
+
+Scenario: Escape closes an open drawer first
+  Given the Messages drawer is open
   When the user presses Escape
-  Then the user returns to the main table
+  Then the drawer closes and the user stays on the detail page
 
 Scenario: Detail pane sizes persist in-session
   Given the user is on a detail page
   And the user resizes one or more detail panes
   When the user navigates to another detail result in the same browser session
   Then the resized pane sizes remain applied
+
+Scenario: Detail view on a narrow screen
+  Given the viewport is narrower than 768px
+  When the user opens a detail page
+  Then Input, Output and Reference stack full-width, followed by the sidebar
+  And resize handles are hidden (saved pane sizes still apply on wider screens)
 ```
 
 ---
@@ -210,7 +400,7 @@ Scenario: Add annotation via placeholder link
 Scenario: Save annotation
   Given the user is editing an annotation
   When the user types text and clicks Save
-  Then the annotation saves to the JSON file via PATCH API
+  Then the annotation saves to the run via PATCH API
   And a correction_history entry is appended with field="annotation", before, after, and timestamp
   And the view returns to read-only mode showing the annotation text
   And the annotation persists across page reloads
@@ -252,7 +442,7 @@ Scenario: Keyboard navigation disabled while editing
 - Dataset
 - Labels
 - Metadata
-- Run Data
+- Extra data
 - Latency
 - Error
 
@@ -268,12 +458,14 @@ Scenario: Edit score from score card
   Then inline edit controls appear for that score
   And boolean scores only show boolean controls
   And value scores only show value controls
+  And scores with both a value and pass/fail show both controls
+  And a typed value that parses as a number (e.g. `.5`, `1e3`) saves as a number; other text saves as text
   And Save/Cancel buttons appear
 
 Scenario: Save score edits
   Given the user is editing a score
   When the user updates fields and clicks Save
-  Then the scores save to the JSON file via PATCH API
+  Then the scores save to the run via PATCH API
   And a correction_history entry is appended with field="scores", before, after, and timestamp
   And the score card returns to read-only mode
   And the edits persist across page reloads
@@ -290,7 +482,7 @@ Scenario: Cancel score edit
 
 ## Export
 
-The export dropdown menu in the header provides 4 export formats (JSON, CSV, Markdown, PNG).
+The Export menu in the filter bar provides 4 export formats (JSON, CSV, Markdown, PNG).
 
 ### Raw Exports (All Data)
 
@@ -308,7 +500,7 @@ Scenario: Export as CSV
     - function, dataset, labels
     - input, output, reference
     - scores, error, latency
-    - metadata, trace_data, annotations
+    - metadata, trace_data, annotation
 ```
 
 ### Filtered Exports (Respects Filters & Column Selection)
@@ -326,34 +518,32 @@ Scenario: Export as Markdown
 
 Scenario: Export as PNG
   Given evaluation results exist
-  When the user clicks Export > PNG
-  Then a modal opens with a PNG preview
-  And export controls are collapsed by default behind a compact options button
-  And the controls include:
-    - Editable title
-    - Score color customization
-    - Toggles for showing test count and average latency in the footer
-  And the preview image shows:
-    - EZVals logo and title
-    - Test count (when enabled) in the bottom-left
-    - Average latency (when enabled) in the bottom-left
-    - Vertical bar chart for each score metric with percentages
-    - EZVals logo and "ezvals.com" branding in the bottom-right
+  When the user clicks Export > Image
+  Then a dialog opens with a preview of the image
+  And export options are collapsed by default behind a compact options button
+  And the options include:
+    - Editable title (the session name by default)
+    - Score colours (good, mid, low; the theme's passed, in-progress and failed colours by default)
+    - Toggles for showing the eval count and average latency under the title
+  And the image shows the summary as on screen (the visible rows):
+    - the title, and the eval count and average latency when enabled
+    - the pass rate, large, with the outcome bar and a legend of passed, failed and errored counts
+    - each score key with its value and a bar, only when there is more than one key or a numeric one
+    - the EZVals mark and "ezvals.com" in the bottom-right
   And the image matches the current theme (dark or light)
   And the user can click Save to download the PNG
   And the user can click Copy to copy the image to clipboard
 
 Scenario: Export as PNG in comparison mode
   Given comparison mode is active with 2+ runs
-  When the user clicks Export > PNG
+  When the user clicks Export > Image
   Then the default title is the session name
   And the modal includes editable run names and run colors
   And the modal includes up/down controls to reorder runs
-  And the PNG preview shows:
-    - Run chips with colors and test counts
-    - Grouped bars per metric (one bar per run, colored by run)
-    - Percentage labels above each bar
-    - Latency as an additional metric
+  And the image shows one row per run:
+    - the run's colour dot and name
+    - its pass rate as a bar in the run's colour, with the change in points from the first run
+    - its average latency
 ```
 
 ---
@@ -362,131 +552,159 @@ Scenario: Export as PNG in comparison mode
 
 | Key | Action | Context |
 |-----|--------|---------|
-| `↑` | Previous result | Detail view |
-| `↓` | Next result | Detail view |
-| `Esc` | Back to table | Detail view |
+| `↑` | Previous result | Review panel, detail view |
+| `↓` | Next result | Review panel, detail view |
+| `Enter` | Open the result's detail page | Review panel |
+| `Esc` | Close the panel | Review panel |
+| `Esc` | Back to the dashboard, with the result open | Detail view |
+
+Shortcuts are ignored while typing in a field or when a menu or dialog is open.
 
 ---
 
 ## Session & Run Navigation
 
 
-### Run Selector
+### Runs Sidebar
 
-The run selector displays as a dropdown when multiple runs exist in the session, otherwise as plain text.
+The sidebar shows the session and its runs; the open run's name heads the main panel.
 
 ```gherkin
-Scenario: Single run in session
-  Given only one run exists in the current session
-  When the user views the run name in the stats bar
-  Then it displays as plain text (not a dropdown)
-  And the pencil edit icon is shown next to it
+Scenario: Runs in the sidebar
+  Then the sidebar lists the session's runs, newest first
+  And each shows its name, pass rate, time (or "Running…" with a spinner while it runs) and a small passed/failed/errored bar
+  And the open run is highlighted, and listed even before it has results ("Not run yet")
 
-Scenario: Multiple runs in session (dropdown)
-  Given two or more runs exist in the current session
-  When the user views the run name in the stats bar
-  Then it displays as a dropdown selector
-  And each option shows: run_name and formatted timestamp (e.g., "run-one (Dec 17, 9:52 AM)")
-  And runs are sorted newest-first
-  And the pencil edit icon is shown next to the dropdown
+Scenario: Open another run
+  When the user clicks a run in the sidebar
+  Then that run becomes the active run and its results load
+  And comparison mode ends if it was on
 
-Scenario: Switch run via dropdown
-  Given the run dropdown is visible
-  When the user selects a different run
-  Then that run's results load in the table
-  And the dropdown updates to show the new selection
+Scenario: Run actions
+  When the user opens a run's "⋯" menu (always shown on the open run; on the others it shows on hover or keyboard focus)
+  Then it offers Compare with this run (not on the open run), Rename, Copy name and Delete run
 
 Scenario: Rename run via inline editing
-  When the user clicks the pencil icon next to the run name in the stats bar
+  When the user clicks the pencil beside the run name in the header, or chooses Rename in a run's "⋯" menu
   Then the run name becomes an editable text field
-  And if a dropdown was shown, it hides and the input appears in its place
-  And pressing Enter or clicking the checkmark saves the new name
+  And pressing Enter (or clicking the checkmark, in the header) saves the new name
   And pressing Escape or clicking outside cancels the edit
-  And the filename and JSON metadata update on save
+  And the run's saved name updates on save (the run file, named by run id, stays put)
+  And names keep spaces and punctuation; a blank name is rejected
 
 Scenario: Copy session/run name
-  When the user clicks on the session or run name in the stats bar
+  When the user clicks the session name in the sidebar, or chooses Copy name in a run's "⋯" menu
   Then the name is copied to the clipboard
-  And a "Copied!" tooltip appears briefly
+  And clicking the session name shows a "Copied!" tooltip briefly
 
 Scenario: Delete run
-  When the user clicks delete on a run
+  When the user chooses Delete run in a run's "⋯" menu
   Then a confirmation appears
-  And on confirm, the run file is deleted
-  And the dropdown refreshes
+  And on confirm, the run file is deleted and the list refreshes
+  And the open run can't be deleted: the item is disabled until another run is open
 ```
 
 ---
 
-## Stats Bar
+## Summary
 
-The top stats bar shows session/run info, test counts, and score breakdown.
-
-### Expanded View (default)
-
-Shows a bar chart with score breakdown:
-- Each score key has a colored bar (green ≥80%, amber ≥50%, red <50%)
-- Below each bar: percentage prominent on top, ratio smaller below
-  - Example: "87%" on first line, "54/62" smaller below
-- Left side shows: session name, run name (dropdown if multiple runs), test count, error count
-- Time column header tooltip shows average latency as `(Avg: 0.50s)`
-
-Compact mode is not available. The stats bar always uses expanded view.
-
-### Dynamic Stats
+A compact strip under the header answers "how did this run do?" at a glance.
 
 ```gherkin
+Scenario: Headline pass rate
+  Given the run has finished rows with pass/fail scores
+  Then the summary leads with the pass rate: passed rows / finished rows (passed, failed and errored)
+  And beside it: passed, failed and error counts, the number of evals and the average latency
+  And with trials, pass@k and pass^k
+
+Scenario: Numeric-only scores
+  Given no finished row has a pass/fail score
+  Then the headline is the number of finished evals instead of a pass rate
+
+Scenario: Change since the previous run
+  Given the session has an older run with results
+  And the current run is not running and no filter is active
+  Then the pass rate shows the change in points since that run (e.g. "▲ 4 pts")
+  And clicking it compares the two runs
+
+Scenario: Pass-rate trend
+  Given two or more of the session's runs have a pass rate
+  Then a small line chart beside the headline shows the pass rates of the last 12 of them, oldest to newest, with the open run's point filled
+  And hovering a point shows that run's name and pass rate
+
+Scenario: Outcome bar
+  Then under the headline a bar splits the rows into passed (green), failed (red) and errored (faded red) shares
+  And rows that finished without a pass/fail score (numeric scores only, or none) take a grey share, counted in the facts as "N without pass/fail"
+  And rows not yet finished leave the rest of the bar empty
+  And hovering a share shows its count ("10 failed")
+
+Scenario: One metric
+  Given the run's only score key is pass/fail
+  Then the summary shows just the headline and outcome bar, with no per-key breakdown
+
+Scenario: Several metrics
+  Given the run has more than one score key, or a numeric one
+  Then each key is listed beside the headline with its pass rate (or average), "passed/total" (or "avg") and a small bar
+  And bars are green at ≥80%, amber at ≥50% and red below
+
+Scenario: Progress while running
+  Given a run is in progress
+  Then the outcome bar fills as results arrive, with "completed/total" beside it
+
+Scenario: Not run yet
+  Given no row has been run
+  Then the summary says how many evals are ready to run ("6 evals ready to run")
+
 Scenario: Stats update with filters
-  Given filters or search are active
-  When rows are filtered
-  Then stats bar shows "filtered/total" format (e.g., "TESTS 5/20")
-  And time header average latency and score chips calculate from visible rows only
-  And chips show actual filtered counts, not original totals
+  Given filters, search or the outcome switch narrow the rows
+  Then the counts, pass rate, latency, outcome bar and per-key stats describe the visible rows only
+  And the eval count reads "5 of 20 evals"
 ```
 
 ---
 
 ## Filtering
 
-### Three-State Filters
-
-Dataset, label, annotation, and trace data filters use a cycling toggle pattern:
-
-| Click | State | Visual | Behavior |
-|-------|-------|--------|----------|
-| 1st | Include | Blue | Show only matching rows |
-| 2nd | Exclude | Rose | Hide matching rows |
-| 3rd | Any | Gray | No filter applied |
+### Outcome Switch
 
 ```gherkin
-Scenario: Filter by dataset (include)
-  Given the filter menu is open
-  When the user clicks a dataset pill once
-  Then the pill turns blue
-  And only rows with that dataset are shown
+Scenario: Show only failures
+  When the user picks "Failed" in the filter bar's outcome switch
+  Then only failed and errored rows are shown
+  And "Errors" shows only errored rows, "All" shows everything
+  And each option shows its row count
+  And the choice is kept in the URL (`outcome=failed|errors`)
+```
 
-Scenario: Filter by dataset (exclude)
-  Given a dataset pill is blue (included)
-  When the user clicks the pill again
-  Then the pill turns rose with ✕ prefix
-  And rows with that dataset are hidden
+### Filters Panel
 
-Scenario: Clear dataset filter
-  Given a dataset pill is rose (excluded)
-  When the user clicks the pill again
-  Then the pill turns gray
-  And all rows are shown (no dataset filter)
+The Filters button (labeled, with a count of active filters) opens a panel.
+
+```gherkin
+Scenario: Filter by dataset or label
+  Given the filters panel is open
+  Then each dataset and label is a row with "Only" and "Hide" buttons
+  When the user clicks "Only"
+  Then only rows with that value are shown
+  When the user clicks "Hide"
+  Then rows with that value are hidden
+  And clicking the active button again clears it
+
+Scenario: Presence filters
+  Then Annotation, Error, URL and Messages each have an Any / Has / None switch
 ```
 
 ### Filter Types
 
 | Filter | States | Description |
 |--------|--------|-------------|
-| Dataset | include / exclude / any | Filter by dataset name |
-| Labels | include / exclude / any | Filter by label |
-| Annotation | has / no / any | Filter by presence of annotation |
-| Has URL | has / no / any | Filter by trace_data.url presence |
-| Has Messages | has / no / any | Filter by trace_data.messages presence |
+| Outcome | all / failed / errors | Quick switch in the filter bar |
+| Dataset | only / hide / any | Filter by dataset name |
+| Labels | only / hide / any | Filter by label |
+| Annotation | has / none / any | Filter by presence of annotation |
+| Error | has / none / any | Filter by presence of an error |
+| URL | has / none / any | Filter by trace_data.url presence |
+| Messages | has / none / any | Filter by trace_data.messages presence |
 | Score Value | numeric rules | Filter by score values |
 | Score Passed | boolean rules | Filter by pass/fail status |
 
@@ -523,24 +741,30 @@ The UI is backed by these REST endpoints, also available programmatically.
 |----------|--------|-------------|
 | `/results` | GET | HTML table view |
 | `/runs/{run_id}/results/{index}` | GET | HTML detail view |
-| `/api/runs/{run_id}/results/{index}` | PATCH | Update result fields |
+| `/api/runs/{run_id}/results/{index}` | GET | Result JSON for the detail view |
+| `/api/runs/{run_id}/results/{index}` | PATCH | Update `annotation` and/or `scores` (any run) |
 
 ### Run Control
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/runs/rerun` | POST | Run active eval configuration (optionally selected indices) |
+| `/api/runs/regrade` | POST | Regrade the active run (optionally `{"indices": [...]}`); returns `regraded` and `skipped_without_target` |
 | `/api/runs/pause` | POST | Pause queued execution after in-flight evals finish |
 | `/api/runs/resume` | POST | Resume pending evals on a paused run |
 | `/api/runs/stop` | POST | Cancel pending/running evals |
-| `/api/server/restart` | POST | Restart the current `ezvals serve` process |
+| `/api/server/restart` | POST | Rediscover evals and reload ezvals.json |
 
 **Rerun Request Body:**
 ```json
 {
-  "indices": [0, 2, 5]  // Optional: specific indices to rerun
+  "indices": [0, 2, 5],  // Optional: result rows to rerun
+  "config_name": "gpt-4", // Optional: config profile; a different profile starts a new run named after it
+  "run_id": "a1b2c3d4"    // Optional: run to rerun rows of; it becomes the active run (rerun and regrade)
 }
 ```
+
+A request while a run is in progress returns 409.
 
 ### Export
 
@@ -555,9 +779,9 @@ The UI is backed by these REST endpoints, also available programmatically.
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/sessions` | GET | List all session names (from directories) |
-| `/api/sessions/{name}/runs` | GET | List runs in session |
+| `/api/sessions/{name}/runs` | GET | List runs in session: `run_id`, `run_name`, `timestamp`, `total_evaluations`, `total_passed`, `total_failed`, `total_errors` |
 | `/api/sessions/{name}` | DELETE | Delete entire session and all runs |
-| `/api/runs/{run_id}` | PATCH | Update run metadata (rename updates filename) |
+| `/api/runs/{run_id}` | PATCH | Rename a run (`{"run_name"}`, trimmed; blank is a 400) |
 | `/api/runs/{run_id}` | DELETE | Delete specific run |
 | `/api/runs/{run_id}/activate` | POST | Switch active run to view/edit a different run |
 | `/api/runs/new` | POST | Create a new run with a fresh run_id/run_name (no overwrite) |
@@ -567,11 +791,13 @@ The UI is backed by these REST endpoints, also available programmatically.
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/config` | GET | Get ezvals.json config |
-| `/api/config` | PUT | Update config |
+| `/api/config` | PUT | Save the Settings keys (`concurrency`, `timeout`, `trials`, `results_dir`, `completion_notifications`): the body replaces them, and a key sent as null or left out goes back to its default. Only the keys whose value changes are written. Every other key in ezvals.json, including a project's own keys, stays as it was, in the same order |
+| `/api/configs` | GET | Config profile names and the active one |
+| `/api/configs/select` | POST | Choose the config profile for the next run |
 
 ```gherkin
 Scenario: Configure completion notifications from Settings
-  Given the user opens the Settings modal from the config menu
+  Given the user opens Settings from the sidebar
   When the user toggles "Completion notifications + sound" and clicks Save
   Then the value is persisted via `/api/config`
   And future run-complete events honor the toggle
@@ -599,54 +825,72 @@ Scenario: Run not found
 Scenario: Result index out of range
   When GET /runs/{run_id}/results/999
   Then 404: "Result not found"
+
+Scenario: Discovery finds no evals or fails
+  Given the eval path has no evals, or an eval file fails to import
+  When GET /results (or /api/runs/latest/data)
+  Then 200 with the active run's ids and names and no results
+  And `discovery_error` holds the worker's error and traceback when discovery failed
+  And the UI shows "Couldn't load your evals" with the traceback and how to recover (fix the file, then Reload evals in the sidebar)
+  And with no results, the table and the "No evals found" message are not shown
+
+Scenario: No results match the filters
+  Given filters or search hide every row
+  Then the table says so and offers "Clear filters", which resets filters and search
+
+Scenario: Loading and load failures
+  Then while a page loads it says what it is loading ("Loading results…")
+  And if it can't load, it says so ("Couldn't load results") and suggests checking that `ezvals serve` is still running
+  And action failures appear as toasts that start with "Couldn't …" and include the reason
 ```
 
 ---
 
 ## File Storage
 
-Results are stored in `.ezvals/sessions/` with hierarchical session directories:
+Each run is an append-only event log at `.ezvals/sessions/<session>/<run_id>.jsonl` (format in [EXPERIENCE_SPEC_SDK.md](./EXPERIENCE_SPEC_SDK.md#run-format)):
 
 ```
 .ezvals/
-├── sessions/
-│   ├── default/
-│   │   └── swift-falcon_1705312200.json
-│   ├── emojis/
-│   │   ├── baseline_1705312300.json
-│   │   └── fixed_1705312500.json
-│   └── model-upgrade/
-│       ├── gpt5_1705313000.json
-│       └── gpt5-1_1705313200.json
-└── ezvals.json
+└── sessions/
+    ├── default/
+    │   └── 3f9a1c2e.jsonl
+    └── model-upgrade/
+        ├── 7b2d4e61.jsonl   (run_name "gpt5")
+        └── c08e5a93.jsonl   (run_name "gpt5-1")
 ```
 
-**File naming:** `{run_name}_{unix_timestamp}.json`
-- Unix timestamps (integers) for easy sorting
-- Session = directory name
-- Run name = filename prefix
-
-**Overwrite behavior:** When `overwrite=true` (default), running with the same session + run name replaces the existing file.
+- Session = directory name (letters, digits, `-` and `_`); `run_id` = 8 random hex characters; the run name lives inside the log, so it can hold any text and renaming never moves files
+- Results stream into the log as each eval finishes, so a crashed or stopped run keeps everything that completed
+- **Overwrite behavior:** When `overwrite=true` (default), starting a run with the same session + run name deletes the older run
 
 ### JSON Schema
 
+The API, `ezvals run --json` and `ezvals export -f json` present a run as:
+
 ```json
 {
+  "run_id": "3f9a1c2e",
   "session_name": "model-upgrade",
   "run_name": "baseline",
-  "run_id": "1705312200",
+  "created_at": 1705312200,
   "path": "evals/",
   "total_evaluations": 50,
   "total_functions": 10,
   "total_passed": 45,
+  "total_failed": 3,
   "total_errors": 2,
   "total_with_scores": 48,
   "average_latency": 0.5,
   "results": [
     {
+      "id": "evals/support.py::test_refund~2",
       "function": "test_refund",
       "dataset": "customer_service",
       "labels": ["production"],
+      "trial": 2,
+      "trial_of": "evals/support.py::test_refund",
+      "regradable": true,
       "result": {
         "input": "I want a refund",
         "output": "I'll help you with that",
@@ -657,22 +901,22 @@ Results are stored in `.ezvals/sessions/` with hierarchical session directories:
         "metadata": {"model": "gpt-4"},
         "trace_data": {},
         "status": "completed",
+        "annotation": "Good tone",
         "correction_history": [
           {
             "field": "scores",
             "before": [{"key": "pass", "passed": false, "notes": "judge output"}],
             "after": [{"key": "pass", "passed": true, "notes": "human correction"}],
-            "timestamp": "2026-02-20T12:34:56.000000+00:00"
+            "timestamp": "2026-02-20T12:34:56Z"
           }
-        ],
-        "annotations": null
+        ]
       }
     }
   ]
 }
 ```
 
-**Note:** `run_id` is a Unix timestamp (string representation of integer) for sortability.
+`trial`, `trial_of` and `regradable` appear only when they apply; runs with trials also carry `trials`, `pass_at_k` and `pass_all_k`. `created_at` is when the run last started running (unix seconds). `/results` and `/api/runs/{run_id}/data` add `score_chips`, `eval_path`, and for the active run `is_paused`, `selected_total`, and `discovery_error` (only when discovering the evals failed).
 
 ---
 
@@ -685,42 +929,45 @@ Comparison mode allows users to view and compare results from multiple runs side
 ```gherkin
 Scenario: Start comparing runs
   Given the user has multiple runs in the current session
-  And the user is viewing a run in the stats panel
-  When the user clicks the "+ Compare" button next to the run name
-  Then a dropdown appears showing other available runs in the session
+  When the user clicks "Compare" in the header
+  Then a menu shows the other runs in the session
   And selecting a run enters comparison mode
-  And both runs are shown as color-coded chips
+  And "Compare" is not shown when the session has no other run
+
+Scenario: Compare from the sidebar
+  When the user chooses "Compare with this run" in another run's "⋯" menu
+  Then comparison mode starts with the open run and that run
+
+Scenario: Compare with the previous run
+  When the user clicks the pass-rate change in the summary
+  Then comparison mode starts with the current and previous runs
 ```
 
 ### Comparison Mode UI
 
 ```gherkin
-Scenario: Left panel in comparison mode
-  Given comparison mode is active with 2+ runs
-  Then the left panel shows:
-    - Session name
-    - "comparing" label
-    - Color-coded chips for each run (max 4)
-    - Each chip shows: color dot, run name, test count in parentheses
-    - Non-primary chips have an "×" button to remove them
-    - A "+" button to add more runs (if < 4 runs)
-  And average latency is NOT shown (moved to chart)
-  And test count is NOT shown (embedded in chips)
+Scenario: Header in comparison mode
+  Given comparison mode is active
+  Then the header shows "Comparing N runs" and an "Exit" button in place of the run actions
+  And clicking "Exit" returns to the first run
+
+Scenario: Comparison summary
+  Given comparison mode is active with 2+ runs (max 4)
+  Then the summary is a table with one row per run:
+    - color dot and run name
+    - pass rate with a bar in the run's colour, and for runs after the first, the change in points from the first run
+    - one column per score key (pass rate or average), only when the runs have more than one key or a numeric one
+    - average latency
+  And the best value in each column is emphasized (nothing is, when the runs tie)
+  And non-primary rows have a remove (×) button
+  And an "Add run" button adds another run (if < 4 runs)
 
 Scenario: Reorder compared runs
   Given comparison mode is active with 2+ runs
-  When the user clicks up/down controls on a run chip
-  Then the chip order updates immediately without exiting comparison mode
-  And chart bars and comparison table columns follow the new run order
-  And the first chip remains the primary run (cannot be removed)
-
-Scenario: Chart in comparison mode
-  Given comparison mode is active
-  Then the chart shows:
-    - Grouped bars (one per run) for each score metric
-    - Bars color-coded to match run chips
-    - "Latency" as an additional metric (normalized 0-5s = 0-100%)
-    - Per-run values displayed below each metric group
+  When the user clicks up/down controls on a run row
+  Then the order updates immediately without exiting comparison mode
+  And comparison table columns follow the new run order
+  And the first row remains the primary run (cannot be removed)
 ```
 
 ### Comparison Table
@@ -786,11 +1033,9 @@ Scenario: Maximum 4 runs
   Then the "+" button is hidden or disabled
   And no more runs can be added
 
-Scenario: Run button disabled
+Scenario: Run button hidden
   Given comparison mode is active
-  Then the Run button shows "Compare Mode"
-  And the button is disabled (grayed out)
-  And no dropdown is shown
+  Then the header shows "Comparing N runs" instead of the Run button
 ```
 
 ### Exiting Comparison Mode
@@ -798,7 +1043,7 @@ Scenario: Run button disabled
 ```gherkin
 Scenario: Remove runs to exit
   Given comparison mode is active with 2 runs
-  When the user clicks "×" on the second run's chip
+  When the user clicks "×" on the second run's row
   Then that run is removed from comparison
   And the UI returns to normal (single-run) mode
   And the first run remains as the active run
@@ -806,11 +1051,11 @@ Scenario: Remove runs to exit
 
 ### Color Assignment
 
-Runs are assigned colors from a fixed palette in order:
-1. First run: Blue (#3b82f6)
-2. Second run: Orange (#f97316)
-3. Third run: Green (#22c55e)
-4. Fourth run: Purple (#a855f7)
+Runs are assigned colors from a fixed palette in order (the `--run-1` to `--run-4` tokens, tuned for each theme):
+1. First run: Blue
+2. Second run: Violet
+3. Third run: Teal
+4. Fourth run: Pink
 
 Colors are reassigned when runs are removed to maintain palette order.
 
@@ -823,22 +1068,3 @@ GET /api/runs/{run_id}/data
 Returns full run data without changing the active run. Used for fetching comparison run data.
 
 Response format: Same as `/results` endpoint (includes `score_chips`).
-
----
-
-## Known Issues
-
-### Limited Test Coverage
-
-| Feature | Coverage |
-|---------|----------|
-| Run/Stop controls | Tested |
-| Result streaming | Tested |
-| JSON export | Tested |
-| CSV export | Partially tested |
-| Inline editing | Annotation editing tested |
-| Keyboard shortcuts | Detail view arrows/Esc tested |
-| Stats bar | Tested |
-| Three-state filtering | Not tested |
-| Filter persistence | Not tested |
-| Comparison mode | Partially tested |

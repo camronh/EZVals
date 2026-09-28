@@ -1,1668 +1,407 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { FormEvent, MouseEvent as ReactMouseEvent } from 'react'
-import type {
-  ColumnDef,
-  ComparisonRun,
-  Config,
-  FilterState,
-  NormalizedComparisonRun,
-  RunButtonState,
-  RunSummary,
-  RunResultRow,
-  Score,
-  SessionRun,
-  SortStateItem,
-  StatsSummary,
-} from '../types'
-import {
-  DEFAULT_HIDDEN_COLS,
-  buildComparisonMatrix,
-  compareValues,
-  computeDatasetLabels,
-  computeFilteredStats,
-  computeScoreKeyMeta,
-  defaultFilters,
-  formatRunTimestamp,
-  formatValue,
-  getResultKey,
-  isFilterActive,
-  matchesFiltersForData,
-  normalizeComparisonRuns,
-  parseSortValue,
-  summarizeStats,
-  type ComparisonMatrixEntry,
-} from './utils'
-import { useDebouncedValue, useLocalStorageState, useSessionStorageState } from './hooks'
-import DashboardIcons from './components/DashboardIcons'
-import DashboardHeader from './components/DashboardHeader'
-import StatsExpanded from './components/StatsExpanded'
-import SettingsModal from './components/SettingsModal'
-import ComparisonTable from './components/ComparisonTable'
-import ResultsTable from './components/ResultsTable'
-import FloatingMenu from './components/FloatingMenu'
-import RunPickerDropdown from './components/RunPickerDropdown'
-import PngExportModal from './components/PngExportModal'
+import type { Config, FilterState, OutcomeFilter, SortRule } from '../types'
+import { api } from '../api'
+import { Icon } from '../components/Icon'
+import { Drawer } from '../detail/components/Panels'
+import { DataViewer } from '../components/DataViewer'
+import { PageMessage } from '../components/Spinner'
+import { Toasts, useToasts } from '../components/Toasts'
+import { useDebouncedValue, useLocalState, useSessionState } from '../hooks/storage'
+import { buildComparison } from '../lib/comparison'
+import { defaultFilters, matchesFilters, type FilterableRow } from '../lib/filters'
+import { passRate, runProgress, statsFor, trialStats, extraChips } from '../lib/stats'
+import { formatRunTimestamp } from '../lib/format'
+import { COLUMNS, COLUMN_KEYS, DEFAULT_HIDDEN_COLUMNS, comparisonSearchText, filterable, sortBy, sortValue, tableRows, toggleSort } from '../lib/table'
+import { writeQuery, type DashboardQuery } from '../lib/urlState'
+import { ComparisonTable, type ComparisonRow } from './components/ComparisonTable'
+import { PngExportModal } from './components/PngExportModal'
+import { ResultsTable } from './components/ResultsTable'
+import { FilterBar, type ExportFormat } from './components/FilterBar'
+import { Header, type RunState } from './components/Header'
+import { ResultPanel } from './components/ResultPanel'
+import { RunsSidebar } from './components/RunsSidebar'
+import { SettingsModal } from './components/SettingsModal'
+import { StatsPanel } from './components/StatsPanel'
+import { isActive, useActiveRun, useComparison } from './useRunData'
 
-type Toast = { id: number; message: string; type: 'error' | 'success' }
-
-const DASHBOARD_BODY_CLASS = 'h-screen flex flex-col bg-theme-bg font-sans text-theme-text'
-
-const PILL_TONES: Record<string, string> = {
-  not_started: 'text-zinc-400 bg-zinc-500/10 border border-zinc-500/40',
-  pending: 'text-blue-300 bg-blue-500/10 border border-blue-500/40',
-  running: 'text-cyan-300 bg-cyan-500/10 border border-cyan-500/40',
-  completed: 'text-emerald-300 bg-emerald-500/10 border border-emerald-500/40',
-  error: 'text-rose-300 bg-rose-500/10 border border-rose-500/40',
-  cancelled: 'text-amber-300 bg-amber-500/10 border border-amber-500/40',
+function download(blob: Blob, filename: string) {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(a.href)
 }
 
-const COLUMN_DEFS: ColumnDef[] = [
-  { key: 'function', label: 'Eval', width: '15%', type: 'string', align: 'left' },
-  { key: 'input', label: 'Input', width: '18%', type: 'string', align: 'left' },
-  { key: 'reference', label: 'Reference', width: '18%', type: 'string', align: 'left' },
-  { key: 'output', label: 'Output', width: '18%', type: 'string', align: 'left' },
-  { key: 'error', label: 'Error', width: '18%', type: 'string', align: 'left' },
-  { key: 'scores', label: 'Scores', width: '140px', type: 'number', align: 'left' },
-  { key: 'latency', label: 'Time', width: '70px', type: 'number', align: 'right' },
-]
-const DEFAULT_SEARCH_COLS = COLUMN_DEFS.map((col) => col.key)
+const OUTCOME_ONLY = (['all', 'failed', 'errors'] as const).map((outcome) => ({ ...defaultFilters(), outcome }))
 
-type DashboardRow = {
-  index: number
-  function: string
-  dataset: string
-  labels: string[]
-  result: NonNullable<RunResultRow['result']>
-  scores: Score[]
-  scoresSortValue: string | number
-  hasUrl: boolean
-  hasMessages: boolean
-  hasError: boolean
-  annotation: string
-  searchText: string
+function countOutcomes(groups: FilterableRow[][]) {
+  return Object.fromEntries(OUTCOME_ONLY.map((f) => [f.outcome, groups.filter((g) => g.some((row) => matchesFilters(f, row))).length])) as Record<OutcomeFilter, number>
 }
 
-type ComparisonRow = {
-  key: string
-  entry: ComparisonMatrixEntry
-  index: number
-  linkRunId?: string
-  linkIndex?: number | null
-  firstResult?: RunResultRow | null
-  searchText: string
+function notifyCompletion(runName: string, count: number) {
+  const show = () => new Notification(`${runName} complete`, { body: `${count} eval${count === 1 ? '' : 's'} finished`, icon: '/logo.png' })
+  if (Notification.permission === 'granted') show()
+  else if (Notification.permission === 'default') Notification.requestPermission().then((p) => p === 'granted' && show())
 }
 
-type ResizeState = { colKey: string; startX: number; startWidth: number; moved: boolean }
-type SettingsFormState = { concurrency: string; results_dir: string; timeout: string; completion_notifications: boolean }
-type DashboardQueryState = {
-  runId: string | null
-  comparisonRuns: ComparisonRun[]
-  search: string | null
-  hasFilters: boolean
-  filters: FilterState
-  sortState: SortStateItem[]
-  searchColumns: string[] | null
-}
+/** The results dashboard: the runs sidebar, then the active run's header, summary, filter bar and table, with a review panel for the open result. */
+export function DashboardPage({ query }: { query: DashboardQuery }) {
+  const { toasts, notify } = useToasts()
+  const [filters, setFilters] = useSessionState<FilterState>('ezvals:filters', defaultFilters, query.filters)
+  const [search, setSearch] = useSessionState('ezvals:search', '', query.search)
+  const [searchColumns, setSearchColumns] = useLocalState('ezvals:search_columns', COLUMN_KEYS, query.searchColumns)
+  const [hidden, setHidden] = useLocalState('ezvals:hidden_columns', DEFAULT_HIDDEN_COLUMNS)
+  const [widths, setWidths] = useLocalState<Record<string, number>>('ezvals:col_widths', {})
+  const [sort, setSort] = useState<SortRule[]>(query.sort)
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [modal, setModal] = useState<{ kind: 'settings'; config: Config } | { kind: 'png' } | null>(null)
+  const [configs, setConfigs] = useState<{ names: string[]; active: string | null }>({ names: [], active: null })
+  const [reloading, setReloading] = useState(false)
+  const [openIndex, setOpenIndex] = useState<number | null>(query.result)
+  const [panelEditing, setPanelEditing] = useState(false)
+  const [messagesOpen, setMessagesOpen] = useState(false)
+  // Only a click on the toggle is remembered; until then the sidebar shows on wide screens.
+  const [sidebarChoice, setSidebarChoice] = useLocalState<boolean | null>('ezvals:sidebar', null)
+  const sidebarOpen = sidebarChoice ?? matchMedia('(min-width: 1024px)').matches
 
-function parseScoreValueRule(raw: string) {
-  const parts = raw.split(',')
-  if (parts.length !== 3) return null
-  const key = (parts[0] || '').trim()
-  const opRaw = (parts[1] || '').trim()
-  const valueRaw = (parts[2] || '').trim()
-  const opMap: Record<string, '>' | '>=' | '<' | '<=' | '==' | '!='> = {
-    gt: '>',
-    gte: '>=',
-    lt: '<',
-    lte: '<=',
-    eq: '==',
-    neq: '!=',
-  }
-  const op = opMap[opRaw]
-  const value = Number(valueRaw)
-  if (!key || !op || Number.isNaN(value)) return null
-  return { key, op, value }
-}
-
-function parseScorePassedRule(raw: string) {
-  const parts = raw.split(',')
-  if (parts.length !== 2) return null
-  const key = (parts[0] || '').trim()
-  const valueRaw = (parts[1] || '').trim().toLowerCase()
-  if (!key || (valueRaw !== 'true' && valueRaw !== 'false')) return null
-  return { key, value: valueRaw === 'true' }
-}
-
-function parseSortRule(raw: string) {
-  const parts = raw.split(',')
-  if (parts.length < 2 || parts.length > 3) return null
-  const col = (parts[0] || '').trim()
-  const dirRaw = (parts[1] || '').trim()
-  const type = (parts[2] || 'string').trim()
-  if (!col || (dirRaw !== 'asc' && dirRaw !== 'desc') || !type) return null
-  return { col, dir: dirRaw, type } as SortStateItem
-}
-
-function serializeSortRule(rule: SortStateItem) {
-  const col = (rule.col || '').trim()
-  const dir = rule.dir
-  const type = (rule.type || 'string').trim()
-  if (!col || (dir !== 'asc' && dir !== 'desc') || !type) return null
-  return `${col},${dir},${type}`
-}
-
-function readDashboardQuery(params: URLSearchParams): DashboardQueryState {
-  const search = params.get('search')
-  const annotationParam = params.get('annotation')
-  const annotation = (annotationParam === 'yes' || annotationParam === 'no' || annotationParam === 'any')
-    ? annotationParam
-    : 'any'
-  const hasErrorRaw = params.get('has_error')
-  const hasUrlRaw = params.get('has_url')
-  const hasMessagesRaw = params.get('has_messages')
-
-  const hasError = hasErrorRaw === '1' ? true : hasErrorRaw === '0' ? false : null
-  const hasUrl = hasUrlRaw === '1' ? true : hasUrlRaw === '0' ? false : null
-  const hasMessages = hasMessagesRaw === '1' ? true : hasMessagesRaw === '0' ? false : null
-
-  const valueRules = params.getAll('score_value')
-    .map(parseScoreValueRule)
-    .filter((v): v is NonNullable<typeof v> => !!v)
-  const passedRules = params.getAll('score_passed')
-    .map(parseScorePassedRule)
-    .filter((v): v is NonNullable<typeof v> => !!v)
-
-  const datasetIn = params.getAll('dataset_in').map((x) => x.trim()).filter(Boolean)
-  const datasetOut = params.getAll('dataset_out').map((x) => x.trim()).filter(Boolean)
-  const labelIn = params.getAll('label_in').map((x) => x.trim()).filter(Boolean)
-  const labelOut = params.getAll('label_out').map((x) => x.trim()).filter(Boolean)
-  const sortState = params.getAll('sort')
-    .map(parseSortRule)
-    .filter((v): v is NonNullable<typeof v> => !!v)
-  const searchColumnsRaw = params.getAll('search_col')
-    .map((x) => x.trim())
-    .filter((x) => DEFAULT_SEARCH_COLS.includes(x))
-  const searchColumns = searchColumnsRaw.length ? Array.from(new Set(searchColumnsRaw)) : null
-
-  const runIdRaw = (params.get('run_id') || '').trim()
-  const runId = runIdRaw || null
-  const compareRunIds = params.getAll('compare_run_id').map((x) => x.trim()).filter(Boolean)
-  const effectiveCompareIds: string[] = []
-  if (compareRunIds.length) {
-    if (compareRunIds.length === 1 && runId) effectiveCompareIds.push(runId)
-    compareRunIds.forEach((id) => {
-      if (!effectiveCompareIds.includes(id)) effectiveCompareIds.push(id)
-    })
-  }
-
-  return {
-    runId: compareRunIds.length > 1 ? null : runId,
-    comparisonRuns: effectiveCompareIds.map((id) => ({ runId: id, runName: id })),
-    search,
-    hasFilters:
-      params.has('annotation') ||
-      params.has('has_error') ||
-      params.has('has_url') ||
-      params.has('has_messages') ||
-      params.has('score_value') ||
-      params.has('score_passed') ||
-      params.has('dataset_in') ||
-      params.has('dataset_out') ||
-      params.has('label_in') ||
-      params.has('label_out'),
-    filters: {
-      valueRules,
-      passedRules,
-      annotation,
-      selectedDatasets: { include: datasetIn, exclude: datasetOut },
-      selectedLabels: { include: labelIn, exclude: labelOut },
-      hasUrl,
-      hasMessages,
-      hasError,
-    },
-    sortState,
-    searchColumns,
-  }
-}
-
-function writeDashboardQuery(args: {
-  runId: string | null | undefined
-  comparisonRuns: ComparisonRun[] | NormalizedComparisonRun[]
-  search: string
-  searchColumns: string[]
-  filters: FilterState
-  sortState: SortStateItem[]
-}) {
-  const params = new URLSearchParams()
-  const normalizedComparison = normalizeComparisonRuns(args.comparisonRuns)
-  const isComparisonMode = normalizedComparison.length > 1
-  const runId = (args.runId || '').trim()
-  if (runId && !isComparisonMode) params.set('run_id', runId)
-
-  normalizedComparison.forEach((run) => {
-    params.append('compare_run_id', run.runId)
-  })
-
-  const q = args.search.trim()
-  if (q) params.set('search', q)
-  const normalizedSearchCols = Array.from(new Set(args.searchColumns.filter((key) => DEFAULT_SEARCH_COLS.includes(key))))
-  if (normalizedSearchCols.length > 0 && normalizedSearchCols.length < DEFAULT_SEARCH_COLS.length) {
-    normalizedSearchCols.forEach((key) => params.append('search_col', key))
-  }
-
-  const filters = args.filters || defaultFilters()
-  if (filters.annotation && filters.annotation !== 'any') params.set('annotation', filters.annotation)
-  if (filters.hasError !== null) params.set('has_error', filters.hasError ? '1' : '0')
-  if (filters.hasUrl !== null) params.set('has_url', filters.hasUrl ? '1' : '0')
-  if (filters.hasMessages !== null) params.set('has_messages', filters.hasMessages ? '1' : '0')
-  filters.selectedDatasets?.include?.forEach((value) => { if (value) params.append('dataset_in', value) })
-  filters.selectedDatasets?.exclude?.forEach((value) => { if (value) params.append('dataset_out', value) })
-  filters.selectedLabels?.include?.forEach((value) => { if (value) params.append('label_in', value) })
-  filters.selectedLabels?.exclude?.forEach((value) => { if (value) params.append('label_out', value) })
-
-  const valueOpMap: Record<string, string> = {
-    '>': 'gt',
-    '>=': 'gte',
-    '<': 'lt',
-    '<=': 'lte',
-    '==': 'eq',
-    '!=': 'neq',
-  }
-  filters.valueRules?.forEach((rule) => {
-    const key = (rule.key || '').trim()
-    const op = valueOpMap[rule.op]
-    if (!key || !op || Number.isNaN(rule.value)) return
-    params.append('score_value', `${key},${op},${rule.value}`)
-  })
-  filters.passedRules?.forEach((rule) => {
-    const key = (rule.key || '').trim()
-    if (!key || typeof rule.value !== 'boolean') return
-    params.append('score_passed', `${key},${rule.value ? 'true' : 'false'}`)
-  })
-
-  args.sortState.forEach((rule) => {
-    const serialized = serializeSortRule(rule)
-    if (serialized) params.append('sort', serialized)
-  })
-  return params
-}
-
-function hasRunningResults(data: RunSummary | null) {
-  if (!data || data.is_paused) return false
-  return (data.results || []).some((r) => ['pending', 'running'].includes(r.result?.status))
-}
-
-function hasActiveResults(data: RunSummary | null) {
-  return (data?.results || []).some((r) => ['pending', 'running'].includes(r.result?.status))
-}
-
-function hasRunningRows(data: RunSummary | null) {
-  return (data?.results || []).some((r) => r.result?.status === 'running')
-}
-
-function buildRowSearchText(row: RunResultRow, searchColumns: Set<string>) {
-  const result = row.result || {}
-  const scores = result.scores || []
-  const parts: string[] = []
-  if (searchColumns.has('function')) parts.push(row.function, row.dataset, ...(row.labels || []))
-  if (searchColumns.has('input')) parts.push(result.input != null ? formatValue(result.input) : '')
-  if (searchColumns.has('reference')) parts.push(result.reference != null ? formatValue(result.reference) : '')
-  if (searchColumns.has('output')) parts.push(result.output != null ? formatValue(result.output) : '')
-  if (searchColumns.has('error')) parts.push(result.error || '')
-  if (searchColumns.has('scores')) {
-    parts.push(result.annotation || '')
-    scores.forEach((s) => {
-      parts.push(`${s.key} ${s.value ?? ''} ${s.passed ?? ''}`)
-    })
-  }
-  if (searchColumns.has('latency')) parts.push(result.latency != null ? `${result.latency}` : '')
-  return parts.filter(Boolean).join(' ').toLowerCase()
-}
-
-function buildComparisonSearchText(entry: ComparisonMatrixEntry, comparisonRuns: NormalizedComparisonRun[], searchColumns: Set<string>) {
-  const meta = entry?._meta as { function?: string; dataset?: string; labels?: string[] } | undefined
-  const parts: string[] = []
-  if (searchColumns.has('function')) parts.push(meta?.function || '', meta?.dataset || '', ...(meta?.labels || []))
-  comparisonRuns.forEach((run) => {
-    const row = entry?.[run.runId] as RunResultRow | undefined
-    const result = row?.result
-    if (!result) return
-    if (searchColumns.has('input')) parts.push(result.input != null ? formatValue(result.input) : '')
-    if (searchColumns.has('reference')) parts.push(result.reference != null ? formatValue(result.reference) : '')
-    if (searchColumns.has('output')) parts.push(result.output != null ? formatValue(result.output) : '')
-    if (searchColumns.has('error')) parts.push(result.error || '')
-    if (searchColumns.has('scores')) {
-      parts.push(result.annotation || '')
-      ;(result.scores || []).forEach((s) => {
-        parts.push(`${s.key} ${s.value ?? ''} ${s.passed ?? ''}`)
-      })
-    }
-    if (searchColumns.has('latency')) parts.push(result.latency != null ? `${result.latency}` : '')
-  })
-  return parts.filter(Boolean).join(' ').toLowerCase()
-}
-
-function getRowSortValue(row: DashboardRow, col: string) {
-  const result = row.result || {}
-  if (col === 'function') return row.function || ''
-  if (col === 'input') return formatValue(result.input)
-  if (col === 'reference') return formatValue(result.reference)
-  if (col === 'output') return formatValue(result.output)
-  if (col === 'error') return result.error || ''
-  if (col === 'scores') {
-    const scores = result.scores || []
-    if (!scores.length) return ''
-    const first = scores[0]
-    if (first.value != null) return typeof first.value === 'number' ? first.value : String(first.value)
-    if (first.passed === true) return 1
-    if (first.passed === false) return 0
-    return ''
-  }
-  if (col === 'latency') return result.latency ?? ''
-  return ''
-}
-
-function getComparisonSortValue(row: ComparisonRow, col: string) {
-  if (col === 'function') return row.entry?._meta?.function || ''
-  if (col === 'input') return formatValue(row.firstResult?.result?.input)
-  if (col === 'reference') return formatValue(row.firstResult?.result?.reference)
-  if (col.startsWith('output-')) {
-    const runId = col.slice('output-'.length)
-    const entry = row.entry?.[runId] as RunResultRow | undefined
-    const result = entry?.result
-    if (!result) return ''
-    const scores = result.scores || []
-    const scoreText = scores.map((s) => `${s.key}:${s.value ?? ''}`).join(' ')
-    return `${formatValue(result.output)} ${result.error || ''} ${scoreText}`
-  }
-  return ''
-}
-
-export default function DashboardPage() {
-  const [data, setData] = useState<RunSummary | null>(null)
-  const [sessionRuns, setSessionRuns] = useState<SessionRun[]>([])
-  const [comparisonData, setComparisonData] = useState<Record<string, RunSummary>>({})
-  const [error, setError] = useState<Error | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [filtersOpen, setFiltersOpen] = useState(false)
-  const [columnsOpen, setColumnsOpen] = useState(false)
-  const [exportOpen, setExportOpen] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [pngExportOpen, setPngExportOpen] = useState(false)
-  const [runDropdownOpen, setRunDropdownOpen] = useState(false)
-  const [compareDropdownOpen, setCompareDropdownOpen] = useState(false)
-  const [addCompareOpen, setAddCompareOpen] = useState(false)
-  const [editingRunName, setEditingRunName] = useState(false)
-  const [runNameDraft, setRunNameDraft] = useState('')
-  const [filters, setFilters] = useSessionStorageState<FilterState>('ezvals:filters', defaultFilters)
-  const [search, setSearch] = useSessionStorageState<string>('ezvals:search', '')
-  const [searchColumns, setSearchColumns] = useLocalStorageState<string[]>('ezvals:search_columns', DEFAULT_SEARCH_COLS)
-  const [hiddenColumns, setHiddenColumns] = useLocalStorageState<string[]>('ezvals:hidden_columns', Array.from(DEFAULT_HIDDEN_COLS))
-  const [colWidths, setColWidths] = useLocalStorageState<Record<string, number>>('ezvals:col_widths', {})
-  const [comparisonRuns, setComparisonRuns] = useSessionStorageState<ComparisonRun[]>('ezvals:comparisonRuns', [])
-  const [sortState, setSortState] = useState<SortStateItem[]>([])
-  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set())
-  const [isRunningOverride, setIsRunningOverride] = useState(false)
-  const [isRestartingServer, setIsRestartingServer] = useState(false)
-  const [hasRunBefore, setHasRunBefore] = useState(false)
-  const [animateStats, setAnimateStats] = useState(false)
-  const [settingsForm, setSettingsForm] = useState<SettingsFormState>({ concurrency: '', results_dir: '', timeout: '', completion_notifications: false })
-  const [completionNotificationsEnabled, setCompletionNotificationsEnabled] = useState(false)
-  const [queryActiveRunId, setQueryActiveRunId] = useState<string | null>(null)
-  const [configNames, setConfigNames] = useState<string[]>([])
-  const [activeConfig, setActiveConfig] = useState<string | null>(null)
-  const [toasts, setToasts] = useState<Toast[]>([])
-  const toastIdRef = useRef(0)
-
-  const addToast = useCallback((message: string, type: 'error' | 'success' = 'error') => {
-    const id = ++toastIdRef.current
-    setToasts((prev) => [...prev, { id, message, type }])
-    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000)
-  }, [])
-
-  const filtersToggleRef = useRef<HTMLButtonElement | null>(null)
-  const filtersMenuRef = useRef<HTMLDivElement | null>(null)
-  const columnsToggleRef = useRef<HTMLButtonElement | null>(null)
-  const columnsMenuRef = useRef<HTMLDivElement | null>(null)
-  const exportToggleRef = useRef<HTMLButtonElement | null>(null)
-  const exportMenuRef = useRef<HTMLDivElement | null>(null)
-  const compareDropdownAnchorRef = useRef<HTMLButtonElement | null>(null)
-  const addCompareAnchorRef = useRef<HTMLButtonElement | null>(null)
-  const runDropdownExpandedRef = useRef<HTMLButtonElement | null>(null)
-  const selectAllRef = useRef<HTMLInputElement | null>(null)
-  const lastCheckedRef = useRef<number | null>(null)
-  const resizeStateRef = useRef<ResizeState | null>(null)
-  const suppressSortUntilRef = useRef<number>(0)
-  const headerRefs = useRef<Record<string, HTMLElement | null>>({})
-  const isHydratingFromQueryRef = useRef(false)
-  const previousRunActiveRef = useRef<boolean | null>(null)
-  const notificationsDraftRef = useRef(false)
-
-  const debouncedSearch = useDebouncedValue(search, 120)
-  const normalizedComparisonRuns = useMemo(() => normalizeComparisonRuns(comparisonRuns), [comparisonRuns])
-  const isComparisonMode = normalizedComparisonRuns.length > 1
-  const comparisonDataForMode = useMemo<Record<string, RunSummary>>(() => {
-    if (!isComparisonMode) return comparisonData
-    const selectedRunIds = new Set(normalizedComparisonRuns.map((run) => run.runId))
-    return Object.fromEntries(Object.entries(comparisonData).filter(([runId]) => selectedRunIds.has(runId)))
-  }, [comparisonData, isComparisonMode, normalizedComparisonRuns])
-  const comparisonMatrix = useMemo<Record<string, ComparisonMatrixEntry>>(
-    () => buildComparisonMatrix(comparisonDataForMode),
-    [comparisonDataForMode],
-  )
-  const comparisonDataCount = useMemo(() => Object.keys(comparisonData).length, [comparisonData])
-  const searchColumnsSet = useMemo(() => new Set(searchColumns.filter((key) => DEFAULT_SEARCH_COLS.includes(key))), [searchColumns])
-  const hasFilters = isFilterActive(filters, debouncedSearch)
-
-  const loadConfigSettings = useCallback(async () => {
-    const resp = await fetch('/api/config')
-    if (!resp.ok) throw new Error(`Config load failed: HTTP ${resp.status}`)
-    const config = await resp.json() as Config
-    const notificationsEnabled = config.completion_notifications === true
-    setCompletionNotificationsEnabled(notificationsEnabled)
-    notificationsDraftRef.current = notificationsEnabled
-    setSettingsForm({
-      concurrency: config.concurrency != null ? String(config.concurrency) : '',
-      results_dir: config.results_dir ?? '',
-      timeout: config.timeout != null ? String(config.timeout) : '',
-      completion_notifications: notificationsEnabled,
-    })
-    return config
-  }, [])
-
-  const loadCompletionNotificationsSetting = useCallback(async () => {
-    const resp = await fetch('/api/config')
-    if (!resp.ok) throw new Error(`Config load failed: HTTP ${resp.status}`)
-    const config = await resp.json() as Config
-    const notificationsEnabled = config.completion_notifications === true
-    setCompletionNotificationsEnabled(notificationsEnabled)
-    notificationsDraftRef.current = notificationsEnabled
-    return notificationsEnabled
-  }, [])
-
-  const loadConfigs = useCallback(async () => {
-    try {
-      const resp = await fetch('/api/configs')
-      if (!resp.ok) return
-      const data = await resp.json()
-      setConfigNames(data.names || [])
-      setActiveConfig(data.active || null)
-    } catch {
-      // ignore
-    }
-  }, [])
-
-  const handleConfigSelect = useCallback(async (name: string | null) => {
-    try {
-      const resp = await fetch('/api/configs/select', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-      })
-      if (!resp.ok) return
-      const result = await resp.json()
-      setActiveConfig(result.active || null)
-    } catch {
-      // ignore
-    }
-  }, [])
+  const comparisonIds = useRef(query.compareRunIds)
+  const { data, sessionRuns, error, reload, patchResult } = useActiveRun(true)
+  const comparison = useComparison(data, comparisonIds.current)
+  const debouncedSearch = useDebouncedValue(search, 120).trim().toLowerCase()
+  const filtering = debouncedSearch !== '' || JSON.stringify(filters) !== JSON.stringify(defaultFilters())
 
   useEffect(() => {
     document.title = 'EZVals'
-    document.body.className = DASHBOARD_BODY_CLASS
-    return () => {
-      document.body.className = ''
-    }
+    api.configs().then(setConfigs, () => {})
   }, [])
 
+  // Opening a link to a specific run makes it the active one.
+  const requestedRun = useRef(query.runId)
   useEffect(() => {
-    setComparisonRuns((prev) => {
-      const normalized = normalizeComparisonRuns(prev)
-      const same = JSON.stringify(normalized) === JSON.stringify(prev)
-      return same ? prev : normalized
-    })
-  }, [setComparisonRuns])
-
-  useEffect(() => {
-    if (!sessionRuns.length) return
-    setComparisonRuns((prev) => {
-      const normalized = normalizeComparisonRuns(prev)
-      let changed = false
-      const updated = normalized.map((r) => {
-        if (r.runName !== r.runId) return r
-        const match = sessionRuns.find((sr) => sr.run_id === r.runId)
-        if (match && match.run_name !== r.runId) {
-          changed = true
-          return { ...r, runName: match.run_name }
-        }
-        return r
-      })
-      return changed ? updated : prev
-    })
-  }, [sessionRuns, setComparisonRuns])
-
-  const loadResults = useCallback(async (silent = false) => {
-    if (!silent) {
-      setLoading(true)
-      setError(null)
+    if (data && requestedRun.current && requestedRun.current !== data.run_id) {
+      api.activate(requestedRun.current).then(reload, () => {})
     }
-    try {
-      const resp = await fetch('/results')
-      if (!resp.ok) throw new Error('Failed to load results')
-      const next = await resp.json() as RunSummary
-      setData(next)
-      setLoading(false)
-      setError(null)
-      setHasRunBefore((prev) => prev || (next.results || []).some((r) => r.result?.status && r.result.status !== 'not_started'))
-      setComparisonData((prev) => ({ ...prev, [next.run_id]: next }))
-      if (next.session_name) {
-        const runsResp = await fetch(`/api/sessions/${encodeURIComponent(next.session_name)}/runs`)
-        if (runsResp.ok) {
-          const runsData = await runsResp.json() as { runs?: SessionRun[] }
-          setSessionRuns(runsData.runs || [])
-        }
-      }
-    } catch (err) {
-      const nextError = err instanceof Error ? err : new Error('Failed to load results')
-      setError(nextError)
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    loadResults()
-    loadConfigs()
-  }, [loadResults, loadConfigs])
-
-  useEffect(() => {
-    let active = true
-    async function loadInitialConfigSettings() {
-      try {
-        const notificationsEnabled = await loadCompletionNotificationsSetting()
-        if (!active) return
-        setCompletionNotificationsEnabled(notificationsEnabled)
-      } catch {
-        // ignore config load failures
-      }
-    }
-    loadInitialConfigSettings()
-    return () => { active = false }
-  }, [loadCompletionNotificationsSetting])
+    if (data) requestedRun.current = null
+  }, [data, reload])
 
   useEffect(() => {
     if (!data) return
-    const isActive = hasActiveResults(data)
-    if (previousRunActiveRef.current == null) {
-      previousRunActiveRef.current = isActive
-      return
-    }
-    const justCompleted = previousRunActiveRef.current && !isActive
-    previousRunActiveRef.current = isActive
-    if (!justCompleted) return
+    const params = writeQuery(new URLSearchParams(window.location.search), { runId: data.run_id, compareRunIds: comparison.runs.map((r) => r.runId), search, searchColumns, filters, sort, result: openIndex })
+    history.replaceState(null, '', params.size ? `?${params}` : window.location.pathname)
+  }, [comparison.runs, data, filters, search, searchColumns, sort, openIndex])
 
-    async function maybeNotifyOnCompletion() {
-      let enabled = completionNotificationsEnabled
-      if (!enabled) {
-        try {
-          enabled = await loadCompletionNotificationsSetting()
-        } catch {
-          enabled = false
-        }
-      }
-      if (!enabled) return
-      if (typeof window === 'undefined' || !('Notification' in window)) return
-
-      const title = `${data.run_name || 'Run'} complete`
-      const body = `${data.total_evaluations || 0} eval${(data.total_evaluations || 0) === 1 ? '' : 's'} finished`
-      const notify = () => {
-        try {
-          new Notification(title, { body, icon: '/logo.png' })
-        } catch {
-          // ignore notification failures
-        }
-      }
-
-      if (Notification.permission === 'granted') {
-        notify()
-        return
-      }
-      if (Notification.permission === 'default') {
-        Notification.requestPermission().then((permission) => {
-          if (permission === 'granted') notify()
-        }).catch(() => {})
-      }
-    }
-
-    void maybeNotifyOnCompletion()
-  }, [data, completionNotificationsEnabled, loadCompletionNotificationsSetting])
-
+  const wasActive = useRef<boolean | null>(null)
   useEffect(() => {
     if (!data) return
-    const restored = normalizedComparisonRuns
-    if (restored.length < 2) return
-
-    let active = true
-    async function fetchMissing() {
-      for (const run of restored) {
-        if (!active) return
-        if (run.runId === data.run_id) {
-          setComparisonData((prev) => ({ ...prev, [run.runId]: data }))
-          continue
-        }
-        if (comparisonData[run.runId]) continue
-        try {
-          const resp = await fetch(`/api/runs/${encodeURIComponent(run.runId)}/data`)
-          if (!resp.ok) continue
-          const runData = await resp.json() as RunSummary
-          setComparisonData((prev) => ({ ...prev, [run.runId]: runData }))
-        } catch {
-          // ignore fetch failures
-        }
-      }
+    const active = isActive(data)
+    if (wasActive.current && !active && 'Notification' in window) {
+      api.config().then((c) => c.completion_notifications && notifyCompletion(data.run_name ?? 'Run', data.total_evaluations ?? 0), () => {})
     }
-
-    fetchMissing()
-    return () => { active = false }
-  }, [data, normalizedComparisonRuns, comparisonData])
-
-  useEffect(() => {
-    if (!data || isComparisonMode) return undefined
-    const shouldRefresh = hasRunningRows(data) || (!data.is_paused && hasActiveResults(data))
-    if (!shouldRefresh) return undefined
-    const timer = setTimeout(() => {
-      loadResults(true)
-    }, 500)
-    return () => clearTimeout(timer)
-  }, [data, isComparisonMode, loadResults])
-
-  useEffect(() => {
-    if (!data) return
-    if (!hasRunningResults(data)) setIsRunningOverride(false)
+    wasActive.current = active
   }, [data])
 
-  useEffect(() => {
-    isHydratingFromQueryRef.current = true
-    const savedY = sessionStorage.getItem('ezvals:scrollY')
-    const params = new URLSearchParams(window.location.search)
-    const query = readDashboardQuery(params)
-
-    if (query.search != null) setSearch(query.search)
-    if (query.hasFilters) setFilters(query.filters)
-    if (query.searchColumns) setSearchColumns(query.searchColumns)
-    if (params.has('sort')) setSortState(query.sortState)
-    if (query.comparisonRuns.length) setComparisonRuns(query.comparisonRuns)
-    if (query.runId) setQueryActiveRunId(query.runId)
-
-    if (savedY != null) {
-      window.scrollTo(0, parseInt(savedY, 10))
-      sessionStorage.removeItem('ezvals:scrollY')
+  // Rows matching everything but the outcome switch, so each outcome can show its count.
+  const { rows, outcomeCounts } = useMemo(() => {
+    const matching = tableRows(data?.results ?? [], new Set(searchColumns))
+      .filter((r) => (!debouncedSearch || r.searchText.includes(debouncedSearch)) && matchesFilters({ ...filters, outcome: 'all' }, r))
+    return {
+      rows: sortBy(matching.filter((r) => matchesFilters(filters, r)), sort, (r, col) => sortValue(r.result, r.row, col)),
+      outcomeCounts: countOutcomes(matching.map((r) => [r])),
     }
-    if (params.has('scroll')) {
-      params.delete('scroll')
-      const queryString = params.toString()
-      const nextUrl = queryString ? `${window.location.pathname}?${queryString}` : window.location.pathname
-      history.replaceState(null, '', nextUrl)
-    }
-    isHydratingFromQueryRef.current = false
-  }, [setComparisonRuns, setFilters, setSearch, setSearchColumns])
+  }, [data, debouncedSearch, filters, searchColumns, sort])
 
   useEffect(() => {
-    if (!data || isHydratingFromQueryRef.current) return
-    const params = writeDashboardQuery({
-      runId: data.run_id,
-      comparisonRuns: normalizedComparisonRuns,
-      search,
-      searchColumns,
-      filters,
-      sortState,
+    if (openIndex == null || comparison.comparing || !data) return
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement
+      if (e.defaultPrevented || panelEditing || messagesOpen || modal || target.closest('input, textarea, select, [role="menu"], [role="dialog"]')) return
+      const at = rows.findIndex((r) => r.index === openIndex)
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        const next = rows[at + (e.key === 'ArrowDown' ? 1 : -1)]
+        if (next) setOpenIndex(next.index)
+      } else if (e.key === 'Escape') setOpenIndex(null)
+      else if (e.key === 'Enter' && target === document.body) window.location.href = `/runs/${data.run_id}/results/${openIndex}`
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [comparison.comparing, data, messagesOpen, modal, openIndex, panelEditing, rows])
+
+  const comparisonView = useMemo(() => {
+    if (!comparison.comparing) return null
+    const columns = new Set(searchColumns)
+    const matching = buildComparison(comparison.runs, comparison.data)
+      .map((entry, index) => ({ ...entry, index, filterable: Object.values(entry.byRun).map(({ row }) => filterable(row)) }))
+      .filter((entry) => (!debouncedSearch || comparisonSearchText(entry, comparison.runs, columns).includes(debouncedSearch))
+        && entry.filterable.some((row) => matchesFilters({ ...filters, outcome: 'all' }, row)))
+    const rows: ComparisonRow[] = sortBy(matching.filter((entry) => entry.filterable.some((row) => matchesFilters(filters, row))), sort, (entry, col) => {
+      const runId = col.startsWith('output-') ? col.slice(7) : comparison.runs.find((r) => entry.byRun[r.runId])?.runId
+      const match = runId ? entry.byRun[runId] : undefined
+      return sortValue(match?.row.result, entry, col.startsWith('output-') ? 'output' : col)
     })
-    const query = params.toString()
-    const nextUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname
-    const currentUrl = `${window.location.pathname}${window.location.search}`
-    if (nextUrl !== currentUrl) history.replaceState(null, '', nextUrl)
-  }, [data, filters, normalizedComparisonRuns, search, searchColumns, sortState])
+    return { rows, outcomeCounts: countOutcomes(matching.map((entry) => entry.filterable)) }
+  }, [comparison, debouncedSearch, filters, searchColumns, sort])
+  const comparisonRows = comparisonView?.rows ?? []
 
-  useEffect(() => {
-    if (!queryActiveRunId || !data) return
-    if (data.run_id === queryActiveRunId) {
-      setQueryActiveRunId(null)
+  const facets = useMemo(() => {
+    const results = comparison.comparing ? Object.values(comparison.data).flatMap((r) => r.results) : data?.results ?? []
+    const scoreKeys: Record<string, { numeric: boolean; passed: boolean }> = {}
+    for (const { result } of results) {
+      for (const s of result.scores ?? []) {
+        const meta = (scoreKeys[s.key] ??= { numeric: false, passed: false })
+        if (typeof s.value === 'number') meta.numeric = true
+        if (s.passed != null) meta.passed = true
+      }
+    }
+    const sorted = (values: (string | null | undefined)[]) => [...new Set(values.filter((v): v is string => !!v))].sort()
+    return { scoreKeys, datasets: sorted(results.map((r) => r.dataset)), labels: sorted(results.flatMap((r) => r.labels ?? [])) }
+  }, [comparison, data])
+
+  const saveAnnotation = useCallback(async (runId: string, index: number, annotation: string | null) => {
+    await api.updateResult(runId, index, { annotation })
+    if (runId === data?.run_id) patchResult(index, { annotation })
+    else comparison.patchResult(runId, index, { annotation })
+  }, [comparison, data?.run_id, patchResult])
+
+  const act = useCallback(async (action: () => Promise<unknown>, failure: string) => {
+    try {
+      await action()
+    } catch (err) {
+      notify(`${failure}: ${(err as Error).message}`)
+    }
+    await reload()
+  }, [notify, reload])
+
+  if (error && !data) return <PageMessage title="Couldn't load results">Check that <code className="font-mono">ezvals serve</code> is still running, then refresh the page.</PageMessage>
+  if (!data) return <PageMessage loading title="Loading results…" />
+
+  const keyOrder = (data.score_chips ?? []).map((c) => c.key)
+  const statsRows = filtering ? rows.map((r) => r.row) : data.results
+  const stats = statsFor(statsRows, keyOrder)
+  const progress = runProgress(data)
+  const comparisonStats = Object.fromEntries(comparison.runs.map((run) => [
+    run.runId,
+    statsFor(comparisonRows.flatMap((row) => (row.byRun[run.runId] ? [row.byRun[run.runId].row] : [])), keyOrder),
+  ]))
+  const previous = sessionRuns[sessionRuns.findIndex((r) => r.run_id === data.run_id) + 1]
+  const previousRate = previous && passRate(previous.total_passed ?? 0, previous.total_failed ?? 0, previous.total_errors ?? 0)
+  const delta = !progress.running && !filtering && stats.rate != null && previousRate != null && sessionRuns.some((r) => r.run_id === data.run_id)
+    ? { points: Math.round(stats.rate * 100) - Math.round(previousRate * 100), previous: previous.run_name, onCompare: () => comparison.start([data.run_id, previous.run_id]) }
+    : null
+  const selectedIndices = [...selected].sort((a, b) => a - b)
+  const trend = [...sessionRuns].reverse().slice(-12).flatMap((run) => {
+    const current = run.run_id === data.run_id
+    const rate = current ? statsFor(data.results).rate : passRate(run.total_passed ?? 0, run.total_failed ?? 0, run.total_errors ?? 0)
+    return rate == null ? [] : [{ name: run.run_name, rate, current }]
+  })
+  // A run that hasn't started has no run file yet, so the session's runs don't include it.
+  const runs = sessionRuns.some((r) => r.run_id === data.run_id) ? sessionRuns : [{ run_id: data.run_id, run_name: data.run_name ?? '' }, ...sessionRuns]
+  const openRow = openIndex != null && !comparison.comparing ? data.results[openIndex] : undefined
+  const openAt = rows.findIndex((r) => r.index === openIndex)
+  const runState: RunState = comparison.comparing ? 'compare' : data.is_paused && isActive(data) ? 'paused' : isActive(data) ? 'running' : 'idle'
+
+  const exportAs = async (format: ExportFormat) => {
+    if (format === 'png') return setModal({ kind: 'png' })
+    if (format !== 'markdown') {
+      window.location.href = api.exportUrl(data.run_id, format)
       return
     }
-    let active = true
-    async function activateQueryRun() {
-      try {
-        const resp = await fetch(`/api/runs/${encodeURIComponent(queryActiveRunId)}/activate`, { method: 'POST' })
-        if (resp.ok && active) await loadResults(true)
-      } catch {
-        // ignore activation failures
-      } finally {
-        if (active) setQueryActiveRunId(null)
-      }
+    const payload = {
+      visible_indices: rows.map((r) => r.index),
+      visible_columns: COLUMNS.map((c) => c.key).filter((k) => !hidden.includes(k)),
+      stats: { total: data.results.length, filtered: comparison.comparing ? comparisonRows.length : rows.length, avgLatency: stats.avgLatency, chips: stats.chips },
+      run_name: data.run_name,
+      session_name: data.session_name,
+      comparison_mode: comparison.comparing,
+      comparison_runs: comparison.runs.map((run) => ({
+        run_id: run.runId,
+        run_name: run.runName,
+        chips: comparisonStats[run.runId].chips,
+        avg_latency: comparisonStats[run.runId].avgLatency,
+        results: comparisonRows.flatMap((row) => (row.byRun[run.runId] ? [row.byRun[run.runId].row] : [])),
+      })),
     }
-    activateQueryRun()
-    return () => { active = false }
-  }, [data, loadResults, queryActiveRunId])
-
-  useEffect(() => {
-    if (!filtersOpen && !columnsOpen && !exportOpen) return
-    const handleClick = (event: MouseEvent) => {
-      const target = event.target as Node
-      if (filtersOpen && filtersMenuRef.current && !filtersMenuRef.current.contains(target) && !filtersToggleRef.current?.contains(target)) {
-        setFiltersOpen(false)
-      }
-      if (columnsOpen && columnsMenuRef.current && !columnsMenuRef.current.contains(target) && !columnsToggleRef.current?.contains(target)) {
-        setColumnsOpen(false)
-      }
-      if (exportOpen && exportMenuRef.current && !exportMenuRef.current.contains(target) && !exportToggleRef.current?.contains(target)) {
-        setExportOpen(false)
-      }
-    }
-    document.addEventListener('click', handleClick)
-    return () => document.removeEventListener('click', handleClick)
-  }, [filtersOpen, columnsOpen, exportOpen])
-
-  const allResultsForFilters = useMemo(() => {
-    if (isComparisonMode) {
-      return Object.values(comparisonDataForMode).flatMap((run) => run?.results || [])
-    }
-    return data?.results || []
-  }, [comparisonDataForMode, data, isComparisonMode])
-
-  const scoreKeysMeta = useMemo(() => computeScoreKeyMeta(allResultsForFilters), [allResultsForFilters])
-  const datasetLabels = useMemo(() => computeDatasetLabels(allResultsForFilters), [allResultsForFilters])
-
-  const [selectedScoreKey, setSelectedScoreKey] = useState<string>('')
-
-  useEffect(() => {
-    if (!scoreKeysMeta.all.length) return
-    if (!scoreKeysMeta.all.includes(selectedScoreKey)) {
-      setSelectedScoreKey(scoreKeysMeta.all[0])
-    }
-  }, [scoreKeysMeta, selectedScoreKey])
-
-  const rows = useMemo<DashboardRow[]>(() => {
-    return (data?.results || []).map((r, index) => {
-      const result = (r.result || {}) as NonNullable<RunResultRow['result']>
-      const scores = (result.scores || []) as Score[]
-      let scoresSortValue: string | number = ''
-      if (scores.length) {
-        const first = scores[0]
-        if (first.value != null) scoresSortValue = typeof first.value === 'number' ? first.value : String(first.value)
-        else if (first.passed === true) scoresSortValue = 1
-        else if (first.passed === false) scoresSortValue = 0
-      }
-      return {
-        index,
-        function: r.function,
-        dataset: r.dataset || '',
-        labels: r.labels || [],
-        result,
-        scores,
-        scoresSortValue,
-        hasUrl: !!(result.trace_data?.trace_url),
-        hasMessages: !!(result.trace_data?.messages?.length),
-        hasError: !!result.error,
-        annotation: result.annotation || '',
-        searchText: buildRowSearchText(r, searchColumnsSet),
-      }
-    })
-  }, [data, searchColumnsSet])
-
-  const filteredRows = useMemo(() => {
-    if (!rows.length) return []
-    const q = debouncedSearch.trim().toLowerCase()
-    return rows.filter((row) => {
-      if (q && !row.searchText.includes(q)) return false
-      return matchesFiltersForData(filters, row)
-    })
-  }, [rows, debouncedSearch, filters])
-
-  const sortedRows = useMemo(() => {
-    if (!sortState.length) return filteredRows
-    const next = [...filteredRows]
-    next.sort((a, b) => {
-      for (const s of sortState) {
-        const va = parseSortValue(getRowSortValue(a, s.col), s.type || 'string')
-        const vb = parseSortValue(getRowSortValue(b, s.col), s.type || 'string')
-        const cmp = compareValues(va, vb, s.type || 'string', s.col)
-        if (cmp !== 0) return s.dir === 'asc' ? cmp : -cmp
-      }
-      return a.index - b.index
-    })
-    return next
-  }, [filteredRows, sortState])
-
-  const comparisonRows = useMemo<ComparisonRow[]>(() => {
-    if (!isComparisonMode) return []
-    const keys = Object.keys(comparisonMatrix).sort()
-    return keys.map((key, index) => {
-      const entry = comparisonMatrix[key]
-      let linkRunId = data?.run_id
-      let linkIndex = entry?._indices?.[data?.run_id]
-      if (linkIndex == null) {
-        for (const run of normalizedComparisonRuns) {
-          if (entry?._indices?.[run.runId] != null) {
-            linkRunId = run.runId
-            linkIndex = entry._indices[run.runId]
-            break
-          }
-        }
-      }
-      let firstResult: RunResultRow | null = null
-      for (const run of normalizedComparisonRuns) {
-        const rowEntry = entry?.[run.runId] as RunResultRow | undefined
-        if (rowEntry?.result) {
-          firstResult = rowEntry
-          break
-        }
-      }
-      return {
-        key,
-        entry,
-        index,
-        linkRunId,
-        linkIndex,
-        firstResult,
-        searchText: buildComparisonSearchText(entry, normalizedComparisonRuns, searchColumnsSet),
-      }
-    })
-  }, [comparisonMatrix, data, isComparisonMode, normalizedComparisonRuns, searchColumnsSet])
-
-  const filteredComparisonRows = useMemo(() => {
-    if (!isComparisonMode) return []
-    const q = debouncedSearch.trim().toLowerCase()
-    return comparisonRows.filter((row) => {
-      if (q && !row.searchText.includes(q)) return false
-      if (!hasFilters) return true
-      return normalizedComparisonRuns.some((run) => {
-        const entry = row.entry?.[run.runId] as RunResultRow | undefined
-        const result = entry?.result
-        if (!result) return false
-        return matchesFiltersForData(filters, {
-          annotation: result.annotation,
-          dataset: entry?.dataset ?? row.entry?._meta?.dataset ?? '',
-          labels: entry?.labels ?? row.entry?._meta?.labels ?? [],
-          scores: result.scores || [],
-          hasError: !!result.error,
-          hasUrl: !!(result.trace_data?.trace_url),
-          hasMessages: !!(result.trace_data?.messages?.length),
-        })
-      })
-    })
-  }, [comparisonRows, debouncedSearch, filters, hasFilters, isComparisonMode, normalizedComparisonRuns])
-
-  const sortedComparisonRows = useMemo(() => {
-    if (!sortState.length) return filteredComparisonRows
-    const next = [...filteredComparisonRows]
-    next.sort((a, b) => {
-      for (const s of sortState) {
-        const va = parseSortValue(getComparisonSortValue(a, s.col), s.type || 'string')
-        const vb = parseSortValue(getComparisonSortValue(b, s.col), s.type || 'string')
-        const cmp = compareValues(va, vb, s.type || 'string', s.col)
-        if (cmp !== 0) return s.dir === 'asc' ? cmp : -cmp
-      }
-      return a.index - b.index
-    })
-    return next
-  }, [filteredComparisonRows, sortState])
-
-  useEffect(() => {
-    if (!selectAllRef.current) return
-    const visibleIndices = sortedRows.map((row) => row.index)
-    const visibleSelected = visibleIndices.filter((idx) => selectedIndices.has(idx)).length
-    selectAllRef.current.indeterminate = visibleSelected > 0 && visibleSelected < visibleIndices.length
-  }, [sortedRows, selectedIndices])
-
-  useEffect(() => {
-    setAnimateStats(false)
-    const handle = requestAnimationFrame(() => setAnimateStats(true))
-    return () => cancelAnimationFrame(handle)
-  }, [data, hasFilters, isComparisonMode, normalizedComparisonRuns.length])
-
-  const hiddenSet = useMemo(() => new Set(hiddenColumns), [hiddenColumns])
-  const stats = useMemo<StatsSummary>(() => (data ? summarizeStats(data) : summarizeStats({ run_id: 'empty', results: [] })), [data])
-  const currentRun = useMemo(() => sessionRuns.find((r) => r.run_id === stats.runId), [sessionRuns, stats.runId])
-  const currentRunLabel = currentRun ? `${currentRun.run_name || currentRun.run_id} (${formatRunTimestamp(currentRun.timestamp)})` : (stats.runName || '')
-
-  const filteredStats = useMemo(() => {
-    if (!hasFilters || isComparisonMode) return null
-    return computeFilteredStats(sortedRows.map((row) => ({ result: row.result })))
-  }, [hasFilters, isComparisonMode, sortedRows])
-
-  const comparisonDisplayStats = useMemo(() => {
-    if (!isComparisonMode) return {}
-    const visibleKeys = new Set(sortedComparisonRows.map((row) => row.key))
-    const next: Record<string, ReturnType<typeof computeFilteredStats>> = {}
-    normalizedComparisonRuns.forEach((run) => {
-      const runData = comparisonData[run.runId]
-      const visibleResults = (runData?.results || []).filter((result) => visibleKeys.has(getResultKey(result)))
-      next[run.runId] = computeFilteredStats(visibleResults.map((result) => ({ result: result.result })))
-    })
-    return next
-  }, [comparisonData, isComparisonMode, normalizedComparisonRuns, sortedComparisonRows])
-
-  const displayChips = filteredStats ? filteredStats.chips : stats.chips
-  const displayLatency = filteredStats ? filteredStats.avgLatency : stats.avgLatency
-  const displayFilteredCount = filteredStats ? filteredStats.filtered : null
-
-  const runButtonState = useMemo<RunButtonState>(() => {
-    const isPaused = !!data?.is_paused
-    const isRunning = isRunningOverride || hasRunningResults(data)
-    const isActive = isPaused || isRunning
-    if (isComparisonMode) {
-      return { hidden: true, text: 'Run' }
-    }
-    if (isActive) {
-      return { hidden: false, text: 'Stop' }
-    }
-    return { hidden: false, text: 'Run' }
-  }, [data, isComparisonMode, isRunningOverride])
-
-  const showPauseButton = useMemo(() => {
-    if (isComparisonMode) return false
-    return hasActiveResults(data)
-  }, [data, isComparisonMode])
-
-  const pauseButtonText = useMemo<'Pause' | 'Resume'>(() => (data?.is_paused ? 'Resume' : 'Pause'), [data])
-
-  const handleToggleSort = useCallback((col: string, type: string, multi: boolean) => {
-    if (resizeStateRef.current) return
-    if (performance.now() < suppressSortUntilRef.current) return
-    setSortState((prev) => {
-      const next = [...prev]
-      const idx = next.findIndex((s) => s.col === col)
-      if (multi) {
-        if (idx === -1) next.push({ col, dir: 'asc', type })
-        else if (next[idx].dir === 'asc') next[idx].dir = 'desc'
-        else next.splice(idx, 1)
-      } else {
-        if (idx === 0 && next[0]?.dir === 'asc') return [{ col, dir: 'desc', type }]
-        if (idx === 0 && next[0]?.dir === 'desc') return []
-        return [{ col, dir: 'asc', type }]
-      }
-      return next
-    })
-  }, [])
-
-  const handleSelectAll = useCallback((checked: boolean) => {
-    const visible = sortedRows.map((row) => row.index)
-    setSelectedIndices((prev) => {
-      const next = new Set(prev)
-      if (checked) visible.forEach((idx) => next.add(idx))
-      else visible.forEach((idx) => next.delete(idx))
-      return next
-    })
-  }, [sortedRows])
-
-  const handleRowSelect = useCallback((idx: number, checked: boolean, shiftKey: boolean) => {
-    setSelectedIndices((prev) => {
-      const next = new Set(prev)
-      if (shiftKey && lastCheckedRef.current != null) {
-        const visible = sortedRows.map((row) => row.index)
-        const start = visible.indexOf(lastCheckedRef.current)
-        const end = visible.indexOf(idx)
-        if (start !== -1 && end !== -1) {
-          const from = Math.min(start, end)
-          const to = Math.max(start, end)
-          for (let i = from; i <= to; i += 1) {
-            const rowIdx = visible[i]
-            if (checked) next.add(rowIdx)
-            else next.delete(rowIdx)
-          }
-        }
-      } else {
-        if (checked) next.add(idx)
-        else next.delete(idx)
-      }
-      lastCheckedRef.current = idx
-      return next
-    })
-  }, [sortedRows])
-
-  const handleResizeStart = useCallback((colKey: string, event: ReactMouseEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    event.stopPropagation()
-    const th = headerRefs.current[colKey]
-    if (!th) return
-
-    const measuredWidths: Record<string, number> = {}
-    Object.entries(headerRefs.current).forEach(([key, header]) => {
-      if (!header || header.classList.contains('hidden')) return
-      const width = Math.round(header.getBoundingClientRect().width)
-      if (width > 0) measuredWidths[key] = width
-    })
-    if (Object.keys(measuredWidths).length) setColWidths((prev) => ({ ...prev, ...measuredWidths }))
-
-    const startX = event.clientX
-    const startWidth = measuredWidths[colKey] ?? th.getBoundingClientRect().width
-    resizeStateRef.current = { colKey, startX, startWidth, moved: false }
-    document.body.classList.add('ezvals-col-resize')
-  }, [setColWidths])
-
-  useEffect(() => {
-    const handleMove = (event: MouseEvent) => {
-      if (!resizeStateRef.current) return
-      const { colKey, startX, startWidth } = resizeStateRef.current
-      const dx = event.clientX - startX
-      if (!resizeStateRef.current.moved && Math.abs(dx) >= 2) resizeStateRef.current.moved = true
-      const minWidth = 50
-      const maxWidth = 500
-      const nextWidth = Math.max(minWidth, Math.min(maxWidth, startWidth + dx))
-      setColWidths((prev) => ({ ...prev, [colKey]: Math.round(nextWidth) }))
-    }
-    const handleUp = () => {
-      if (resizeStateRef.current?.moved) suppressSortUntilRef.current = performance.now() + 200
-      resizeStateRef.current = null
-      document.body.classList.remove('ezvals-col-resize')
-    }
-    document.addEventListener('mousemove', handleMove)
-    document.addEventListener('mouseup', handleUp)
-    return () => {
-      document.removeEventListener('mousemove', handleMove)
-      document.removeEventListener('mouseup', handleUp)
-    }
-  }, [setColWidths])
-
-  const handleAddComparison = useCallback(async (runId: string, runName: string) => {
-    setComparisonRuns((prev) => {
-      const existing = normalizeComparisonRuns(prev)
-      if (existing.find((r) => r.runId === runId)) return prev
-      if (existing.length >= 4) return prev
-      const next = [...existing, { runId, runName }]
-      return next
-    })
-    if (data && runId === data.run_id) {
-      setComparisonData((prev) => ({ ...prev, [runId]: data }))
-    } else {
-      try {
-        const resp = await fetch(`/api/runs/${encodeURIComponent(runId)}/data`)
-        if (resp.ok) {
-          const runData = await resp.json()
-          setComparisonData((prev) => ({ ...prev, [runId]: runData }))
-        }
-      } catch {
-        // ignore
-      }
-    }
-  }, [data, setComparisonRuns])
-
-  const handleRemoveComparison = useCallback((runId: string) => {
-    setComparisonRuns((prev) => normalizeComparisonRuns(prev).filter((r) => r.runId !== runId))
-    setComparisonData((prev) => {
-      const next = { ...prev }
-      delete next[runId]
-      return next
-    })
-  }, [setComparisonRuns])
-
-  const handleMoveComparison = useCallback((runId: string, direction: 'up' | 'down') => {
-    setComparisonRuns((prev) => {
-      const existing = normalizeComparisonRuns(prev)
-      const currentIndex = existing.findIndex((run) => run.runId === runId)
-      if (currentIndex === -1) return prev
-      const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
-      if (targetIndex < 0 || targetIndex >= existing.length) return prev
-      const next = [...existing]
-      const temp = next[currentIndex]
-      next[currentIndex] = next[targetIndex]
-      next[targetIndex] = temp
-      return next.map((run) => ({ runId: run.runId, runName: run.runName }))
-    })
-  }, [setComparisonRuns])
-
-  useEffect(() => {
-    if (normalizedComparisonRuns.length <= 1) {
-      if (comparisonRuns.length) setComparisonRuns([])
-      if (comparisonDataCount) setComparisonData({})
-    }
-  }, [comparisonDataCount, comparisonRuns.length, normalizedComparisonRuns.length, setComparisonRuns])
-
-  const handleRunExecute = useCallback(async () => {
-    const isActive = !!data?.is_paused || isRunningOverride || hasRunningResults(data)
-    if (isActive) {
-      try {
-        await fetch('/api/runs/stop', { method: 'POST' })
-      } catch {
-        // ignore
-      }
-      loadResults(true)
-      return
-    }
-
-    const body: Record<string, unknown> = selectedIndices.size > 0 ? { indices: Array.from(selectedIndices) } : {}
-    if (activeConfig) body.config_name = activeConfig
-
     try {
-      const resp = await fetch('/api/runs/rerun', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      if (!resp.ok) {
-        const text = await resp.text()
-        let msg = text
-        try {
-          const parsed = JSON.parse(text)
-          msg = parsed?.detail || parsed?.message || text
-        } catch {
-          // ignore parse errors
-        }
-        throw new Error(msg || `HTTP ${resp.status}`)
-      }
-      setHasRunBefore(true)
-      setIsRunningOverride(true)
-      loadResults(true)
+      download(await api.exportMarkdown(data.run_id, payload), `${comparison.comparing ? 'comparison' : data.run_id}.md`)
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      addToast(`Run failed: ${message}`, 'error')
+      notify(`Couldn't export: ${(err as Error).message}`)
     }
-  }, [activeConfig, data, isRunningOverride, loadResults, selectedIndices])
-
-  const handleCreateNewRun = useCallback(async () => {
-    try {
-      const resp = await fetch('/api/runs/new', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ indices: [] }),
-      })
-      if (!resp.ok) {
-        const text = await resp.text()
-        let msg = text
-        try {
-          const parsed = JSON.parse(text)
-          msg = parsed?.detail || parsed?.message || text
-        } catch {
-          // ignore parse errors
-        }
-        throw new Error(msg || `HTTP ${resp.status}`)
-      }
-      setSelectedIndices(new Set())
-      await loadResults(true)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      addToast(`New run failed: ${message}`, 'error')
-    }
-  }, [loadResults])
-
-  const handlePauseToggle = useCallback(async () => {
-    if (!hasActiveResults(data)) return
-    const endpoint = data?.is_paused ? '/api/runs/resume' : '/api/runs/pause'
-    try {
-      const resp = await fetch(endpoint, { method: 'POST' })
-      if (!resp.ok) {
-        const text = await resp.text()
-        throw new Error(text || `HTTP ${resp.status}`)
-      }
-      if (data?.is_paused) setIsRunningOverride(true)
-      await loadResults(true)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      addToast(`Run control failed: ${message}`, 'error')
-    }
-  }, [data, loadResults])
-
-  const handleRestartServer = useCallback(async () => {
-    if (isRestartingServer) return
-    setIsRestartingServer(true)
-    try {
-      const resp = await fetch('/api/server/restart', { method: 'POST' })
-      if (!resp.ok) {
-        const text = await resp.text()
-        throw new Error(text || `HTTP ${resp.status}`)
-      }
-      window.setTimeout(() => window.location.reload(), 700)
-    } catch (err) {
-      setIsRestartingServer(false)
-      const message = err instanceof Error ? err.message : String(err)
-      addToast(`Restart failed: ${message}`, 'error')
-    }
-  }, [isRestartingServer])
-
-  const handleThemeToggle = useCallback(() => {
-    const html = document.documentElement
-    const isDark = html.classList.contains('dark')
-    if (isDark) {
-      html.classList.remove('dark')
-      localStorage.setItem('ezvals:theme', 'light')
-    } else {
-      html.classList.add('dark')
-      localStorage.setItem('ezvals:theme', 'dark')
-    }
-  }, [])
-
-  const handleSettingsOpen = useCallback(async () => {
-    try {
-      await loadConfigSettings()
-    } catch {
-      // ignore
-    }
-    setSettingsOpen(true)
-  }, [loadConfigSettings])
-
-  const handleSettingsSave = useCallback(async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const payload: Record<string, unknown> = {}
-    const concurrency = parseInt(settingsForm.concurrency, 10)
-    if (!Number.isNaN(concurrency)) payload.concurrency = concurrency
-    const resultsDir = (settingsForm.results_dir || '').trim()
-    if (resultsDir) payload.results_dir = resultsDir
-    const timeout = parseFloat(settingsForm.timeout)
-    if (!Number.isNaN(timeout)) payload.timeout = timeout
-    const notificationsEnabled = notificationsDraftRef.current
-    payload.completion_notifications = notificationsEnabled
-
-    try {
-      const resp = await fetch('/api/config', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      if (!resp.ok) throw new Error('Save failed')
-      setCompletionNotificationsEnabled(notificationsEnabled)
-      notificationsDraftRef.current = notificationsEnabled
-      setSettingsForm((prev) => ({ ...prev, completion_notifications: notificationsEnabled }))
-      setSettingsOpen(false)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      addToast(`Failed to save settings: ${message}`, 'error')
-    }
-  }, [settingsForm])
-
-  const handleNotificationsChange = useCallback((enabled: boolean) => {
-    notificationsDraftRef.current = enabled
-    setSettingsForm((prev) => ({ ...prev, completion_notifications: enabled }))
-  }, [])
-
-  const handleSaveAnnotation = useCallback(async (runId: string, resultIndex: number, annotation: string | null) => {
-    const resp = await fetch(`/api/runs/${encodeURIComponent(runId)}/results/${resultIndex}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ result: { annotation } }),
-    })
-    if (!resp.ok) {
-      let message = 'Failed to save annotation'
-      try {
-        const err = await resp.json() as { detail?: string }
-        if (err.detail) message = err.detail
-      } catch {
-        // ignore non-json errors
-      }
-      throw new Error(message)
-    }
-
-    setData((prev) => {
-      if (!prev || prev.run_id !== runId) return prev
-      const results = [...(prev.results || [])]
-      const row = results[resultIndex]
-      if (!row?.result) return prev
-      results[resultIndex] = {
-        ...row,
-        result: { ...row.result, annotation },
-      }
-      return { ...prev, results }
-    })
-
-    setComparisonData((prev) => {
-      const runData = prev[runId]
-      if (!runData) return prev
-      const results = [...(runData.results || [])]
-      const row = results[resultIndex]
-      if (!row?.result) return prev
-      results[resultIndex] = {
-        ...row,
-        result: { ...row.result, annotation },
-      }
-      return { ...prev, [runId]: { ...runData, results } }
-    })
-  }, [])
-
-  const handleExport = useCallback(async (format) => {
-    if (format === 'png') {
-      setExportOpen(false)
-      setPngExportOpen(true)
-      return
-    }
-    const runId = data?.run_id || 'latest'
-    if (format === 'json' || format === 'csv') {
-      window.location.href = `/api/runs/${runId}/export/${format}`
-      return
-    }
-
-    const visibleIndices = isComparisonMode
-      ? sortedComparisonRows.map((row) => row.index)
-      : sortedRows.map((row) => row.index)
-
-    const visibleColumns = COLUMN_DEFS.map((col) => col.key).filter((key) => !hiddenSet.has(key))
-
-    const statsPayload = {
-      total: stats.total || data?.total_evaluations || visibleIndices.length,
-      filtered: hasFilters ? (displayFilteredCount ?? visibleIndices.length) : visibleIndices.length,
-      avgLatency: displayLatency || 0,
-      chips: displayChips || [],
-    }
-
-    const payload: Record<string, unknown> = {
-      visible_indices: visibleIndices,
-      visible_columns: visibleColumns,
-      stats: statsPayload,
-      run_name: data?.run_name || 'export',
-      session_name: data?.session_name || null,
-    }
-
-    if (isComparisonMode) {
-      const visibleKeys = new Set(sortedComparisonRows.map((row) => row.key))
-      payload.comparison_mode = true
-      payload.comparison_runs = normalizedComparisonRuns.map((run) => {
-        const runData = comparisonData[run.runId]
-        const filteredResults = (runData?.results || []).filter((r) => visibleKeys.has(getResultKey(r)))
-        return {
-          run_id: run.runId,
-          run_name: run.runName,
-          chips: runData?.score_chips || [],
-          avg_latency: runData?.average_latency || 0,
-          results: filteredResults,
-        }
-      })
-    }
-
-    try {
-      const resp = await fetch(`/api/runs/${runId}/export/${format}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      if (!resp.ok) {
-        const errText = await resp.text()
-        addToast(`Export failed: ${errText}`)
-        return
-      }
-      const blob = await resp.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      const filename = isComparisonMode ? 'comparison' : runId
-      a.download = `${filename}.md`
-      a.click()
-      URL.revokeObjectURL(url)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      addToast(`Export failed: ${message}`)
-    }
-  }, [comparisonData, data, displayChips, displayFilteredCount, displayLatency, hasFilters, hiddenSet, isComparisonMode, normalizedComparisonRuns, sortedComparisonRows, sortedRows, stats])
-
-  const handleRunNameSave = useCallback(async () => {
-    const newName = runNameDraft.trim()
-    if (!newName || newName === data?.run_name) {
-      setEditingRunName(false)
-      return
-    }
-    try {
-      const hasRunFile = hasRunBefore || (data?.results || []).some((r) => r.result?.status && r.result.status !== 'not_started')
-      if (hasRunFile && data?.run_id) {
-        await fetch(`/api/runs/${data.run_id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ run_name: newName }),
-        })
-      } else {
-        await fetch('/api/pending-run-name', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ run_name: newName }),
-        })
-      }
-      setEditingRunName(false)
-      loadResults(true)
-    } catch (err) {
-      console.error('Rename failed:', err)
-      setEditingRunName(false)
-    }
-  }, [data, hasRunBefore, loadResults, runNameDraft])
-
-  const handleRenameRunById = useCallback(async (runId: string, newName: string) => {
-    try {
-      await fetch(`/api/runs/${runId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ run_name: newName }),
-      })
-      loadResults(true)
-    } catch (err) {
-      console.error('Rename failed:', err)
-    }
-  }, [loadResults])
-
-  const activeFilterCount = useMemo(() => {
-    let count = 0
-    filters.valueRules.forEach(() => { count += 1 })
-    filters.passedRules.forEach(() => { count += 1 })
-    if (filters.annotation && filters.annotation !== 'any') count += 1
-    count += (filters.selectedDatasets?.include || []).length
-    count += (filters.selectedDatasets?.exclude || []).length
-    count += (filters.selectedLabels?.include || []).length
-    count += (filters.selectedLabels?.exclude || []).length
-    if (filters.hasError !== null) count += 1
-    if (filters.hasUrl !== null) count += 1
-    if (filters.hasMessages !== null) count += 1
-    return count
-  }, [filters])
-
-  if (loading && !data) {
-    return (
-      <div className="h-screen flex flex-col bg-theme-bg font-sans text-theme-text">
-        <div className="flex-1 flex items-center justify-center text-theme-text-muted">Loading...</div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="h-screen flex flex-col bg-theme-bg font-sans text-theme-text">
-        <div className="p-4 text-theme-text-muted">Failed to load results. Please refresh the page.</div>
-      </div>
-    )
   }
 
   return (
-    <div className="h-screen flex flex-col bg-theme-bg font-sans text-theme-text">
-      <DashboardIcons />
-
-      <DashboardHeader
-        search={search}
-        setSearch={setSearch}
-        filtersOpen={filtersOpen}
-        columnsOpen={columnsOpen}
-        exportOpen={exportOpen}
-        setFiltersOpen={setFiltersOpen}
-        setColumnsOpen={setColumnsOpen}
-        setExportOpen={setExportOpen}
-        filtersToggleRef={filtersToggleRef}
-        filtersMenuRef={filtersMenuRef}
-        columnsToggleRef={columnsToggleRef}
-        columnsMenuRef={columnsMenuRef}
-        exportToggleRef={exportToggleRef}
-        exportMenuRef={exportMenuRef}
-        activeFilterCount={activeFilterCount}
-        filters={filters}
-        setFilters={setFilters}
-        selectedScoreKey={selectedScoreKey}
-        setSelectedScoreKey={setSelectedScoreKey}
-        scoreKeysMeta={scoreKeysMeta}
-        datasetLabels={datasetLabels}
-        hiddenSet={hiddenSet}
-        setHiddenColumns={setHiddenColumns}
-        searchColumns={searchColumnsSet}
-        setSearchColumns={setSearchColumns}
-        columnDefs={COLUMN_DEFS}
-        setSortState={setSortState}
-        setColWidths={setColWidths}
-        handleExport={handleExport}
-        handleSettingsOpen={handleSettingsOpen}
-        isRestartingServer={isRestartingServer}
-        onRestartServer={handleRestartServer}
-        runButtonState={runButtonState}
-        isComparisonMode={isComparisonMode}
-        onRunExecute={handleRunExecute}
-        showPauseButton={showPauseButton}
-        pauseButtonText={pauseButtonText}
-        onPauseToggle={handlePauseToggle}
-      />
-
-      <main className="flex-1 overflow-auto px-4 py-4">
-        <StatsExpanded
-          stats={stats}
-          hasFilters={hasFilters}
-          displayFilteredCount={displayFilteredCount}
-          displayChips={displayChips}
-          isComparisonMode={isComparisonMode}
-          normalizedComparisonRuns={normalizedComparisonRuns}
-          comparisonData={comparisonData}
-          comparisonDisplayStats={comparisonDisplayStats}
-          sessionRuns={sessionRuns}
-          currentRunLabel={currentRunLabel}
-          editingRunName={editingRunName}
-          runNameDraft={runNameDraft}
-          setRunNameDraft={setRunNameDraft}
-          setEditingRunName={setEditingRunName}
-          onRunNameSave={handleRunNameSave}
-          onCreateNewRun={handleCreateNewRun}
-          onRunDropdownToggle={() => setRunDropdownOpen((prev) => !prev)}
-          onAddCompareToggle={() => setCompareDropdownOpen((prev) => !prev)}
-          onAddMoreCompareToggle={() => setAddCompareOpen((prev) => !prev)}
-          onRemoveComparison={handleRemoveComparison}
-          onMoveComparison={handleMoveComparison}
-          runDropdownExpandedRef={runDropdownExpandedRef}
-          compareDropdownAnchorRef={compareDropdownAnchorRef}
-          addCompareAnchorRef={addCompareAnchorRef}
-          animateStats={animateStats}
+    <div className="flex h-screen bg-canvas font-sans text-fg">
+      {sidebarOpen ? (
+        <RunsSidebar
+          sessionName={data.session_name}
+          runs={runs}
+          activeRunId={data.run_id}
+          running={isActive(data)}
+          comparing={comparison.comparing}
+          reloading={reloading}
+          onSelectRun={(runId) => {
+            if (runId === data.run_id) return
+            setOpenIndex(null)
+            if (comparison.comparing) comparison.start([])
+            act(() => api.activate(runId), "Couldn't open the run")
+          }}
+          onNewRun={() => act(async () => {
+            await api.newRun()
+            setSelected(new Set())
+            setOpenIndex(null)
+          }, "Couldn't start a new run")}
+          onCompare={(runId) => comparison.start([data.run_id, runId])}
+          onRenameRun={(runId, name) => act(() => (runId === data.run_id && !data.results.some((r) => r.result.status !== 'not_started') ? api.setPendingRunName(name) : api.rename(runId, name)), "Couldn't rename the run")}
+          onDeleteRun={(runId) => act(() => api.deleteRun(runId), "Couldn't delete the run")}
+          onReload={async () => {
+            setReloading(true)
+            await act(api.reloadServer, "Couldn't reload evals")
+            setTimeout(() => window.location.reload(), 700)
+          }}
+          onOpenSettings={() => api.config().then((config) => setModal({ kind: 'settings', config }), (err) => notify(err.message))}
         />
-
-        {isComparisonMode ? (
-          <ComparisonTable
-            sortedRows={sortedComparisonRows}
-            normalizedComparisonRuns={normalizedComparisonRuns}
-            onToggleSort={handleToggleSort}
-            onSaveAnnotation={handleSaveAnnotation}
-            currentRunId={data?.run_id}
-          />
-        ) : (
-          <ResultsTable
-            data={data}
-            rows={sortedRows}
-            selectedIndices={selectedIndices}
-            hiddenSet={hiddenSet}
-            sortState={sortState}
-            colWidths={colWidths}
-            columnDefs={COLUMN_DEFS}
-            pillTones={PILL_TONES}
-            onToggleSort={handleToggleSort}
-            onResizeStart={handleResizeStart}
-            onSelectAll={handleSelectAll}
-            onRowSelect={handleRowSelect}
-            onSaveAnnotation={handleSaveAnnotation}
-            selectAllRef={selectAllRef}
-            headerRefs={headerRefs}
-          />
-        )}
-
-      </main>
-
-      <SettingsModal
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        onSave={handleSettingsSave}
-        settingsForm={settingsForm}
-        setSettingsForm={setSettingsForm}
-        onNotificationsChange={handleNotificationsChange}
-        onToggleTheme={handleThemeToggle}
-        configNames={configNames}
-        activeConfig={activeConfig}
-        onConfigSelect={handleConfigSelect}
-      />
-
-      <PngExportModal
-        open={pngExportOpen}
-        onClose={() => setPngExportOpen(false)}
-        displayChips={displayChips}
-        displayLatency={displayLatency}
-        displayFilteredCount={displayFilteredCount}
-        totalTests={stats.total}
-        isComparisonMode={isComparisonMode}
-        normalizedComparisonRuns={normalizedComparisonRuns}
-        comparisonData={comparisonData}
-        sessionName={data?.session_name || ''}
-      />
-
-      <RunPickerDropdown
-        anchorRef={runDropdownExpandedRef}
-        open={runDropdownOpen}
-        onClose={() => setRunDropdownOpen(false)}
-        sessionRuns={sessionRuns}
-        activeRunId={data?.run_id}
-        onSelectRun={async (runId) => {
-          if (runId !== data?.run_id) {
-            try {
-              await fetch(`/api/runs/${encodeURIComponent(runId)}/activate`, { method: 'POST' })
-            } catch {
-              // ignore
-            }
-            loadResults(true)
-          }
-        }}
-        onRenameRun={handleRenameRunById}
-      />
-
-      <FloatingMenu anchorRef={compareDropdownAnchorRef} open={compareDropdownOpen} onClose={() => setCompareDropdownOpen(false)}>
-        {sessionRuns.filter((r) => !normalizedComparisonRuns.find((run) => run.runId === r.run_id) && r.run_id !== data?.run_id).length === 0 ? (
-          <div className="text-theme-text-muted text-[10px] p-2">No other runs available</div>
-        ) : sessionRuns.filter((r) => !normalizedComparisonRuns.find((run) => run.runId === r.run_id) && r.run_id !== data?.run_id).map((run) => (
-          <button
-            key={run.run_id}
-            className="compare-option w-full text-left px-3 py-2 text-xs text-theme-text-secondary"
-            onClick={() => {
-              const current = data?.run_id
-              if (current && !normalizedComparisonRuns.find((r) => r.runId === current)) {
-                handleAddComparison(current, data?.run_name || current)
-              }
-              handleAddComparison(run.run_id, run.run_name || run.run_id)
-              setCompareDropdownOpen(false)
-            }}
-          >
-            {run.run_name || run.run_id} <span className="text-theme-text-muted">({formatRunTimestamp(run.timestamp)})</span>
-          </button>
-        ))}
-      </FloatingMenu>
-
-      <FloatingMenu anchorRef={addCompareAnchorRef} open={addCompareOpen} onClose={() => setAddCompareOpen(false)}>
-        {sessionRuns.filter((r) => !normalizedComparisonRuns.find((run) => run.runId === r.run_id)).length === 0 ? (
-          <div className="text-theme-text-muted text-[10px] p-2">No other runs available</div>
-        ) : sessionRuns.filter((r) => !normalizedComparisonRuns.find((run) => run.runId === r.run_id)).map((run) => (
-          <button
-            key={run.run_id}
-            className="compare-option w-full text-left px-3 py-2 text-xs text-theme-text-secondary"
-            onClick={() => {
-              handleAddComparison(run.run_id, run.run_name || run.run_id)
-              setAddCompareOpen(false)
-            }}
-          >
-            {run.run_name || run.run_id} <span className="text-theme-text-muted">({formatRunTimestamp(run.timestamp)})</span>
-          </button>
-        ))}
-      </FloatingMenu>
-
-      {toasts.length > 0 && (
-        <div id="toast-container" className="fixed bottom-4 right-4 z-[200] flex flex-col gap-2">
-          {toasts.map((toast) => (
-            <div
-              key={toast.id}
-              className={`rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-lg ${toast.type === 'error' ? 'bg-red-600/90' : 'bg-emerald-600/90'}`}
-              style={{ animation: 'toast-in 0.2s ease-out' }}
-            >
-              {toast.message}
-            </div>
-          ))}
+      ) : null}
+      <div className={`relative my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-panel ${sidebarOpen ? '' : 'ml-2'}`}>
+        <Header
+          runName={data.run_name}
+          runId={data.run_id}
+          meta={[`${data.results.length} eval${data.results.length === 1 ? '' : 's'}`, formatRunTimestamp(data.created_at)].filter(Boolean).join(' · ')}
+          sessionRuns={sessionRuns}
+          sidebarOpen={sidebarOpen}
+          onToggleSidebar={() => setSidebarChoice(!sidebarOpen)}
+          onRename={(name) => act(() => (data.results.some((r) => r.result.status !== 'not_started') ? api.rename(data.run_id, name) : api.setPendingRunName(name)), "Couldn't rename the run")}
+          onCompare={(runId) => comparison.start([data.run_id, runId])}
+          comparingCount={comparison.comparing ? comparison.runs.length : undefined}
+          onExitCompare={() => {
+            const first = comparison.runs[0].runId
+            comparison.start([])
+            if (first !== data.run_id) act(() => api.activate(first), "Couldn't open the run")
+          }}
+          onRegrade={() => act(async () => {
+            const { regraded, skipped_without_target: skipped } = await api.regrade(selectedIndices.length ? selectedIndices : undefined)
+            notify(`Regrading ${regraded} result${regraded === 1 ? '' : 's'}${skipped ? ` (${skipped} skipped: no target)` : ''}`, 'success')
+          }, "Couldn't regrade")}
+          canRegrade={data.results.some((r) => r.regradable && r.result.status === 'completed')}
+          runState={runState}
+          selectedCount={selected.size}
+          onRun={() => act(() => api.run(selectedIndices.length ? selectedIndices : undefined, configs.active), "Couldn't start the run")}
+          onStop={() => act(api.stop, "Couldn't stop the run")}
+          onPauseToggle={() => act(data.is_paused ? api.resume : api.pause, "Couldn't pause or resume the run")}
+        />
+        <div className="flex min-h-0 flex-1">
+          <main className="min-w-0 flex-1 overflow-auto px-5 pb-6 pt-5">
+            {data.discovery_error ? (
+              <div id="discovery-error" role="alert" className="mb-5 rounded-lg bg-danger-subtle">
+                <div className="flex items-center gap-2 px-4 pt-3 text-sm font-semibold text-danger"><Icon name="alert" />Couldn't load your evals</div>
+                <p className="px-4 pt-0.5 text-sm text-fg-secondary">Fix the error below, then choose <span className="font-medium text-fg">Reload evals</span> in the sidebar.</p>
+                <pre className="m-3 mt-2.5 max-h-60 overflow-auto whitespace-pre-wrap rounded-md bg-surface p-3 font-mono text-xs leading-5 text-fg">{data.discovery_error}</pre>
+              </div>
+            ) : null}
+            {data.results.length ? (
+              <StatsPanel
+                stats={stats}
+                total={data.results.length}
+                progress={progress}
+                trials={trialStats(statsRows)}
+                delta={delta}
+                trend={trend}
+                sessionRuns={sessionRuns}
+                comparison={comparison.comparing ? { runs: comparison.runs, stats: comparisonStats, onMove: comparison.move, onRemove: comparison.remove, onAdd: comparison.add } : undefined}
+              />
+            ) : null}
+            {data.results.length ? (
+              <FilterBar
+                outcomeCounts={comparisonView?.outcomeCounts ?? outcomeCounts}
+                search={search}
+                onSearch={setSearch}
+                filters={filters}
+                onFilters={setFilters}
+                scoreKeys={facets.scoreKeys}
+                datasets={facets.datasets}
+                labels={facets.labels}
+                hiddenColumns={hidden}
+                searchColumns={searchColumns}
+                onHiddenColumns={setHidden}
+                onSearchColumns={setSearchColumns}
+                onResetSort={() => setSort([])}
+                onResetWidths={() => setWidths({})}
+                onExport={exportAs}
+                selectedCount={selected.size}
+                onClearSelection={() => setSelected(new Set())}
+              />
+            ) : null}
+            {comparison.comparing ? (
+              <ComparisonTable runs={comparison.runs} rows={comparisonRows} onSort={(col, type, multi) => setSort(toggleSort(sort, col, type, multi))} onSaveAnnotation={saveAnnotation} />
+            ) : data.discovery_error && !data.results.length ? null : (
+              <ResultsTable
+                runId={data.run_id}
+                rows={rows}
+                hidden={hidden}
+                sort={sort}
+                widths={widths}
+                selected={selected}
+                onSelect={setSelected}
+                onSort={(col, type, multi) => setSort(toggleSort(sort, col, type, multi))}
+                onWidths={setWidths}
+                onOpen={setOpenIndex}
+                current={openRow ? openIndex : null}
+                onSaveAnnotation={saveAnnotation}
+                oneMetric={!extraChips(data.score_chips ?? []).length}
+                emptyText={filtering && data.results.length ? (
+                  <>No results match the current filters. <button className="link font-medium" onClick={() => { setFilters(defaultFilters()); setSearch('') }}>Clear filters</button></>
+                ) : undefined}
+                evalPath={data.eval_path ?? data.path ?? undefined}
+              />
+            )}
+          </main>
+          {openRow ? (
+            <ResultPanel
+              key={openIndex}
+              row={openRow}
+              index={openIndex!}
+              runId={data.run_id}
+              position={{ index: Math.max(openAt, 0), total: rows.length }}
+              onMove={(step) => { const next = rows[openAt + step]; if (next) setOpenIndex(next.index) }}
+              onClose={() => setOpenIndex(null)}
+              onSaveAnnotation={(annotation) => saveAnnotation(data.run_id, openIndex!, annotation)}
+              onSaveScores={async (scores) => {
+                await api.updateResult(data.run_id, openIndex!, { scores })
+                patchResult(openIndex!, { scores })
+              }}
+              onOpenMessages={() => setMessagesOpen(true)}
+              onEditingChange={setPanelEditing}
+            />
+          ) : null}
         </div>
-      )}
+      </div>
+      <Drawer id="messages-pane" title="Messages" count={openRow?.result.trace_data?.messages?.length ?? 0} open={messagesOpen && !!openRow} onClose={() => setMessagesOpen(false)}>
+        <div className="p-4"><DataViewer content={openRow?.result.trace_data?.messages ?? []} placeholder="—" /></div>
+      </Drawer>
+      {modal?.kind === 'settings' ? (
+        <SettingsModal
+          config={modal.config}
+          configNames={configs.names}
+          activeConfig={configs.active}
+          onConfigSelect={(name) => act(async () => {
+            await api.selectConfig(name)
+            setConfigs({ ...configs, active: name })
+          }, "Couldn't switch the run config")}
+          onSave={(config) => act(async () => {
+            await api.saveConfig(config)
+            setModal(null)
+          }, "Couldn't save settings")}
+          onClose={() => setModal(null)}
+        />
+      ) : null}
+      {modal?.kind === 'png' ? (
+        <PngExportModal
+          onClose={() => setModal(null)}
+          stats={stats}
+          total={data.results.length}
+          comparison={comparison.comparing ? { runs: comparison.runs, stats: comparisonStats } : undefined}
+          sessionName={data.session_name ?? ''}
+        />
+      ) : null}
+      <Toasts toasts={toasts} />
     </div>
   )
 }

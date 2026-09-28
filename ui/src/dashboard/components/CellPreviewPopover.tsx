@@ -1,233 +1,101 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { Score } from '../../types'
+import type { ResultData } from '../../types'
+import { AnnotationEditor } from '../../components/AnnotationEditor'
 import { DataViewer } from '../../components/DataViewer'
-import { formatValue } from '../utils'
+import { Icon } from '../../components/Icon'
+import { ScoreCard } from '../../components/ScoreCard'
+import { formatValue } from '../../lib/format'
 
-type CellPreviewTarget = {
-  col: string
+export type PreviewColumn = 'input' | 'output' | 'reference' | 'error' | 'scores' | 'annotation'
+
+export type PreviewTarget = {
+  col: PreviewColumn
   rect: DOMRect
-  content: unknown
-  scores?: Score[]
-  error?: string | null
-  runId?: string
-  resultIndex?: number | null
-  editMode?: boolean
-} | null
-
-type CellPreviewPopoverProps = {
-  target: CellPreviewTarget
-  onMouseEnter?: () => void
-  onMouseLeave?: () => void
-  onSaveAnnotation?: (runId: string, resultIndex: number, annotation: string | null) => Promise<void>
+  result: ResultData
+  runId: string
+  index: number
+  editing?: boolean
 }
 
-function ScorePreviewCard({ score }: { score: Score }) {
-  let cls = 'border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-800/50'
-  let textCls = 'text-zinc-700 dark:text-zinc-300'
-  let valueCls = 'text-zinc-500 dark:text-zinc-400'
-  if (score.passed === true) {
-    cls = 'border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10'
-    textCls = 'text-emerald-700 dark:text-emerald-300'
-    valueCls = 'text-emerald-600 dark:text-emerald-400'
-  } else if (score.passed === false) {
-    cls = 'border-rose-200 bg-rose-50 dark:border-rose-500/30 dark:bg-rose-500/10'
-    textCls = 'text-rose-700 dark:text-rose-300'
-    valueCls = 'text-rose-600 dark:text-rose-400'
-  }
+const WIDTH = 420
+const MAX_HEIGHT = 380
+const GAP = 6
+const LABELS: Record<PreviewColumn, string> = { input: 'Input', output: 'Output', reference: 'Reference', error: 'Error', scores: 'Scores', annotation: 'Annotation' }
 
-  return (
-    <div className={`rounded border px-2.5 py-1.5 ${cls}`}>
-      <div className="flex items-center justify-between gap-3">
-        <span className={`font-mono text-xs font-medium ${textCls}`}>{score.key}</span>
-        <div className="flex items-center gap-1.5">
-          {score.value != null ? <span className={`font-mono text-xs ${valueCls}`}>{score.value}</span> : null}
-          {score.passed === true ? (
-            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-white">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6L9 17l-5-5" /></svg>
-            </span>
-          ) : null}
-          {score.passed === false ? (
-            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-white">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6L6 18M6 6l12 12" /></svg>
-            </span>
-          ) : null}
-        </div>
-      </div>
-      {score.notes ? <div className={`mt-1 text-[11px] ${valueCls}`}>{score.notes}</div> : null}
-    </div>
-  )
+/** Whether hovering this cell shows anything: text cells only preview content too long to read in the table. */
+export function hasPreview(col: PreviewColumn, result: ResultData) {
+  if (col === 'scores') return !!result.scores?.length
+  if (col === 'annotation') return true
+  const text = col === 'error' ? (result.error ?? '') : formatValue(result[col])
+  return text.length >= 80 || text.includes('\n')
 }
 
-const COLUMN_LABELS: Record<string, string> = {
-  input: 'Input',
-  output: 'Output',
-  reference: 'Reference',
-  error: 'Error',
-  scores: 'Scores',
-  annotation: 'Annotation',
+type Props = {
+  target: PreviewTarget | null
+  onKeep: () => void
+  onClose: () => void
+  onSaveAnnotation: (runId: string, index: number, annotation: string | null) => Promise<void>
 }
 
-export default function CellPreviewPopover({ target, onMouseEnter, onMouseLeave, onSaveAnnotation }: CellPreviewPopoverProps) {
-  const popoverRef = useRef<HTMLDivElement>(null)
-  const [position, setPosition] = useState<{ top: number; left: number; placement: 'below' | 'above' } | null>(null)
-  const [annotationText, setAnnotationText] = useState('')
-  const [annotationDraft, setAnnotationDraft] = useState('')
-  const [editingAnnotation, setEditingAnnotation] = useState(false)
-  const [annotationSaving, setAnnotationSaving] = useState(false)
-  const [annotationError, setAnnotationError] = useState<string | null>(null)
+/** Full content of a table cell, shown on hover. Annotations can be edited in place. */
+export function CellPreviewPopover({ target, onKeep, onClose, onSaveAnnotation }: Props) {
+  const [editingTarget, setEditingTarget] = useState<PreviewTarget | null>(null)
+  if (!target) return null
+  const editing = !!target.editing || editingTarget === target
 
-  useEffect(() => {
-    if (!target) {
-      setPosition(null)
-      return
-    }
-
-    const { rect } = target
-    const popoverWidth = 420
-    const popoverMaxHeight = 380
-    const gap = 6
-
-    const spaceBelow = window.innerHeight - rect.bottom - gap
-    const spaceAbove = rect.top - gap
-    const placement = spaceBelow >= Math.min(popoverMaxHeight, 200) ? 'below' : spaceAbove > spaceBelow ? 'above' : 'below'
-
-    let top = placement === 'below' ? rect.bottom + gap : rect.top - gap
-    let left = rect.left + rect.width / 2 - popoverWidth / 2
-
-    // Clamp to viewport
-    left = Math.max(8, Math.min(left, window.innerWidth - popoverWidth - 8))
-    if (placement === 'above') top = Math.max(8, top)
-
-    setPosition({ top, left, placement })
-  }, [target])
-
-  useEffect(() => {
-    if (target?.col !== 'annotation') return
-    const next = typeof target.content === 'string' ? target.content : String(target.content || '')
-    setAnnotationText(next)
-    setAnnotationDraft(next)
-    setEditingAnnotation(!!target.editMode && !!onSaveAnnotation)
-    setAnnotationSaving(false)
-    setAnnotationError(null)
-  }, [onSaveAnnotation, target])
-
-  if (!target || !position) return null
-
-  const canEditAnnotation = target.col === 'annotation' && !!onSaveAnnotation
-  const annotationValue = target.col === 'annotation' ? annotationText.trim() : ''
-  const hasContent = target.col === 'scores'
-    ? (target.scores && target.scores.length > 0)
-    : target.col === 'error'
-      ? !!target.error
-      : target.col === 'annotation'
-        ? editingAnnotation || annotationValue.length > 0
-        : target.content != null && target.content !== ''
-
-  if (!hasContent) return null
-
-  // Skip preview for very short content that's fully visible in the cell
-  if (target.col !== 'scores' && target.col !== 'annotation') {
-    const text = target.col === 'error' ? (target.error || '') : formatValue(target.content)
-    if (text.length < 80 && !text.includes('\n')) return null
-  }
-
-  const label = COLUMN_LABELS[target.col] || target.col
-  const saveAnnotation = async () => {
-    if (!canEditAnnotation || !onSaveAnnotation) return
-    if (typeof target.runId !== 'string' || typeof target.resultIndex !== 'number') {
-      setAnnotationError('Unable to save this annotation from the current context')
-      return
-    }
-    const next = annotationDraft.trim()
-    setAnnotationSaving(true)
-    setAnnotationError(null)
-    try {
-      await onSaveAnnotation(target.runId, target.resultIndex, next || null)
-      setAnnotationText(next)
-      setAnnotationDraft(next)
-      setEditingAnnotation(false)
-    } catch (err) {
-      setAnnotationError(err instanceof Error ? err.message : 'Failed to save annotation')
-    } finally {
-      setAnnotationSaving(false)
-    }
-  }
+  const { rect, result, col } = target
+  const below = window.innerHeight - rect.bottom - GAP >= Math.min(MAX_HEIGHT, 200) || rect.top < window.innerHeight - rect.bottom
+  const left = Math.max(8, Math.min(rect.left + rect.width / 2 - WIDTH / 2, window.innerWidth - WIDTH - 8))
+  const annotation = result.annotation ?? ''
 
   return createPortal(
     <div
-      ref={popoverRef}
-      className="cell-preview-popover"
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={editingAnnotation ? undefined : onMouseLeave}
+      className="cell-preview-popover popover"
+      onMouseEnter={onKeep}
+      onMouseLeave={editing ? undefined : onClose}
       style={{
         position: 'fixed',
-        top: position.placement === 'above' ? undefined : position.top,
-        bottom: position.placement === 'above' ? window.innerHeight - position.top : undefined,
-        left: position.left,
-        width: 420,
-        maxHeight: 380,
+        top: below ? rect.bottom + GAP : undefined,
+        bottom: below ? undefined : window.innerHeight - Math.max(8, rect.top - GAP),
+        left,
+        width: WIDTH,
+        maxHeight: MAX_HEIGHT,
         zIndex: 60,
       }}
     >
       <div className="cell-preview-label flex items-center justify-between gap-2">
-        <span>{label}</span>
+        <span>{LABELS[col]}</span>
+        {col === 'annotation' && !editing ? (
+          <button className="btn btn-ghost btn-xs btn-icon -my-1 -mr-1.5" title="Edit annotation" aria-label="Edit annotation" onClick={() => setEditingTarget(target)}>
+            <Icon name="pencil" className="h-3 w-3" />
+          </button>
+        ) : null}
       </div>
       <div className="cell-preview-content">
-        {target.col === 'scores' && target.scores ? (
-          <div className="space-y-1.5">
-            {target.scores.map((score, idx) => (
-              <ScorePreviewCard key={`${score.key}-${idx}`} score={score} />
-            ))}
-          </div>
-        ) : target.col === 'error' ? (
-          <pre className="whitespace-pre-wrap break-words font-mono text-xs text-rose-600 dark:text-rose-300">{target.error}</pre>
-        ) : target.col === 'annotation' ? (
-          editingAnnotation ? (
-            <div className="space-y-2">
-              <textarea
-                data-annotation-editor="true"
-                className="w-full min-h-[110px] rounded border border-zinc-300 bg-white px-2 py-1.5 text-xs text-zinc-700 placeholder-zinc-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:placeholder-zinc-500 dark:focus:border-blue-500"
-                value={annotationDraft}
-                onChange={(e) => setAnnotationDraft(e.target.value)}
-                disabled={annotationSaving}
-                placeholder="Add annotation..."
-              />
-              {annotationError ? <div className="text-[11px] text-rose-500">{annotationError}</div> : null}
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  className="rounded border border-zinc-300 bg-white px-2 py-1 text-[11px] text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600"
-                  onClick={() => {
-                    setEditingAnnotation(false)
-                    setAnnotationDraft(annotationText)
-                    setAnnotationError(null)
-                  }}
-                  disabled={annotationSaving}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  data-annotation-save="true"
-                  className="rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-600 hover:bg-emerald-500/20 disabled:opacity-50 dark:text-emerald-400"
-                  onClick={saveAnnotation}
-                  disabled={annotationSaving}
-                >
-                  {annotationSaving ? 'Saving...' : 'Save'}
-                </button>
-              </div>
-            </div>
+        {col === 'scores' ? (
+          <div className="space-y-1.5">{(result.scores ?? []).map((s, i) => <ScoreCard key={`${s.key}-${i}`} score={s} />)}</div>
+        ) : col === 'error' ? (
+          <pre className="whitespace-pre-wrap break-words font-mono text-xs text-danger">{result.error}</pre>
+        ) : col === 'annotation' ? (
+          editing ? (
+            <AnnotationEditor
+              initial={annotation}
+              rows={5}
+              onCancel={onClose}
+              onSave={async (next) => {
+                await onSaveAnnotation(target.runId, target.index, next)
+                onClose()
+              }}
+            />
           ) : (
-            <pre className="whitespace-pre-wrap break-words font-mono text-xs text-zinc-700 dark:text-zinc-300">{annotationText}</pre>
+            <div className="whitespace-pre-wrap break-words text-sm text-fg-secondary">{annotation}</div>
           )
         ) : (
-          <DataViewer content={target.content} placeholder="--" />
+          <DataViewer content={result[col]} placeholder="—" />
         )}
       </div>
     </div>,
     document.body,
   )
 }
-
-export type { CellPreviewTarget }

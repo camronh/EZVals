@@ -10,6 +10,8 @@ This document specifies the command-line interface experience for EZVals.
 |---------|---------|
 | `ezvals run` | Execute evaluations headlessly (for agents/CI) |
 | `ezvals serve` | Start web UI for interactive use |
+| `ezvals regrade` | Re-score a run's stored outputs without re-running targets |
+| `ezvals query` | Query saved runs with SQL |
 | `ezvals export` | Export a run to various formats (JSON, CSV, Markdown) |
 
 ---
@@ -23,9 +25,9 @@ This document specifies the command-line interface experience for EZVals.
 ```gherkin
 Scenario: Run all evaluations in a directory
   When the user runs `ezvals run evals/`
-  Then all @eval decorated functions in .py files are discovered
-  And all evaluations withing the evals/ path execute
-  And results save to .ezvals/runs/{run_name}_{timestamp}.json by default
+  Then all evals in .py and *.eval.ts files under evals/ are discovered, in every language present
+  And all evaluations within the evals/ path execute
+  And results save to .ezvals/sessions/default/{run_id}.jsonl by default
 
 Scenario: Run a specific file
   When the user runs `ezvals run evals/customer_service.py`
@@ -40,7 +42,7 @@ Scenario: Run a specific list of functions
   Then only test_refund and test_escalation run
 
 Scenario: Run a case variant
-  When the user runs `ezvals run evals.py::test_math[2][3][5]`
+  When the user runs `ezvals run evals.py::test_math[low]`
   Then only that specific variant runs
 
 Scenario: Run specific case IDs with intuitive selectors
@@ -86,29 +88,51 @@ Scenario: Run with concurrency
 Scenario: Run with timeout
   When the user runs `ezvals run evals/ --timeout 30.0`
   Then evaluations exceeding 30 seconds terminate with timeout error
+
+Scenario: Run every eval several times
+  When the user runs `ezvals run evals/ --trials 5`
+  Then every eval runs 5 times (overriding each eval's own trials)
+  And the run reports pass@5 and pass^5 (see the Python spec's Trials section)
 ```
 
 ### Output Options
 
 ```gherkin
-Scenario: Default minimal output
+Scenario: Default output
   When the user runs `ezvals run evals/`
-  Then output shows only:
-    - "Running {path}"
-    - "Results saved to {file}"
+  Then stderr shows a header with the path, session and run name
+  And one line per eval function as soon as all its results are in, grouped under its file
+  And a failures section, then a summary (see Output Formats)
+  And stdout is empty
+
+Scenario: Colors
+  Given stderr is a terminal and NO_COLOR is not set
+  Then outcome marks are colored (✓ green, ✗ red, ◐ yellow, ! magenta) and metadata is dim
+  Otherwise the output is plain text
+
+Scenario: Quiet output
+  When the user runs `ezvals run evals/ -q`
+  Then stderr shows only the summary
+
+Scenario: JSON output for agents and scripts
+  When the user runs `ezvals run evals/ --json`
+  Then the results are saved as usual
+  And stdout is the run JSON (ids, names, totals, results) plus "saved_path"
+  And the human output still goes to stderr, so stdout stays machine-readable
 
 Scenario: Verbose output
   When the user runs `ezvals run evals/ --verbose`
-  Then print statements from eval functions appear in output
+  Then print statements from eval functions appear on stderr
+  And the failures section shows each error's full traceback instead of its first line
 
 Scenario: Custom output path
   When the user runs `ezvals run evals/ --output results.json`
-  Then results save only to results.json
-  And nothing saves to .ezvals/runs/
+  Then the run JSON saves only to results.json
+  And nothing saves to .ezvals/sessions/
 
 Scenario: No save (stdout JSON)
   When the user runs `ezvals run evals/ --no-save`
-  Then JSON outputs to stdout
+  Then the run JSON outputs to stdout
   And no file is written
 ```
 
@@ -117,40 +141,33 @@ Scenario: No save (stdout JSON)
 ```gherkin
 Scenario: Named session and run
   When the user runs `ezvals run evals/ --session model-upgrade --run-name baseline`
-  Then results save to .ezvals/sessions/model-upgrade/baseline_{timestamp}.json
+  Then results save to .ezvals/sessions/model-upgrade/{run_id}.jsonl with run_name "baseline"
 
 Scenario: No session specified (CLI run)
   When the user runs `ezvals run evals/`
   Then session defaults to "default"
-  And results save to .ezvals/sessions/default/{run_name}_{timestamp}.json
+  And results save to .ezvals/sessions/default/{run_id}.jsonl
 
 Scenario: No run name specified
   When the user runs `ezvals run evals/ --session emojis`
   Then run name auto-generates as friendly adjective-noun (e.g., "swift-falcon")
-  And results save to .ezvals/sessions/emojis/swift-falcon_{timestamp}.json
 
 Scenario: Overwrite behavior (same session + run name)
   Given overwrite=true in ezvals.json (default)
   When the user runs `ezvals run evals/ --session upgrade --run-name gpt5` twice
   Then the second run REPLACES the first
-  And only one file exists: .ezvals/sessions/upgrade/gpt5_{new_timestamp}.json
+  And only one run named gpt5 exists in the session
 
 Scenario: No overwrite (when disabled)
   Given overwrite=false in ezvals.json
   When the user runs `ezvals run evals/ --session upgrade --run-name gpt5` twice
-  Then both runs are kept as separate files with different timestamps
+  Then both runs are kept
 
 Scenario: Rename an existing run by ID
   Given run "run123" exists
   When the user runs `ezvals run --rename run123 better-name`
-  Then the run file is renamed to include "better-name"
-  And run metadata field `run_name` becomes "better-name"
-
-Scenario: Rename with explicit session
-  Given run "run123" exists in session "model-upgrade"
-  When the user runs `ezvals run --rename run123 better-name --session model-upgrade`
-  Then only that session is searched for the run
-  And the run is renamed in-place
+  Then the run's `run_name` becomes "better-name"
+  (Run names are trimmed and may contain spaces and punctuation; session names keep only letters, digits, `-` and `_`)
 
 Scenario: Rename run not found
   When the user runs `ezvals run --rename missing-id better-name`
@@ -159,11 +176,49 @@ Scenario: Rename run not found
 
 ### Output Formats
 
-**Minimal (default) Example:**
+**Default Example:**
 ```
-Running evals.py
-Results saved to .ezvals/sessions/default/swift-falcon_1705312200.json
+ezvals run evals/  (session default · run vivid-dragon)
+
+evals/basics.py
+  ✓ capital_pass   0.2s
+  ✗ capital_fail   0.3s
+  ◐ capitals       0.5s  1/2 cases
+  ! crashes        0.0s
+  ◐ flaky          1.2s  1/4 trials  pass@4 ✓  pass^4 ✗
+  ○ similarity     0.1s  sim 0.85
+
+── failures ──
+✗ capital_fail  evals/basics.py
+  pass: assert ctx.output == ctx.reference
+  input: "Capital of Spain?"  output: "I don't know"
+✗ capitals[1]  evals/basics.py
+  pass: wrong
+  input: "b"  output: "b"
+! crashes  evals/basics.py
+  RuntimeError: upstream 500
+  input: "x"  output: null
+✗ flaky~2  evals/basics.py
+  pass: failed
+  input: "x"  output: "x"
+...
+
+3 passed  5 failed  1 error  1 scored  (10 results · 6 evals · 1.4s)
+pass 38% · sim 0.85 · pass@4 100% · pass^4 0%
+Saved to .ezvals/sessions/default/a1b2c3d4.jsonl · view: ezvals serve .ezvals/sessions/default/a1b2c3d4.jsonl
 ```
+
+Each result is **passed** (finished, no error, at least one pass/fail score and none failed), **failed** (a pass/fail score failed), **error**, or **scored** (only numeric scores). A function line folds its cases and trials:
+
+| Mark | Meaning |
+|------|---------|
+| ✓ | Every result passed |
+| ✗ | None passed |
+| ◐ | Some passed, some failed or errored |
+| ! | Every result errored |
+| ○ | Only numeric scores |
+
+The line shows the total latency, then `passed/total cases` (or `trials`, or `results` for cases × trials; `N cases` when only numeric), pass@k/pass^k for trials of a single case, and score averages (pass/fail keys as a pass rate) when the eval has numeric or several keys. The failures section lists each failed or errored result (at most 20, then "… and N more") with its error's first line or each failing score as `key: notes` (`key: failed` without notes), then its input and output (truncated). The summary counts results by kind, then averages every score key; pass@k/pass^k appear for trials. The run JSON's `total_passed` and `total_failed` use the same definitions (as do pass@k/pass^k).
 
 ---
 
@@ -248,8 +303,8 @@ Scenario: compare-runs missing run name
   Then CLI errors because "missing" does not exist in that session
   And no server starts
 
-Scenario: Load existing run JSON
-  When the user runs `ezvals serve .ezvals/sessions/default/run_123.json`
+Scenario: Load an existing run file
+  When the user runs `ezvals serve .ezvals/sessions/default/a1b2c3d4.jsonl`
   Then server starts and browser opens by default
   And the UI displays results from that run
   And if source eval path exists, rerun is enabled
@@ -257,7 +312,7 @@ Scenario: Load existing run JSON
 
 Scenario: Continue previous session
   Given a run was saved with source path "evals/test.py"
-  When the user runs `ezvals serve .ezvals/sessions/my-session/run_123.json`
+  When the user runs `ezvals serve .ezvals/sessions/my-session/a1b2c3d4.jsonl`
   And "evals/test.py" still exists
   Then the Run button works normally
   And new runs save to the same session
@@ -265,22 +320,63 @@ Scenario: Continue previous session
 
 ---
 
-## `ezvals export`
+## `ezvals regrade`
 
-**Intent:** User wants to export a run file to various formats (for sharing, reporting, or further analysis).
+**Intent:** User changed a grader and wants new scores for an existing run without re-running the agent.
 
 ```gherkin
-Scenario: Export to JSON (copy)
-  When the user runs `ezvals export run.json -f json -o report.json`
-  Then the run JSON is copied to report.json
+Scenario: Regrade a saved run
+  When the user runs `ezvals regrade a1b2c3d4` (a run id or a run file)
+  Then finished results of evals that have a target are scored again, without running the target
+  And results of evals without a target are skipped, with a count printed to stderr
+  And the new scores are saved to the same run
+
+Scenario: Eval source is gone
+  Given the run's eval path no longer exists
+  Then the command fails: regrading runs the eval code again
+```
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `-c, --concurrency` | int | config | Results to regrade in parallel |
+| `-v, --verbose` | flag | false | Show eval output and errors |
+| `--json` | flag | false | Print the regraded run JSON |
+
+---
+
+## `ezvals query`
+
+**Intent:** User (often a coding agent) wants to analyze results across runs.
+
+```gherkin
+Scenario: Query runs with SQL
+  When the user runs `ezvals query "SELECT run_name, total_passed FROM runs"`
+  Then every saved run is loaded into an in-memory SQLite database
+  And the rows print as a table (or JSON with --json)
+
+Scenario: See the tables
+  When the user runs `ezvals query --schema`
+  Then the tables (runs, results, scores) and example queries are printed
+```
+
+---
+
+## `ezvals export`
+
+**Intent:** User wants to export a run file to various formats (for sharing, reporting, or further analysis). Run files from older versions (`.json`) are accepted too.
+
+```gherkin
+Scenario: Export to JSON
+  When the user runs `ezvals export a1b2c3d4.jsonl -f json -o report.json`
+  Then report.json holds the whole run as one JSON document (ids, names, totals, results)
 
 Scenario: Export to CSV
-  When the user runs `ezvals export run.json -f csv`
+  When the user runs `ezvals export a1b2c3d4.jsonl -f csv`
   Then a CSV file is created with all results
   And filename defaults to {run_name}.csv
 
 Scenario: Export to Markdown
-  When the user runs `ezvals export run.json -f md`
+  When the user runs `ezvals export a1b2c3d4.jsonl -f md`
   Then a markdown file is created with:
     - Header with run name
     - ASCII bar chart for scores (e.g., "████████░░ 80%")
@@ -303,8 +399,9 @@ Scenario: Export to Markdown
 | Code | Meaning |
 |------|---------|
 | 0 | Evaluations completed (regardless of pass/fail) |
-| 1 | Path does not exist |
-| Non-zero | Execution error (syntax error, etc.) |
+| 1 | Invalid arguments, path does not exist, or an eval file failed to import |
+| 2 | Usage error: unknown command or flag (the usage is printed) |
+| 4 | No evals matched the path, selector and filters (like pytest's "no tests collected") |
 
 **Note:** Failed evaluations do NOT cause non-zero exit. Check JSON output for pass/fail status.
 
@@ -329,13 +426,18 @@ Scenario: Export to Markdown
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `concurrency` | int | 1 | Parallel evaluations |
+| `trials` | int | none | Run every eval this many times |
 | `timeout` | float | null | Global timeout (seconds) |
 | `verbose` | bool | false | Show eval stdout |
+| `port` | int | 8000 | Default port for `ezvals serve` |
+| `completion_notifications` | bool | false | Browser notification when a UI run finishes |
 | `results_dir` | string | `.` | Base directory where runs are stored in `.ezvals/sessions` |
 | `overwrite` | bool | true | Replace runs with same session + run name |
 | `configs` | dict | `{}` | Named config profiles selectable via `--config` |
 
 **Precedence:** CLI flags > Config file > Defaults
+
+`ezvals.json` is only created when settings are saved from the UI.
 
 ### Run Configs
 
@@ -375,16 +477,39 @@ Scenario: Path does not exist
 
 Scenario: Invalid path type
   When `ezvals run some_file.txt`
-  Then output: "ValueError: Path some_file.txt is neither a Python file nor a directory"
+  Then output: "Error: Path some_file.txt is neither an eval file nor a directory"
+  And exit code: 1
 
 Scenario: No evaluations found
-  When running on a file with no @eval functions
-  Then output: "No evaluations found"
-  And exit code: 0
+  When running on a file with no @eval functions, or filters that match none
+  Then output: "No evals found in {path}" (naming the filters when some were given)
+  And with --json or --no-save, stdout is the run JSON with no results
+  And exit code: 4
+
+Scenario: Selector matches nothing
+  When `ezvals run evals.py::tset_refund` and evals.py defines test_refund
+  Then output: "No evals match 'tset_refund' in evals.py. Did you mean test_refund?"
+  (the closest function name or case id, by edit distance or prefix)
+  And exit code: 4
 
 Scenario: Concurrency set to zero
   When `ezvals run evals/ --concurrency 0`
-  Then error: "ValueError: concurrency must be at least 1, got 0"
+  Then error: "Error: concurrency must be at least 1, got 0"
+  And exit code: 1
+
+Scenario: Eval file fails to import
+  When an eval file raises on import (syntax error, missing module, ...)
+  Then the error and traceback are printed
+  And exit code: 1
+
+Scenario: Discovery fails with --json
+  When `ezvals run evals/ --json` (or --no-save) and the path is missing or a file fails to import
+  Then stdout is still JSON: {"error": "<message>", "results": []}
+  And exit code: 1
+
+Scenario: Help
+  When the user runs `ezvals COMMAND -h`
+  Then each flag prints once as `-s, --long VALUE  description`, with no bogus defaults
 ```
 
 ---
@@ -395,18 +520,20 @@ Scenario: Concurrency set to zero
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `-d, --dataset` | str (multiple) | all | Filter by dataset |
+| `-d, --dataset` | str | all | Filter by dataset(s), comma-separated |
 | `-l, --label` | str (multiple) | all | Filter by label |
 | `--limit` | int | none | Max evaluations to run |
 | `-c, --concurrency` | int | 1 | Parallel evaluations |
 | `--timeout` | float | none | Global timeout (seconds) |
-| `-v, --verbose` | flag | false | Show eval stdout |
-| `--visual` | flag | false | Rich progress/table output |
+| `--trials` | int | per eval | Run every eval this many times |
+| `-v, --verbose` | flag | false | Show eval stdout and full error tracebacks |
+| `-q, --quiet` | flag | false | Print only the summary |
 | `-o, --output` | path | auto | Custom output path |
 | `--no-save` | flag | false | JSON to stdout only |
-| `--session` | str | auto | Session name |
+| `--json` | flag | false | Also print the run JSON (with `saved_path`) to stdout |
+| `--session` | str | default | Session name |
 | `--run-name` | str | auto | Run name |
-| `--rename` | str str | none | Rename existing run by `run_id` and new name |
+| `--rename` | str | none | `--rename RUN_ID NEW_NAME` renames a saved run |
 | `--config` | str | none | Named config profile from ezvals.json |
 
 ### `ezvals serve`
@@ -424,7 +551,7 @@ Scenario: Concurrency set to zero
 | `--has-url/--no-has-url` | bool | none | Initial trace URL filter |
 | `--has-messages/--no-has-messages` | bool | none | Initial trace messages filter |
 | `--annotation` | any\|yes\|no | any | Initial annotation filter |
-| `--results-dir` | path | .ezvals/sessions | Results directory |
+| `--results-dir` | path | . | Base directory for `.ezvals/sessions` |
 | `--run` | flag | false | Auto-run all evals on startup |
 | `--open/--no-open` | bool | open | Open browser automatically on startup |
 | `--config` | str | none | Named config profile from ezvals.json |

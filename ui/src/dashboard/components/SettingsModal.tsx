@@ -1,130 +1,94 @@
-import type { Dispatch, FormEvent, SetStateAction } from 'react'
+import { useState } from 'react'
+import type { Config } from '../../types'
+import { Dialog } from '../../components/Dialog'
+import { Segmented } from '../../components/Dropdown'
 
-type SettingsFormState = {
-  concurrency: string
-  results_dir: string
-  timeout: string
-  completion_notifications: boolean
-}
-
-type SettingsModalProps = {
-  open: boolean
-  onClose: () => void
-  onSave: (event: FormEvent<HTMLFormElement>) => void
-  settingsForm: SettingsFormState
-  setSettingsForm: Dispatch<SetStateAction<SettingsFormState>>
-  onNotificationsChange: (enabled: boolean) => void
-  onToggleTheme: () => void
+type Props = {
+  config: Config
   configNames: string[]
   activeConfig: string | null
   onConfigSelect: (name: string | null) => void
+  onSave: (config: Config) => void
+  onClose: () => void
 }
 
-export default function SettingsModal({
-  open,
-  onClose,
-  onSave,
-  settingsForm,
-  setSettingsForm,
-  onNotificationsChange,
-  onToggleTheme,
-  configNames,
-  activeConfig,
-  onConfigSelect,
-}: SettingsModalProps) {
-  if (!open) {
-    return <div id="settings-modal" className="fixed inset-0 z-50 hidden"></div>
-  }
+type Theme = 'system' | 'light' | 'dark'
+const THEME_KEY = 'ezvals:theme'
+const optionalNumber = (value: string) => (value.trim() === '' ? undefined : Number(value))
 
+function Row({ label, htmlFor, hint, children }: { label: string; htmlFor?: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div id="settings-modal" className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/60" id="settings-backdrop" onClick={onClose}></div>
-      <div className="absolute left-1/2 top-1/2 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-lg border border-theme-border bg-theme-bg p-4 shadow-xl">
-        <div className="mb-4 flex items-center justify-between">
-          <span className="text-sm font-medium text-theme-text">Settings</span>
-          <button id="settings-close" className="text-theme-text-muted hover:text-theme-text-secondary" onClick={onClose}>
-            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <use href="#icon-close"></use>
-            </svg>
-          </button>
-        </div>
-        <form id="settings-form" className="space-y-3 text-xs" onSubmit={onSave}>
-          <div className="flex items-center justify-between">
-            <label className="text-theme-text-muted">Concurrency</label>
-            <input
-              type="number"
-              name="concurrency"
-              min="0"
-              className="w-20 rounded border border-theme-border bg-theme-bg-secondary px-2 py-1 text-theme-text focus:border-blue-500 focus:outline-none"
-              value={settingsForm.concurrency}
-              onChange={(e) => setSettingsForm((prev) => ({ ...prev, concurrency: e.target.value }))}
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <label className="text-theme-text-muted">Results dir</label>
-            <input
-              type="text"
-              name="results_dir"
-              className="w-32 rounded border border-theme-border bg-theme-bg-secondary px-2 py-1 text-theme-text focus:border-blue-500 focus:outline-none"
-              value={settingsForm.results_dir}
-              onChange={(e) => setSettingsForm((prev) => ({ ...prev, results_dir: e.target.value }))}
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <label className="text-theme-text-muted">Timeout (s)</label>
-            <input
-              type="number"
-              name="timeout"
-              min="0"
-              step="0.1"
-              className="w-20 rounded border border-theme-border bg-theme-bg-secondary px-2 py-1 text-theme-text focus:border-blue-500 focus:outline-none"
-              placeholder="none"
-              value={settingsForm.timeout}
-              onChange={(e) => setSettingsForm((prev) => ({ ...prev, timeout: e.target.value }))}
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <label className="text-theme-text-muted">Theme</label>
-            <button type="button" id="theme-toggle" className="flex items-center gap-1.5 rounded border border-theme-border bg-theme-bg-secondary px-2 py-1 text-theme-text-secondary hover:bg-theme-bg-elevated" onClick={onToggleTheme}>
-              <svg className="hidden dark:block h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <use href="#icon-sun"></use>
-              </svg>
-              <svg className="block dark:hidden h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <use href="#icon-moon"></use>
-              </svg>
-              <span className="dark:hidden">Dark</span><span className="hidden dark:inline">Light</span>
-            </button>
-          </div>
-          {configNames.length > 0 && (
-            <div className="flex items-center justify-between">
-              <label className="text-theme-text-muted">Run Config</label>
-              <select
-                className="w-32 rounded border border-theme-border bg-theme-bg-secondary px-2 py-1 text-theme-text focus:border-blue-500 focus:outline-none"
-                value={activeConfig || ''}
-                onChange={(e) => onConfigSelect(e.target.value || null)}
-              >
-                <option value="">None</option>
-                {configNames.map((name) => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-            </div>
-          )}
-          <label className="flex cursor-pointer items-center justify-between gap-3">
-            <span className="text-theme-text-muted">Notifications</span>
-            <input
-              id="settings-completion-notifications"
-              type="checkbox"
-              checked={settingsForm.completion_notifications}
-              onChange={(e) => onNotificationsChange(e.target.checked)}
-            />
-          </label>
-          <div className="flex justify-end gap-2 border-t border-theme-border pt-3">
-            <button type="button" id="settings-cancel" className="rounded border border-theme-border bg-theme-bg-secondary px-3 py-1.5 text-theme-text-muted hover:bg-theme-bg-elevated" onClick={onClose}>Cancel</button>
-            <button type="submit" className="rounded bg-blue-600 px-3 py-1.5 font-medium text-white hover:bg-blue-500">Save</button>
-          </div>
-        </form>
-      </div>
+    <div className="flex items-center justify-between gap-4 py-2">
+      <label htmlFor={htmlFor} className="text-sm text-fg">
+        {label}
+        {hint ? <span className="block text-xs text-fg-muted">{hint}</span> : null}
+      </label>
+      {children}
     </div>
+  )
+}
+
+export function SettingsModal({ config, configNames, activeConfig, onConfigSelect, onSave, onClose }: Props) {
+  const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem(THEME_KEY) as Theme | null) ?? 'system')
+  const [form, setForm] = useState({
+    concurrency: String(config.concurrency ?? ''),
+    timeout: String(config.timeout ?? ''),
+    trials: String(config.trials ?? ''),
+    results_dir: config.results_dir ?? '',
+    completion_notifications: !!config.completion_notifications,
+  })
+  const changeTheme = (next: Theme) => {
+    setTheme(next)
+    if (next === 'system') localStorage.removeItem(THEME_KEY)
+    else localStorage.setItem(THEME_KEY, next)
+    document.documentElement.classList.toggle('dark', next === 'system' ? matchMedia('(prefers-color-scheme: dark)').matches : next === 'dark')
+  }
+  const number = (name: 'concurrency' | 'timeout' | 'trials', extra: React.InputHTMLAttributes<HTMLInputElement>) => (
+    <input id={`settings-${name}`} name={name} type="number" min="0" className="input w-24" value={form[name]} onChange={(e) => setForm({ ...form, [name]: e.target.value })} {...extra} />
+  )
+  return (
+    <Dialog id="settings-modal" title="Settings" onClose={onClose}>
+      <form
+        id="settings-form"
+        onSubmit={(e) => {
+          e.preventDefault()
+          onSave({
+            concurrency: optionalNumber(form.concurrency),
+            timeout: optionalNumber(form.timeout),
+            trials: optionalNumber(form.trials),
+            results_dir: form.results_dir.trim() || undefined,
+            completion_notifications: form.completion_notifications,
+          })
+        }}
+      >
+        <div className="px-5 py-2">
+          <Row label="Theme">
+            <Segmented id="settings-theme" label="Theme" value={theme} onChange={changeTheme} options={[{ value: 'system', label: 'System' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }]} />
+          </Row>
+          <div className="my-1 border-t border-line-subtle" />
+          <Row label="Concurrency" htmlFor="settings-concurrency" hint="Evals running at once">{number('concurrency', { min: '1' })}</Row>
+          <Row label="Timeout" htmlFor="settings-timeout" hint="Seconds per eval">{number('timeout', { step: '0.1', placeholder: 'None' })}</Row>
+          <Row label="Trials" htmlFor="settings-trials" hint="Runs of every eval">{number('trials', { min: '1', placeholder: '1' })}</Row>
+          <Row label="Results folder" htmlFor="settings-results-dir">
+            <input id="settings-results-dir" name="results_dir" type="text" className="input w-44" value={form.results_dir} onChange={(e) => setForm({ ...form, results_dir: e.target.value })} />
+          </Row>
+          {configNames.length > 0 ? (
+            <Row label="Run config" htmlFor="settings-config">
+              <select id="settings-config" className="input w-44" value={activeConfig ?? ''} onChange={(e) => onConfigSelect(e.target.value || null)}>
+                <option value="">None</option>
+                {configNames.map((name) => <option key={name} value={name}>{name}</option>)}
+              </select>
+            </Row>
+          ) : null}
+          <Row label="Notify when a run finishes" htmlFor="settings-completion-notifications" hint="Desktop notification and sound">
+            <input id="settings-completion-notifications" type="checkbox" checked={form.completion_notifications} onChange={(e) => setForm({ ...form, completion_notifications: e.target.checked })} />
+          </Row>
+        </div>
+        <div className="flex justify-end gap-2 border-t border-line px-5 py-3">
+          <button type="button" id="settings-cancel" className="btn" onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn btn-primary">Save</button>
+        </div>
+      </form>
+    </Dialog>
   )
 }

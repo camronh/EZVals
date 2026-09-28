@@ -1,0 +1,70 @@
+---
+title: Querying results
+description: Answer questions across every saved run with SQL
+---
+
+The web UI shows one or a few runs at a time. `ezvals query` loads every saved run into an in-memory SQLite database, so you (or your coding agent) can answer questions across runs: did the new prompt regress anything, which evals are flaky, which ones got slower.
+
+```bash
+ezvals query "SELECT run_name, total_passed, total_evaluations FROM runs ORDER BY created_at DESC LIMIT 5"
+```
+
+Rows print as a table; add `--json` to get a JSON array. `ezvals query --schema` prints the tables and some example queries. Run it from your project root: it reads the runs in `.ezvals/sessions/`, or under `results_dir` if you set one in `ezvals.json`.
+
+## Tables
+
+| Table | One row per | Columns |
+|-------|-------------|---------|
+| `runs` | run | `run_id`, `session_name`, `run_name`, `created_at`, `path`, `config_name`, `total_evaluations`, `total_passed`, `total_errors`, `average_latency`, `trials`, `pass_at_k`, `pass_all_k` |
+| `results` | result | `run_id`, `row`, `eval_id`, `function`, `dataset`, `labels`, `trial`, `status`, `passed`, `input`, `output`, `reference`, `error`, `latency`, `metadata`, `trace_data`, `annotation` |
+| `scores` | score | `run_id`, `row`, `eval_id`, `function`, `key`, `value`, `passed`, `notes` |
+
+- `results.passed` is `1` when the result [passed](/writing-evals/scoring#when-a-result-passes): no error, at least one pass/fail score, and all of them passed.
+- `results.trial` is the [trial](/writing-evals/trials) number, or `0` for evals without trials.
+- `labels`, `input`, `output`, `reference`, `metadata` and `trace_data` hold JSON. Read them with `json_extract`, for example `json_extract(metadata, '$.model')`.
+- Join `results` and `scores` on `run_id` and `row`.
+
+## Example queries
+
+### Compare pass rates across a session
+
+```sql
+SELECT r.run_name, avg(res.passed) AS pass_rate, r.average_latency
+FROM runs r JOIN results res USING (run_id)
+WHERE r.session_name = 'model-upgrade'
+GROUP BY r.run_id ORDER BY r.created_at
+```
+
+### Failures in the latest run
+
+```sql
+SELECT eval_id, error, output
+FROM results
+WHERE run_id = (SELECT run_id FROM runs ORDER BY created_at DESC LIMIT 1)
+  AND passed = 0
+```
+
+### Average a numeric score by run
+
+```sql
+SELECT r.run_name, avg(s.value) AS avg_relevance
+FROM scores s JOIN runs r USING (run_id)
+WHERE s.key = 'relevance'
+GROUP BY r.run_id
+```
+
+### Flaky evals
+
+Evals where some trials passed and some didn't:
+
+```sql
+SELECT substr(eval_id, 1, instr(eval_id, '~') - 1) AS eval, count(*) AS trials, sum(passed) AS passes
+FROM results
+WHERE run_id = 'a1b2c3d4' AND trial > 0
+GROUP BY eval
+HAVING passes BETWEEN 1 AND trials - 1
+```
+
+<Tip>
+You rarely need to write these yourself. Ask your coding agent something like "which evals regressed between the last two runs?" and it will write the query.
+</Tip>

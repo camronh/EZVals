@@ -1,117 +1,68 @@
 /** @type {import('tailwindcss').Config} */
+// The design system's scales. Colors are CSS variables (src/styles/app.css) so light and dark share class names;
+// the type, radius and shadow scales replace Tailwind's defaults so only system values exist.
 module.exports = {
-  content: [
-    './index.html',
-    './src/**/*.{js,jsx,ts,tsx}',
-  ],
+  content: ['./index.html', './src/**/*.{ts,tsx}'],
   darkMode: ['class'],
   theme: {
-  	extend: {
-  		fontFamily: {
-  			sans: [
-  				'Inter',
-  				'ui-sans-serif',
-  				'system-ui',
-  				'Segoe UI',
-  				'sans-serif'
-  			],
-  			mono: [
-  				'JetBrains Mono',
-  				'ui-monospace',
-  				'SFMono-Regular',
-  				'Menlo',
-  				'monospace'
-  			]
-  		},
-  		colors: {
-  			theme: {
-  				bg: 'var(--bg)',
-  				'bg-secondary': 'var(--bg-secondary)',
-  				'bg-elevated': 'var(--bg-elevated)',
-  				text: 'var(--text)',
-  				'text-secondary': 'var(--text-secondary)',
-  				'text-muted': 'var(--text-muted)',
-  				border: 'var(--border)',
-  				'border-subtle': 'var(--border-subtle)',
-  				'btn-bg': 'var(--btn-bg)',
-  				'btn-bg-hover': 'var(--btn-bg-hover)',
-  				'btn-border': 'var(--btn-border)'
-  			},
-  			accent: {
-  				link: 'var(--accent-link)',
-  				'link-hover': 'var(--accent-link-hover)',
-  				success: 'var(--accent-success)',
-  				'success-bg': 'var(--accent-success-bg)',
-  				error: 'var(--accent-error)',
-  				'error-bg': 'var(--accent-error-bg)',
-  				DEFAULT: 'hsl(var(--accent))',
-  				foreground: 'hsl(var(--accent-foreground))'
-  			},
-  			background: 'hsl(var(--background))',
-  			foreground: 'hsl(var(--foreground))',
-  			card: {
-  				DEFAULT: 'hsl(var(--card))',
-  				foreground: 'hsl(var(--card-foreground))'
-  			},
-  			popover: {
-  				DEFAULT: 'hsl(var(--popover))',
-  				foreground: 'hsl(var(--popover-foreground))'
-  			},
-  			primary: {
-  				DEFAULT: 'hsl(var(--primary))',
-  				foreground: 'hsl(var(--primary-foreground))'
-  			},
-  			secondary: {
-  				DEFAULT: 'hsl(var(--secondary))',
-  				foreground: 'hsl(var(--secondary-foreground))'
-  			},
-  			muted: {
-  				DEFAULT: 'hsl(var(--muted))',
-  				foreground: 'hsl(var(--muted-foreground))'
-  			},
-  			destructive: {
-  				DEFAULT: 'hsl(var(--destructive))',
-  				foreground: 'hsl(var(--destructive-foreground))'
-  			},
-  			border: 'var(--border)',
-  			input: 'var(--border)',
-  			ring: 'hsl(var(--ring))',
-  			chart: {
-  				'1': 'hsl(var(--chart-1))',
-  				'2': 'hsl(var(--chart-2))',
-  				'3': 'hsl(var(--chart-3))',
-  				'4': 'hsl(var(--chart-4))',
-  				'5': 'hsl(var(--chart-5))'
-  			}
-  		},
-  		borderRadius: {
-  			lg: 'var(--radius)',
-  			md: 'calc(var(--radius) - 2px)',
-  			sm: 'calc(var(--radius) - 4px)'
-  		},
-  		keyframes: {
-  			'accordion-down': {
-  				from: {
-  					height: '0'
-  				},
-  				to: {
-  					height: 'var(--radix-accordion-content-height)'
-  				}
-  			},
-  			'accordion-up': {
-  				from: {
-  					height: 'var(--radix-accordion-content-height)'
-  				},
-  				to: {
-  					height: '0'
-  				}
-  			}
-  		},
-  		animation: {
-  			'accordion-down': 'accordion-down 0.2s ease-out',
-  			'accordion-up': 'accordion-up 0.2s ease-out'
-  		}
-  	}
+    fontSize: {
+      '2xs': ['11px', { lineHeight: '16px' }],
+      xs: ['12px', { lineHeight: '16px' }],
+      sm: ['13px', { lineHeight: '20px' }],
+      base: ['14px', { lineHeight: '22px' }],
+      xl: ['20px', { lineHeight: '28px' }],
+      '4xl': ['40px', { lineHeight: '40px' }],
+    },
+    borderRadius: {
+      none: '0',
+      sm: '4px',
+      DEFAULT: '6px',
+      md: '6px',
+      lg: '8px',
+      xl: '12px',
+      full: '9999px',
+    },
+    boxShadow: {
+      none: 'none',
+      sm: 'var(--shadow-sm)',
+      panel: 'var(--shadow-panel)',
+      popover: 'var(--shadow-popover)',
+      dialog: 'var(--shadow-dialog)',
+    },
+    extend: {
+      fontFamily: {
+        sans: ['"Geist Variable"', 'ui-sans-serif', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'sans-serif'],
+        mono: ['"Geist Mono Variable"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
+      },
+      colors: {
+        canvas: 'var(--canvas)',
+        surface: {
+          DEFAULT: 'var(--surface)',
+          subtle: 'var(--surface-subtle)',
+          muted: 'var(--surface-muted)',
+          raised: 'var(--surface-raised)',
+        },
+        fg: {
+          DEFAULT: 'var(--fg)',
+          secondary: 'var(--fg-secondary)',
+          muted: 'var(--fg-muted)',
+          'on-emphasis': 'var(--on-emphasis)',
+        },
+        line: {
+          DEFAULT: 'var(--line)',
+          subtle: 'var(--line-subtle)',
+          strong: 'var(--line-strong)',
+        },
+        accent: {
+          DEFAULT: 'var(--accent)',
+          emphasis: 'var(--accent-emphasis)',
+          'emphasis-hover': 'var(--accent-emphasis-hover)',
+          subtle: 'var(--accent-subtle)',
+        },
+        success: { DEFAULT: 'var(--success)', subtle: 'var(--success-subtle)' },
+        danger: { DEFAULT: 'var(--danger)', subtle: 'var(--danger-subtle)' },
+        warning: { DEFAULT: 'var(--warning)', subtle: 'var(--warning-subtle)' },
+      },
+    },
   },
-  plugins: [require("tailwindcss-animate")],
 }

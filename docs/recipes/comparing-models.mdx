@@ -1,0 +1,113 @@
+---
+title: Comparing models
+description: Run the same evals against several models or prompts and see which does better
+---
+
+Before you switch models or ship a new prompt, run your existing evals against both versions and compare the results eval by eval. Run configs do this without changing any eval code.
+
+## 1. Read the model from the config
+
+Your eval, or its target, reads the settings from `ctx.config` instead of hard-coding them:
+
+<CodeGroup>
+
+```python Python
+from ezvals import eval, EvalContext
+
+async def run_agent(ctx: EvalContext):
+    ctx.output = await support_agent(
+        ctx.input,
+        model=ctx.config.get("model", "gpt-4.1"),
+        temperature=ctx.config.get("temperature", 0),
+    )
+
+@eval(input="I want a refund", target=run_agent, evaluators=[policy_judge])
+async def test_refund(ctx: EvalContext):
+    assert "refund" in ctx.output.lower()
+```
+
+```ts TypeScript
+import assert from "node:assert";
+import { evaluate, type EvalContext } from "ezvals";
+
+async function runAgent(ctx: EvalContext) {
+  ctx.output = await supportAgent(String(ctx.input), {
+    model: String(ctx.config.model ?? "gpt-4.1"),
+    temperature: Number(ctx.config.temperature ?? 0),
+  });
+}
+
+evaluate("test_refund", { input: "I want a refund", target: runAgent, evaluators: [policyJudge] }, (ctx) => {
+  assert(String(ctx.output).toLowerCase().includes("refund"));
+});
+```
+
+</CodeGroup>
+
+## 2. Define a config per model
+
+```json ezvals.json
+{
+  "configs": {
+    "gpt-4.1": { "model": "gpt-4.1", "temperature": 0 },
+    "sonnet": { "model": "claude-sonnet-4-5", "temperature": 0 }
+  }
+}
+```
+
+A config can hold anything your code reads: a model, a prompt version, a retrieval setting.
+
+## 3. Run each config in one session
+
+```bash
+ezvals run evals/ --session model-upgrade --config gpt-4.1
+ezvals run evals/ --session model-upgrade --config sonnet
+```
+
+Each run is named after its config. In the web UI you can instead choose the config before starting each run.
+
+## 4. Compare
+
+```bash
+ezvals serve evals/ --session model-upgrade --compare-runs gpt-4.1,sonnet
+```
+
+The [comparison view](/reviewing/web-ui#compare-runs) shows the pass rate, each score and latency per run, and each eval's outputs side by side. Look at the evals whose outcome changed, not only at the totals. To do the same from the terminal, [query](/reviewing/querying#compare-pass-rates-across-a-session) the session.
+
+<Tip>
+Models are nondeterministic, so a difference of one or two evals may be noise. Add `--trials 3` to both runs and compare pass^k to see which model is reliably better.
+</Tip>
+
+## Alternative: models as cases
+
+To get every model in a single run, put the model in each [case](/writing-evals/cases) instead. A case's `input` replaces the eval's `input` rather than merging with it, so put the whole input, prompt included, in every case, and have the target read the model from `ctx.input`:
+
+<CodeGroup>
+
+```python Python
+@eval(
+    target=run_agent,
+    cases=[
+        {"id": model, "input": {"prompt": "I want a refund", "model": model}}
+        for model in ["gpt-4.1", "claude-sonnet-4-5"]
+    ],
+)
+async def test_refund(ctx: EvalContext):
+    assert "refund" in ctx.output.lower()
+```
+
+```ts TypeScript
+evaluate("test_refund", {
+  target: runAgent,
+  cases: ["gpt-4.1", "claude-sonnet-4-5"].map((model) => ({
+    id: model,
+    input: { prompt: "I want a refund", model },
+  })),
+}, (ctx) => {
+  assert(String(ctx.output).toLowerCase().includes("refund"));
+});
+```
+
+</CodeGroup>
+
+This is handy for a quick check. Run configs scale better: every eval runs against every model without editing each eval, and the comparison view lines up the runs for you.
