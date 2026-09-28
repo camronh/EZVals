@@ -22,7 +22,7 @@ export function DetailPage({ runId, index: startIndex, compareRunIds }: DetailRo
   const [detail, setDetail] = useState<ResultDetail | null>(null)
   const [error, setError] = useState<Error | null>(null)
   const [compared, setCompared] = useState<ComparedRun[] | null>(null)
-  const [busy, setBusy] = useState<'rerun' | 'regrade' | null>(null)
+  const [busy, setBusy] = useState<{ kind: 'rerun' | 'regrade'; index: number } | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [drawer, setDrawer] = useState<'messages' | null>(null)
   const [editing, setEditing] = useState(false)
@@ -34,6 +34,7 @@ export function DetailPage({ runId, index: startIndex, compareRunIds }: DetailRo
 
   // Results by index, fetched ahead so stepping to the next one shows it at once. Each is refetched when shown.
   const results = useRef(new Map<number, Promise<ResultDetail>>())
+  const visibleIndex = useRef(index)
   const fetchResult = useCallback((i: number) => {
     const next = api.result(runId, i)
     results.current.set(i, next)
@@ -50,6 +51,7 @@ export function DetailPage({ runId, index: startIndex, compareRunIds }: DetailRo
   // Step through results in place: the URL follows (so reload and Back work) but the page doesn't reload.
   const navigate = useCallback((i: number) => {
     history.pushState(null, '', `/runs/${runId}/results/${i}${query}`)
+    visibleIndex.current = i
     setIndex(i)
     setDrawer(null)
     setActionError(null)
@@ -57,7 +59,10 @@ export function DetailPage({ runId, index: startIndex, compareRunIds }: DetailRo
   useEffect(() => {
     const onPop = () => {
       const match = window.location.pathname.match(/\/results\/(\d+)/)
-      if (match) setIndex(Number(match[1]))
+      if (match) {
+        visibleIndex.current = Number(match[1])
+        setIndex(visibleIndex.current)
+      }
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
@@ -108,19 +113,20 @@ export function DetailPage({ runId, index: startIndex, compareRunIds }: DetailRo
   }, [back, detail, drawer, editing, index, navigate])
 
   const runAgain = async (kind: 'rerun' | 'regrade') => {
-    setBusy(kind)
+    const rerunIndex = index
+    setBusy({ kind, index: rerunIndex })
     setActionError(null)
     try {
-      await (kind === 'rerun' ? api.run([index], null, runId) : api.regrade([index], runId))
-      let next = await fetchResult(index)
-      setDetail(next)
+      await (kind === 'rerun' ? api.run([rerunIndex], null, runId) : api.regrade([rerunIndex], runId))
+      let next = await fetchResult(rerunIndex)
+      if (visibleIndex.current === rerunIndex) setDetail(next)
       while (!finished(next)) {
         await new Promise((resolve) => setTimeout(resolve, 500))
-        next = await fetchResult(index)
-        setDetail(next)
+        next = await fetchResult(rerunIndex)
+        if (visibleIndex.current === rerunIndex) setDetail(next)
       }
     } catch (err) {
-      setActionError(`Couldn't ${kind === 'rerun' ? 'rerun' : 'regrade'} this result: ${(err as Error).message}`)
+      if (visibleIndex.current === rerunIndex) setActionError(`Couldn't ${kind === 'rerun' ? 'rerun' : 'regrade'} this result: ${(err as Error).message}`)
     } finally {
       setBusy(null)
     }
@@ -138,7 +144,7 @@ export function DetailPage({ runId, index: startIndex, compareRunIds }: DetailRo
 
   const row = detail.result
   const r = row.result
-  const loading = !!busy || r.status === 'pending' || r.status === 'running'
+  const loading = busy?.index === index || r.status === 'pending' || r.status === 'running'
   const messages = Array.isArray(r.trace_data?.messages) ? r.trace_data.messages : []
 
   return (
@@ -154,7 +160,8 @@ export function DetailPage({ runId, index: startIndex, compareRunIds }: DetailRo
           runCommand={detail.eval_path ? `ezvals run ${detail.eval_path}::${row.function}` : `ezvals run ${row.function}`}
           position={detail}
           onNavigate={navigate}
-          busy={busy}
+          busy={busy?.index === index ? busy.kind : null}
+          actionDisabled={!!busy}
           onRerun={comparing ? undefined : () => runAgain('rerun')}
           onRegrade={comparing || !row.regradable || r.status !== 'completed' ? undefined : () => runAgain('regrade')}
         />

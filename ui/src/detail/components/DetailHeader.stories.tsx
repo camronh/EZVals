@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { fn } from 'storybook/test'
+import { expect, fn, within } from 'storybook/test'
 import { DetailHeader } from './DetailHeader'
 
 const meta: Meta<typeof DetailHeader> = {
@@ -26,6 +26,14 @@ export const Default: Story = {}
 export const Trial: Story = { args: { name: 'refund_status', trial: 2 } }
 export const Rerunning: Story = { args: { busy: 'rerun' } }
 export const Regrading: Story = { args: { busy: 'regrade' } }
+export const BusyOnAnotherResult: Story = {
+  args: { actionDisabled: true },
+  play: async ({ canvasElement }) => {
+    const rerun = within(canvasElement).getByRole('button', { name: 'Rerun' })
+    await expect(rerun).toBeDisabled()
+    await expect(rerun).toHaveTextContent('Rerun')
+  },
+}
 export const NotRegradable: Story = { args: { onRegrade: undefined } }
 export const FirstResult: Story = { args: { position: { index: 0, total: 12 } } }
 export const ComparisonMode: Story = { args: { onRerun: undefined, onRegrade: undefined } }

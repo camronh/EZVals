@@ -216,7 +216,7 @@ func (s *Server) activate(id string) error {
 	if err != nil {
 		return fail(404, "Run not found")
 	}
-	s.activeID, s.runName, s.session = run.RunID, run.RunName, run.SessionName
+	s.activeID, s.runName, s.session, s.configName = run.RunID, run.RunName, run.SessionName, run.ConfigName
 	s.dataset, s.labels, s.functionName, s.path = run.Dataset, run.Labels, run.FunctionName, run.Path
 	if _, err := os.Stat(run.Path); err != nil {
 		s.path = ""
@@ -342,9 +342,38 @@ func (s *Server) start(existing *Run, ids []string, all bool, overwrite bool) er
 	if existing != nil {
 		runName = existing.RunName
 	}
-	workers, evals, err := s.spawn(runName)
+	workers, evals, err := s.spawn(runName, s.configName)
 	if err != nil {
 		return err
+	}
+	if existing != nil && !all {
+		previous := map[string][]Row{}
+		for _, row := range existing.Results {
+			if row.TrialOf != "" && !slices.ContainsFunc(previous[row.TrialOf], func(other Row) bool { return other.ID == row.ID }) {
+				previous[row.TrialOf] = append(previous[row.TrialOf], row)
+			}
+		}
+		var aligned []Eval
+		seen := map[string]bool{}
+		for _, e := range evals {
+			old := previous[e.sdkID()]
+			if len(old) == 0 {
+				aligned = append(aligned, e)
+				continue
+			}
+			if !seen[e.sdkID()] {
+				for _, row := range old {
+					trial := e
+					trial.ID, trial.Trial, trial.TrialOf = row.ID, row.Trial, row.TrialOf
+					aligned = append(aligned, trial)
+				}
+				seen[e.sdkID()] = true
+			}
+			if e.Trial > 0 && !slices.ContainsFunc(old, func(row Row) bool { return row.ID == e.ID }) {
+				aligned = append(aligned, e)
+			}
+		}
+		evals = aligned
 	}
 	s.discovered = evals
 	find := evalFinder(evals)
@@ -389,7 +418,7 @@ func (s *Server) regrade(rows []int) (int, int, error) {
 	if s.path == "" {
 		return 0, 0, fail(400, "Regrade unavailable: missing eval path")
 	}
-	workers, evals, err := s.spawn(run.RunName)
+	workers, evals, err := s.spawn(run.RunName, run.ConfigName)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -406,7 +435,7 @@ func (s *Server) regrade(rows []int) (int, int, error) {
 }
 
 // spawn starts workers for the active run and returns the evals to show, filtered and expanded into trials.
-func (s *Server) spawn(runName string) ([]*Worker, []Eval, error) {
+func (s *Server) spawn(runName, configName string) ([]*Worker, []Eval, error) {
 	if s.path == "" {
 		return nil, nil, fail(400, "Rerun unavailable: missing eval path")
 	}
@@ -414,7 +443,10 @@ func (s *Server) spawn(runName string) ([]*Worker, []Eval, error) {
 		return nil, nil, fail(400, "Eval path not found: %s", s.path)
 	}
 	cfg := loadConfig()
-	profile, _ := cfg.profile(s.configName)
+	profile, err := cfg.profile(configName)
+	if err != nil {
+		return nil, nil, fail(400, "%v", err)
+	}
 	info := RunInfo{RunID: s.activeID, SessionName: s.session, RunName: runName, EvalPath: s.path, Config: profile,
 		Timeout: cfg.Timeout}
 	workers, manifest, err := startWorkers(s.path, info, cfg.Verbose)

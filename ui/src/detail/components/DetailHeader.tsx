@@ -17,12 +17,13 @@ type Props = {
   position: { index: number; total: number }
   onNavigate: (index: number) => void
   busy: 'rerun' | 'regrade' | null
+  actionDisabled?: boolean
   onRerun?: () => void
   onRegrade?: () => void
 }
 
 /** Where this result sits (session / run / eval, and its position in the run) and what can be done with it. */
-export function DetailHeader({ name, outcome, trial, sessionName, run, back, runCommand, position, onNavigate, busy, onRerun, onRegrade }: Props) {
+export function DetailHeader({ name, outcome, trial, sessionName, run, back, runCommand, position, onNavigate, busy, actionDisabled, onRerun, onRegrade }: Props) {
   return (
     <header className="flex h-12 flex-shrink-0 items-center justify-between gap-3 border-b border-line bg-surface px-3 sm:px-4">
       <div className="flex min-w-0 items-center gap-2">
@@ -43,13 +44,13 @@ export function DetailHeader({ name, outcome, trial, sessionName, run, back, run
         <button id="next-btn" className="btn btn-sm btn-icon" title="Next result (↓)" aria-label="Next result" disabled={position.index >= position.total - 1} onClick={() => onNavigate(position.index + 1)}><Icon name="chevron-down" /></button>
         {onRegrade || onRerun ? <span aria-hidden="true" className="mx-1.5 h-5 w-px bg-line" /> : null}
         {onRegrade ? (
-          <button id="regrade-result-btn" className="btn" title="Score this output again without running the eval" onClick={onRegrade} disabled={!!busy}>
+          <button id="regrade-result-btn" className="btn" title="Score this output again without running the eval" onClick={onRegrade} disabled={actionDisabled || !!busy}>
             {busy === 'regrade' ? <Spinner /> : <Icon name="target" className="h-3 w-3" />}
             <span className="max-sm:sr-only">{busy === 'regrade' ? 'Regrading…' : 'Regrade'}</span>
           </button>
         ) : null}
         {onRerun ? (
-          <button id="rerun-btn" className="btn btn-primary" title="Run this eval again" onClick={onRerun} disabled={!!busy}>
+          <button id="rerun-btn" className="btn btn-primary" title="Run this eval again" onClick={onRerun} disabled={actionDisabled || !!busy}>
             {busy === 'rerun' ? <Spinner /> : <Icon name="rerun" className="h-3 w-3" />}
             <span className="max-sm:sr-only">{busy === 'rerun' ? 'Running…' : 'Rerun'}</span>
           </button>

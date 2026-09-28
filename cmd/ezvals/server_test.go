@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -282,5 +283,71 @@ func TestRunNamesKeepSpacesAndRejectBlank(t *testing.T) {
 	call(t, ts, "PUT", "/api/pending-run-name", `{"run_name": "next one"}`)
 	if s.runName != "next one" {
 		t.Fatalf("pending name = %q", s.runName)
+	}
+}
+
+func TestSelectiveRerunKeepsTrialsFromSavedRun(t *testing.T) {
+	s, ts, _ := newTestServer(t)
+	trials := expandTrials(s.discovered[:1], 3) // a CLI --trials override absent from the eval and ezvals.json
+	if err := s.store.Create(Event{Type: "run", RunID: s.activeID, SessionName: s.session, RunName: s.runName, Path: s.path}, false); err != nil {
+		t.Fatal(err)
+	}
+	events := []Event{{Type: "evals", Evals: trials}}
+	for i, trial := range trials {
+		events = append(events, result(trial.ID, fmt.Sprintf("old %d", i+1), true))
+	}
+	if err := s.store.Append(s.activeID, events...); err != nil {
+		t.Fatal(err)
+	}
+	if code, body := call(t, ts, "POST", "/api/runs/rerun", `{"indices": [1]}`); code != 200 {
+		t.Fatalf("selective rerun: %d %v", code, body)
+	}
+	got := waitFor(t, ts, func(st []string) bool { return len(st) >= 3 && st[1] == "completed" })
+	run, err := s.store.Load(s.activeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(run.Results) != 7 || run.Results[0].ID != trials[0].ID || run.Results[1].ID != trials[1].ID ||
+		run.Results[2].ID != trials[2].ID || run.Results[0].Result.Output != "old 1" ||
+		run.Results[2].Result.Output != "old 3" || run.Results[1].Result.Output != float64(0) {
+		t.Fatalf("saved trials after selective rerun: statuses=%v results=%+v", got, run.Results)
+	}
+}
+
+func TestRegradeUsesSavedRunConfig(t *testing.T) {
+	s, ts, _ := newTestServer(t)
+	os.WriteFile("ezvals.json", []byte(`{"configs": {"A": {"expected": "A"}, "B": {"expected": "B"}}}`), 0o644)
+	os.WriteFile("evals.py", []byte(`from ezvals import eval, EvalContext
+@eval(target=lambda ctx: "A")
+def graded(ctx: EvalContext):
+    ctx.store(scores={"key": "match", "passed": ctx.output == ctx.config["expected"], "notes": str(ctx.config)})
+`), 0o644)
+	s.discover(true)
+	eval := s.discovered[0]
+	if err := s.store.Create(Event{Type: "run", RunID: s.activeID, SessionName: s.session, RunName: s.runName,
+		Path: s.path, ConfigName: "A"}, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.store.Append(s.activeID, Event{Type: "evals", Evals: []Eval{eval}},
+		Event{Type: "result", ID: eval.ID, Results: []Result{{Output: "A", Scores: []Score{{Key: "match", Passed: ptr(true)}}}}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.activate(s.activeID); err != nil {
+		t.Fatal(err)
+	}
+	if code, _ := call(t, ts, "POST", "/api/configs/select", `{"name": "B"}`); code != 200 {
+		t.Fatal("selecting a different config failed")
+	}
+	if code, body := call(t, ts, "POST", "/api/runs/regrade", `{}`); code != 200 {
+		t.Fatalf("regrade: %d %v", code, body)
+	}
+	waitFor(t, ts, func(st []string) bool { return st[0] == "completed" })
+	run, err := s.store.Load(s.activeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	score := run.Results[0].Result.Scores[0]
+	if score.Passed == nil || !*score.Passed || score.Notes == nil || !strings.Contains(*score.Notes, "'A'") || run.ConfigName != "A" {
+		t.Fatalf("regrade should use saved config A: %+v", run.Results[0].Result)
 	}
 }

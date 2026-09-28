@@ -224,6 +224,41 @@ func TestLegacyRunsMatchCurrentEvalsByFunction(t *testing.T) {
 	}
 }
 
+func TestLegacyRerunKeepsMultipleUnselectedResultsAndAnnotations(t *testing.T) {
+	first, second := json.RawMessage(`"first note"`), json.RawMessage(`"second note"`)
+	current := []Eval{{ID: "evals.py::batch", Function: "batch"}, {ID: "evals.py::other", Function: "other"}}
+	run := materialize([]Event{
+		{Type: "evals", Evals: []Eval{
+			{ID: "batch#0", Function: "batch"}, {ID: "batch#1", Function: "batch"}, {ID: "other#2", Function: "other"},
+		}},
+		result("batch#0", "first output", true), result("batch#1", "second output", true), result("other#2", "old other", true),
+		{Type: "edit", ID: "batch#0", Field: "annotation", Value: first},
+		{Type: "edit", ID: "batch#1", Field: "annotation", Value: second},
+		{Type: "evals", Evals: current},
+		result("evals.py::other", "new other", true),
+	})
+	if len(run.Results) != 3 || run.Results[0].Result.Output != "first output" || run.Results[1].Result.Output != "second output" ||
+		run.Results[2].Result.Output != "new other" || *run.Results[0].Result.Annotation != "first note" ||
+		*run.Results[1].Result.Annotation != "second note" {
+		t.Fatalf("legacy results and annotations must survive an unrelated rerun: %+v", run.Results)
+	}
+}
+
+func TestDeleteSessionRejectsEmptySanitizedName(t *testing.T) {
+	store := openStore(t.TempDir())
+	for _, session := range []string{"alpha", "beta"} {
+		if err := store.Create(Event{Type: "run", RunID: session, SessionName: session, RunName: session}, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.DeleteSession("!!!"); err == nil {
+		t.Fatal("an invalid session name must not delete the sessions root")
+	}
+	if got := store.Sessions(); !slices.Equal(got, []string{"alpha", "beta"}) {
+		t.Fatalf("sessions after invalid delete = %v", got)
+	}
+}
+
 func TestFilterEvals(t *testing.T) {
 	qa, other := "qa", "other"
 	evals := []Eval{

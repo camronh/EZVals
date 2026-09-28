@@ -171,12 +171,16 @@ func materialize(events []Event) *Run {
 			run.RunName = e.RunName
 		case "evals":
 			find := evalFinder(e.Evals)
+			migrated := map[string]bool{}
 			for _, old := range manifest {
-				if ev, ok := find(old.ID); ok && ev.ID != old.ID && len(results[ev.ID]) == 0 { // a legacy row carries over
-					results[ev.ID] = results[old.ID]
+				if ev, ok := find(old.ID); ok && ev.ID != old.ID && (len(results[ev.ID]) == 0 || migrated[ev.ID]) {
+					offset := len(results[ev.ID])
+					results[ev.ID] = append(results[ev.ID], results[old.ID]...)
+					migrated[ev.ID] = true
 					for i := range edits {
 						if edits[i].ID == old.ID {
 							edits[i].ID = ev.ID
+							edits[i].N += offset
 						}
 					}
 				}
@@ -593,7 +597,11 @@ func (s *Store) Delete(id string) error {
 }
 
 func (s *Store) DeleteSession(name string) error {
-	dir := filepath.Join(s.dir, sanitize(name))
+	name = sanitize(name)
+	if name == "" {
+		return errors.New("session not found")
+	}
+	dir := filepath.Join(s.dir, name)
 	if _, err := os.Stat(dir); err != nil {
 		return errors.New("session not found")
 	}
