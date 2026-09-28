@@ -16,6 +16,7 @@ const meta: Meta<typeof Header> = {
     sidebarOpen: true,
     runState: 'idle',
     selectedCount: 0,
+    canRegrade: true,
     onToggleSidebar: fn(), onRename: fn(), onCompare: fn(), onExitCompare: fn(), onRegrade: fn(), onRun: fn(), onStop: fn(), onPauseToggle: fn(),
   },
 }
@@ -26,7 +27,20 @@ export const Idle: Story = {}
 export const WithSelection: Story = { args: { selectedCount: 3 } }
 export const Running: Story = { args: { runState: 'running' } }
 export const Paused: Story = { args: { runState: 'paused' } }
-export const OnlyRun: Story = { args: { sessionRuns: [sessionRuns[1]] } }
+/** With no other run in the session there is nothing to compare with, so Compare isn't shown. */
+export const OnlyRun: Story = {
+  args: { sessionRuns: [sessionRuns[1]] },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).queryByRole('button', { name: 'Compare runs' })).toBeNull()
+  },
+}
+/** No finished result has a target to score again, so Regrade isn't shown. */
+export const NothingToRegrade: Story = {
+  args: { canRegrade: false },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).queryByRole('button', { name: /Regrade/ })).toBeNull()
+  },
+}
 export const Comparing: Story = { args: { comparingCount: 3 } }
 export const SidebarHidden: Story = { args: { sidebarOpen: false } }
 

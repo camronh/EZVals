@@ -21,6 +21,8 @@ type Props = {
   comparingCount?: number
   onExitCompare: () => void
   onRegrade: () => void
+  /** Some finished result has a target to score its output again; without one, Regrade is not offered. */
+  canRegrade: boolean
   runState: RunState
   selectedCount: number
   onRun: () => void
@@ -137,23 +139,27 @@ export function Header(props: Props) {
         <button id="exit-compare-btn" className="btn" onClick={props.onExitCompare}>Exit</button>
       ) : (
         <div className="flex shrink-0 items-center gap-2">
-          <button
-            ref={compareAnchor}
-            id="add-compare-btn"
-            className="btn hidden md:inline-flex"
-            aria-label="Compare runs"
-            aria-haspopup="menu"
-            aria-expanded={comparing}
-            title={others.length ? undefined : 'Needs another run in this session'}
-            disabled={!others.length}
-            onClick={() => setComparing(!comparing)}
-          >
-            <Icon name="compare" />Compare
-          </button>
-          <RunsMenu anchor={compareAnchor} open={comparing} onClose={() => setComparing(false)} runs={others} onPick={(run) => props.onCompare(run.run_id)} />
-          <button id="regrade-btn" className="btn hidden md:inline-flex" disabled={props.runState !== 'idle'} title="Score the stored outputs again, without running the evals" onClick={props.onRegrade}>
-            <Icon name="target" />{props.selectedCount ? `Regrade ${props.selectedCount}` : 'Regrade'}
-          </button>
+          {others.length ? (
+            <>
+              <button
+                ref={compareAnchor}
+                id="add-compare-btn"
+                className="btn hidden md:inline-flex"
+                aria-label="Compare runs"
+                aria-haspopup="menu"
+                aria-expanded={comparing}
+                onClick={() => setComparing(!comparing)}
+              >
+                <Icon name="compare" />Compare
+              </button>
+              <RunsMenu anchor={compareAnchor} open={comparing} onClose={() => setComparing(false)} runs={others} onPick={(run) => props.onCompare(run.run_id)} />
+            </>
+          ) : null}
+          {props.canRegrade ? (
+            <button id="regrade-btn" className="btn hidden md:inline-flex" disabled={props.runState !== 'idle'} title="Score the stored outputs again, without running the evals" onClick={props.onRegrade}>
+              <Icon name="target" />{props.selectedCount ? `Regrade ${props.selectedCount}` : 'Regrade'}
+            </button>
+          ) : null}
           <RunControls {...props} />
         </div>
       )}

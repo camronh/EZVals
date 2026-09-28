@@ -217,6 +217,7 @@ Scenario: Regrade from the dashboard
 
 A finished row's icon shows its **outcome**, not just that it finished:
 
+  And "Regrade" is not shown when no finished result has a target to score again
 | Outcome | Visual | Meaning |
 |--------|--------|---------|
 | not run | Gray ring, dimmed row | Never run |
@@ -922,7 +923,7 @@ Scenario: Start comparing runs
   When the user clicks "Compare" in the header
   Then a menu shows the other runs in the session
   And selecting a run enters comparison mode
-  And "Compare" is disabled when the session has no other run
+  And "Compare" is not shown when the session has no other run
 
 Scenario: Compare from the sidebar
   When the user chooses "Compare with this run" in another run's "⋯" menu

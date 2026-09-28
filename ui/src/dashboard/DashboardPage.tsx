@@ -280,6 +280,7 @@ export function DashboardPage({ query }: { query: DashboardQuery }) {
             const { regraded, skipped_without_target: skipped } = await api.regrade(selectedIndices.length ? selectedIndices : undefined)
             notify(`Regrading ${regraded} result${regraded === 1 ? '' : 's'}${skipped ? ` (${skipped} skipped: no target)` : ''}`, 'success')
           }, "Couldn't regrade")}
+          canRegrade={data.results.some((r) => r.regradable && r.result.status === 'completed')}
           runState={runState}
           selectedCount={selected.size}
           onRun={() => act(() => api.run(selectedIndices.length ? selectedIndices : undefined, configs.active), "Couldn't start the run")}
