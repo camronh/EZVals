@@ -19,7 +19,7 @@ jobs:
       - name: Build UI and skill docs
         run: make ui skill-docs
 
-      - name: Build host binaries, platform wheels, and the npm package
+      - name: Build host binaries, platform wheels, and the npm platform packages
         run: |
           set -euo pipefail
           VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' python/pyproject.toml)
@@ -29,7 +29,12 @@ jobs:
             rm -rf python/ezvals/bin && mkdir -p python/ezvals/bin
             CGO_ENABLED=0 GOOS=$goos GOARCH=$goarch go build -ldflags "-X main.version=$VERSION" -o "python/ezvals/bin/ezvals$ext" ./cmd/ezvals
             (cd python && EZVALS_WHEEL_PLATFORM=$wheel uv build --wheel --out-dir ../dist)
-            cp "python/ezvals/bin/ezvals$ext" "typescript/bin/ezvals-$node_os-$node_arch$ext"
+            # One npm package per platform holding just its binary; npm installs only the one matching the machine.
+            pkg="npm/ezvals-$node_os-$node_arch"
+            mkdir -p "$pkg"
+            cp "python/ezvals/bin/ezvals$ext" "$pkg/ezvals$ext"
+            jq -n --arg name "ezvals-$node_os-$node_arch" --arg version "$VERSION" --arg os "$node_os" --arg cpu "$node_arch" --arg file "ezvals$ext" \
+              '{name: $name, version: $version, description: "The ezvals host binary for \($os) \($cpu)", license: "MIT", repository: "github:camronh/EZVals", os: [$os], cpu: [$cpu], files: [$file]}' > "$pkg/package.json"
           done <<'PLATFORMS'
           darwin arm64 macosx_11_0_arm64 darwin arm64
           darwin amd64 macosx_10_12_x86_64 darwin x64
@@ -37,7 +42,7 @@ jobs:
           linux arm64 manylinux_2_17_aarch64 linux arm64
           windows amd64 win_amd64 win32 x64
           PLATFORMS
-          ls dist typescript/bin
+          ls dist npm/*
 
       - name: Publish to PyPI
         run: uv publish dist/*
@@ -45,7 +50,14 @@ jobs:
           UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
 
       - name: Publish to npm
-        working-directory: typescript
-        run: npm ci && npm run build && npm publish
+        run: |
+          set -euo pipefail
+          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' python/pyproject.toml)
+          for pkg in npm/*/; do (cd "$pkg" && npm publish --access public); done
+          cd typescript
+          npm ci && npm run build
+          # ezvals depends on exactly this release's platform packages, published above.
+          for pkg in ../npm/*/; do npm pkg set "optionalDependencies.$(basename "$pkg")=$VERSION"; done
+          npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

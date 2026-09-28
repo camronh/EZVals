@@ -18,6 +18,7 @@ description: "All notable changes to EZVals"
 - Changed: SDK and CLI output leads with failures, trims tracebacks to your own code, and suggests the closest option for a mistyped one.
 - Fixed: Saving settings keeps your project's own keys and their order in `ezvals.json`.
 - Fixed: Switching runs no longer re-imports your eval code (about 1s to about 50ms on a heavy project).
+- Added: `npm install ezvals` for TypeScript projects. The host binary comes as a per-platform optional dependency (`ezvals-darwin-arm64` and so on), so an install downloads only your machine's binary (about 10 MB).
 
 ## 0.1.10 - 2026-02-24
 
