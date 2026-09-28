@@ -3,7 +3,7 @@ title: "Changelog"
 description: "All notable changes to EZVals"
 ---
 
-## Unreleased
+## 0.2.0 - 2026-09-27
 
 - Changed: `ezvals` is now a single Go host (CLI, HTTP API, run storage and the web UI) that runs your evals in language workers. The Python SDK has no dependencies, and a TypeScript SDK (`.eval.ts` files) produces the same results, checked by a shared conformance suite.
 - Changed: Runs are stored as append-only event logs, so a run interrupted with Ctrl+C keeps its finished results. Legacy `.json` runs are read in place and never converted or deleted.
