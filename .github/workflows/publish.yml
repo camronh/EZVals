@@ -17,7 +17,7 @@ jobs:
       - uses: actions/setup-go@v5
         with: { go-version-file: go.mod }
       - uses: actions/setup-node@v4
-        with: { node-version: "22", registry-url: "https://registry.npmjs.org" }
+        with: { node-version: "24", registry-url: "https://registry.npmjs.org" }
       - uses: astral-sh/setup-uv@v6
 
       - name: Build host binaries, platform wheels and npm platform packages
