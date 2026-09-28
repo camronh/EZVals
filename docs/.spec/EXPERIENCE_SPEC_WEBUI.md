@@ -217,13 +217,13 @@ Scenario: Regrade from the dashboard
   When the user clicks "Regrade" in the header ("Regrade 3" when 3 rows are selected)
   Then selected rows (or all rows when none are selected) are regraded without re-running targets
   And a toast reports how many results were regraded and how many were skipped for having no target
+  And "Regrade" is not shown when no finished result has a target to score again
 ```
 
 ### Result Status Indicators
 
 A finished row's icon shows its **outcome**, not just that it finished:
 
-  And "Regrade" is not shown when no finished result has a target to score again
 | Outcome | Visual | Meaning |
 |--------|--------|---------|
 | not run | Gray ring, dimmed row | Never run |
@@ -318,13 +318,13 @@ Scenario: Detail layout
 Scenario: Scores lead the sidebar
   Given the result has scores
   Then they are the first section of the sidebar, each with its pass/fail mark or value and its notes in full
+  And beneath them one line of context: dataset (a link that filters the dashboard to it), labels, latency, the trace link and the tools used
 
 Scenario: Message-format data rendering
   Given the detail view is open
   And input, output, reference, or trace messages contain chat-style message arrays
   When the UI detects common message schemas (OpenAI, Anthropic, or text/message variants)
   Then those sections default to a pretty chat-style rendering
-  And beneath them one line of context: dataset (a link that filters the dashboard to it), labels, latency, the trace link and the tools used
   And each section provides a Pretty/Raw toggle
   And Raw shows the underlying JSON payload without transformation
 
