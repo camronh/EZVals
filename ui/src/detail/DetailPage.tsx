@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
-import type { ResultDetail, Score } from '../types'
+import type { ResultDetail, RunSummary, Score } from '../types'
 import { api } from '../api'
 import { DataViewer } from '../components/DataViewer'
 import { resultKey, withColors } from '../lib/comparison'
@@ -17,7 +17,8 @@ export type DetailRoute = { runId: string; index: number; compareRunIds: string[
 const finished = (detail: ResultDetail) => ['completed', 'error', 'cancelled'].includes(detail.result.result.status ?? 'completed')
 
 /** One result: its verdict, the input, output and reference panes, a sidebar of scores and metadata, and a drawer for messages. */
-export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
+export function DetailPage({ runId, index: startIndex, compareRunIds }: DetailRoute) {
+  const [index, setIndex] = useState(startIndex)
   const [detail, setDetail] = useState<ResultDetail | null>(null)
   const [error, setError] = useState<Error | null>(null)
   const [compared, setCompared] = useState<ComparedRun[] | null>(null)
@@ -28,27 +29,69 @@ export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
   const { layout, container, start } = useResizableLayout()
   const comparing = compareRunIds.length > 1
   const query = comparing ? `?${new URLSearchParams(compareRunIds.map((id) => ['compare_run_id', id]))}` : ''
-  const navigate = useCallback((i: number) => { window.location.href = `/runs/${runId}/results/${i}${query}` }, [query, runId])
   // Back to the dashboard with this result open in its review panel (or to the comparison it came from).
   const back = comparing ? `/${query}` : `/?run_id=${encodeURIComponent(runId)}&result=${index}`
 
+  // Results by index, fetched ahead so stepping to the next one shows it at once. Each is refetched when shown.
+  const results = useRef(new Map<number, Promise<ResultDetail>>())
+  const fetchResult = useCallback((i: number) => {
+    const next = api.result(runId, i)
+    results.current.set(i, next)
+    next.catch(() => results.current.delete(i))
+    return next
+  }, [runId])
+  // Other runs' data for comparison, fetched once per page.
+  const runs = useRef(new Map<string, Promise<RunSummary | null>>())
+  const runData = useCallback((id: string) => {
+    if (!runs.current.has(id)) runs.current.set(id, api.runData(id).catch(() => null))
+    return runs.current.get(id)!
+  }, [])
+
+  // Step through results in place: the URL follows (so reload and Back work) but the page doesn't reload.
+  const navigate = useCallback((i: number) => {
+    history.pushState(null, '', `/runs/${runId}/results/${i}${query}`)
+    setIndex(i)
+    setDrawer(null)
+    setActionError(null)
+  }, [query, runId])
   useEffect(() => {
-    api.result(runId, index).then((d) => {
+    const onPop = () => {
+      const match = window.location.pathname.match(/\/results\/(\d+)/)
+      if (match) setIndex(Number(match[1]))
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+
+  useEffect(() => {
+    let current = true
+    const show = (d: ResultDetail) => {
+      if (!current) return
       setDetail(d)
       document.title = `${d.result.function} · EZVals`
-    }, setError)
-  }, [index, runId])
+    }
+    results.current.get(index)?.then(show, () => {})
+    fetchResult(index).then(show, (err) => current && setError(err))
+    return () => { current = false }
+  }, [fetchResult, index])
+
+  useEffect(() => {
+    if (!detail) return
+    for (const i of [detail.index + 1, detail.index - 1]) {
+      if (i >= 0 && i < detail.total && !results.current.has(i)) fetchResult(i)
+    }
+  }, [detail, fetchResult])
 
   useEffect(() => {
     if (!detail || !comparing) return
     const key = resultKey(detail.result)
     Promise.all(withColors(compareRunIds.map((id) => ({ runId: id }))).map(async (run): Promise<ComparedRun> => {
       if (run.runId === detail.run_id) return { ...run, runName: detail.run_name ?? run.runId, match: { row: detail.result, index: detail.index } }
-      const data = await api.runData(run.runId).catch(() => null)
+      const data = await runData(run.runId)
       const i = data?.results.findIndex((r) => resultKey(r) === key) ?? -1
       return { ...run, runName: data?.run_name ?? run.runId, match: i >= 0 ? { row: data!.results[i], index: i } : null }
     })).then(setCompared)
-  }, [compareRunIds, comparing, detail])
+  }, [compareRunIds, comparing, detail, runData])
 
   // A layout effect, so the keys work as soon as the result is on screen.
   useLayoutEffect(() => {
@@ -57,23 +100,23 @@ export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
       if (e.key === 'Escape') {
         if (drawer) setDrawer(null)
         else window.location.href = back
-      } else if (e.key === 'ArrowUp' && detail.index > 0) navigate(detail.index - 1)
-      else if (e.key === 'ArrowDown' && detail.index < detail.total - 1) navigate(detail.index + 1)
+      } else if (e.key === 'ArrowUp' && index > 0) navigate(index - 1)
+      else if (e.key === 'ArrowDown' && index < detail.total - 1) navigate(index + 1)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [back, detail, drawer, editing, navigate])
+  }, [back, detail, drawer, editing, index, navigate])
 
   const runAgain = async (kind: 'rerun' | 'regrade') => {
     setBusy(kind)
     setActionError(null)
     try {
       await (kind === 'rerun' ? api.run([index], null, runId) : api.regrade([index], runId))
-      let next = await api.result(runId, index)
+      let next = await fetchResult(index)
       setDetail(next)
       while (!finished(next)) {
         await new Promise((resolve) => setTimeout(resolve, 500))
-        next = await api.result(runId, index)
+        next = await fetchResult(index)
         setDetail(next)
       }
     } catch (err) {
@@ -85,7 +128,9 @@ export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
 
   const save = async (patch: { annotation?: string | null; scores?: Score[] }) => {
     await api.updateResult(detail!.run_id, index, patch)
-    setDetail((d) => d && { ...d, result: { ...d.result, result: { ...d.result.result, ...patch } } })
+    const next = { ...detail!, result: { ...detail!.result, result: { ...detail!.result.result, ...patch } } }
+    results.current.set(index, Promise.resolve(next))
+    setDetail(next)
   }
 
   if (error) return <PageMessage title="Couldn't load this result">Check that <code className="font-mono">ezvals serve</code> is still running, then refresh the page.</PageMessage>
@@ -115,7 +160,7 @@ export function DetailPage({ runId, index, compareRunIds }: DetailRoute) {
         />
         {actionError ? <Banner tone="danger" icon="alert" title={actionError} /> : null}
         {comparing ? null : <Verdict result={r} />}
-        <div ref={container} id="detail-body" className="flex min-h-0 flex-1 flex-col overflow-auto md:flex-row md:overflow-hidden">
+        <div key={detail.index} ref={container} id="detail-body" className="flex min-h-0 flex-1 flex-col overflow-auto md:flex-row md:overflow-hidden">
           <div id="main-panel" className="flex min-w-0 flex-col max-md:flex-none md:flex-1">
             {comparing ? (
               compared ? <ComparisonView runs={compared} base={row} layout={layout} onResize={start} /> : null

@@ -351,6 +351,9 @@ Scenario: Navigate between results
   When the user presses ↓ (down arrow)
   Then the next result loads
 
+  And stepping between results is instant: the page doesn't reload, and neighboring results are fetched ahead
+  And the URL follows the result, so reload and the browser's Back button work
+
   When the user presses Escape (or clicks Back)
   Then the user returns to the dashboard with this result open in the review panel
 

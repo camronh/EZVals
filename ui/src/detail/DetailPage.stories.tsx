@@ -69,3 +69,22 @@ export const EscapeClosesDrawer: Story = {
     await waitFor(() => expect(drawer.className).toContain('translate-x-full'))
   },
 }
+
+/** The arrow keys step through results in place: no page load, and the URL follows. */
+export const ArrowKeysStepInPlace: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    const win = canvasElement.ownerDocument.defaultView as Window & { samePage?: boolean }
+    const start = win.location.href
+    await canvas.findByText(`1 of ${completedRows.length}`)
+    win.samePage = true
+    await userEvent.keyboard('{ArrowDown}')
+    await canvas.findByText(`2 of ${completedRows.length}`)
+    await expect(canvas.getByText(completedRows[1].function)).toBeVisible()
+    await expect(win.location.pathname).toBe(`/runs/${args.runId}/results/1`)
+    await userEvent.keyboard('{ArrowUp}')
+    await canvas.findByText(`1 of ${completedRows.length}`)
+    await expect(win.samePage).toBe(true)
+    win.history.replaceState(null, '', start)
+  },
+}
